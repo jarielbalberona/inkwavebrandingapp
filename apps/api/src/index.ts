@@ -36,6 +36,7 @@ export {
 export type { StaffRestrictedResponseKey } from "./modules/auth/role-safe-response.js"
 export { AuthService, AuthenticationError } from "./modules/auth/auth.service.js"
 export { createSessionToken, verifySessionToken } from "./modules/auth/sessions.js"
+export { CustomersRepository } from "./modules/customers/customers.repository.js"
 export { CupsRepository } from "./modules/cups/cups.repository.js"
 export { CupsService } from "./modules/cups/cups.service.js"
 export type { AdminCupDto, CupDto, StaffCupDto } from "./modules/cups/cups.types.js"

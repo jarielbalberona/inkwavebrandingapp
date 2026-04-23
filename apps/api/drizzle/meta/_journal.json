@@ -29,6 +29,13 @@
       "when": 1776943489624,
       "tag": "0003_aberrant_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776950512183,
+      "tag": "0004_freezing_paper_doll",
+      "breakpoints": true
     }
   ]
 }
