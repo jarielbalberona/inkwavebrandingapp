@@ -53,8 +53,39 @@ const inventoryBalancesResponseSchema = z.object({
   balances: z.array(inventoryBalanceSchema),
 })
 
+const inventoryMovementListItemSchema = z.object({
+  id: z.string().uuid(),
+  movement_type: z.enum([
+    "stock_in",
+    "reserve",
+    "release_reservation",
+    "consume",
+    "adjustment_in",
+    "adjustment_out",
+  ]),
+  quantity: z.number().int().positive(),
+  note: z.string().nullable(),
+  reference: z.string().nullable(),
+  order_id: z.string().uuid().nullable(),
+  order_item_id: z.string().uuid().nullable(),
+  created_at: z.string(),
+  cup: balanceCupSchema,
+  created_by: z
+    .object({
+      id: z.string().uuid(),
+      display_name: z.string().nullable(),
+      email: z.string().email(),
+    })
+    .nullable(),
+})
+
+const inventoryMovementsResponseSchema = z.object({
+  movements: z.array(inventoryMovementListItemSchema),
+})
+
 export type InventoryMovement = z.infer<typeof inventoryMovementSchema>
 export type InventoryBalance = z.infer<typeof inventoryBalanceSchema>
+export type InventoryMovementListItem = z.infer<typeof inventoryMovementListItemSchema>
 
 export interface StockIntakePayload {
   cupId: string
@@ -82,6 +113,31 @@ export async function listInventoryBalances(): Promise<InventoryBalance[]> {
   }
 
   return inventoryBalancesResponseSchema.parse(await response.json()).balances
+}
+
+export async function listInventoryMovements(filters: {
+  cupId?: string
+  movementType?: string
+}): Promise<InventoryMovementListItem[]> {
+  const searchParams = new URLSearchParams()
+
+  if (filters.cupId) {
+    searchParams.set("cup_id", filters.cupId)
+  }
+
+  if (filters.movementType) {
+    searchParams.set("movement_type", filters.movementType)
+  }
+
+  const response = await fetch(`${apiBaseUrl}/inventory/movements?${searchParams.toString()}`, {
+    credentials: "include",
+  })
+
+  if (!response.ok) {
+    throw new InventoryApiError("Unable to load inventory movements.", response.status)
+  }
+
+  return inventoryMovementsResponseSchema.parse(await response.json()).movements
 }
 
 export async function createStockIntake(payload: StockIntakePayload): Promise<InventoryMovement> {

@@ -5,10 +5,13 @@ import { InventoryRepository } from "./inventory.repository.js"
 import {
   appendInventoryMovementSchema,
   inventoryBalanceQuerySchema,
+  inventoryMovementsQuerySchema,
   type AppendInventoryMovementInput,
   type InventoryBalanceQuery,
+  type InventoryMovementsQuery,
   type StockIntakeRequest,
 } from "./inventory.schemas.js"
+import { toInventoryMovementDto } from "./inventory.movement-types.js"
 import { toInventoryBalanceDto } from "./inventory.types.js"
 
 export class InventoryCupNotFoundError extends Error {
@@ -86,5 +89,12 @@ export class InventoryService {
     }
 
     return toInventoryBalanceDto(balance, user)
+  }
+
+  async listMovements(query: InventoryMovementsQuery, user: SafeUser) {
+    const parsedQuery = inventoryMovementsQuerySchema.parse(query)
+    const movements = await this.inventoryRepository.listMovements(parsedQuery)
+
+    return movements.map((movement) => toInventoryMovementDto(movement, user))
   }
 }

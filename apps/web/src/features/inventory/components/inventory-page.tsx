@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react"
 
+import { Link } from "@tanstack/react-router"
+
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -166,57 +168,62 @@ export function InventoryPage() {
                 Receive stock against an existing SKU and write a real <code>stock_in</code> movement.
               </CardDescription>
             </div>
-            {isAdmin ? (
-              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button type="button" variant="outline">
-                    Create cup first
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="rounded-none sm:max-w-[520px]">
-                  <DialogHeader>
-                    <DialogTitle>Create Cup</DialogTitle>
-                    <DialogDescription>
-                      Use this only when the SKU does not exist yet, then continue the intake flow.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4">
-                    {createError ? (
-                      <Alert variant="destructive">
-                        <AlertDescription>{createError}</AlertDescription>
-                      </Alert>
-                    ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button asChild type="button" variant="outline">
+                <Link to="/inventory-history">View movement history</Link>
+              </Button>
+              {isAdmin ? (
+                <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="outline">
+                      Create cup first
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="rounded-none sm:max-w-[520px]">
+                    <DialogHeader>
+                      <DialogTitle>Create Cup</DialogTitle>
+                      <DialogDescription>
+                        Use this only when the SKU does not exist yet, then continue the intake flow.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4">
+                      {createError ? (
+                        <Alert variant="destructive">
+                          <AlertDescription>{createError}</AlertDescription>
+                        </Alert>
+                      ) : null}
 
-                    <CupField label="SKU" value={createForm.sku} onChange={(value) => setCreateForm({ ...createForm, sku: value })} />
-                    <CupField label="Brand" value={createForm.brand} onChange={(value) => setCreateForm({ ...createForm, brand: value })} />
-                    <CupField label="Size" value={createForm.size} onChange={(value) => setCreateForm({ ...createForm, size: value })} />
-                    <CupField label="Dimension" value={createForm.dimension} onChange={(value) => setCreateForm({ ...createForm, dimension: value })} />
-                    <CupField label="Material" value={createForm.material ?? ""} onChange={(value) => setCreateForm({ ...createForm, material: value })} />
-                    <CupField label="Color" value={createForm.color ?? ""} onChange={(value) => setCreateForm({ ...createForm, color: value })} />
-                    <CupField label="Min stock" type="number" value={String(createForm.min_stock)} onChange={(value) => setCreateForm({ ...createForm, min_stock: Number(value) })} />
-                    <CupField label="Cost price" value={createForm.cost_price} onChange={(value) => setCreateForm({ ...createForm, cost_price: value })} />
-                    <CupField label="Default sell price" value={createForm.default_sell_price} onChange={(value) => setCreateForm({ ...createForm, default_sell_price: value })} />
+                      <CupField label="SKU" value={createForm.sku} onChange={(value) => setCreateForm({ ...createForm, sku: value })} />
+                      <CupField label="Brand" value={createForm.brand} onChange={(value) => setCreateForm({ ...createForm, brand: value })} />
+                      <CupField label="Size" value={createForm.size} onChange={(value) => setCreateForm({ ...createForm, size: value })} />
+                      <CupField label="Dimension" value={createForm.dimension} onChange={(value) => setCreateForm({ ...createForm, dimension: value })} />
+                      <CupField label="Material" value={createForm.material ?? ""} onChange={(value) => setCreateForm({ ...createForm, material: value })} />
+                      <CupField label="Color" value={createForm.color ?? ""} onChange={(value) => setCreateForm({ ...createForm, color: value })} />
+                      <CupField label="Min stock" type="number" value={String(createForm.min_stock)} onChange={(value) => setCreateForm({ ...createForm, min_stock: Number(value) })} />
+                      <CupField label="Cost price" value={createForm.cost_price} onChange={(value) => setCreateForm({ ...createForm, cost_price: value })} />
+                      <CupField label="Default sell price" value={createForm.default_sell_price} onChange={(value) => setCreateForm({ ...createForm, default_sell_price: value })} />
 
-                    <div className="flex gap-2">
-                      <Button type="button" onClick={submitCreateCup} disabled={createCup.isPending}>
-                        {createCup.isPending ? "Creating..." : "Create cup"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setCreateDialogOpen(false)
-                          setCreateForm(emptyCupForm)
-                          setCreateError(null)
-                        }}
-                      >
-                        Cancel
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button type="button" onClick={submitCreateCup} disabled={createCup.isPending}>
+                          {createCup.isPending ? "Creating..." : "Create cup"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setCreateDialogOpen(false)
+                            setCreateForm(emptyCupForm)
+                            setCreateError(null)
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            ) : null}
+                  </DialogContent>
+                </Dialog>
+              ) : null}
+            </div>
           </div>
 
           {currentUser.data && !isAdmin ? (

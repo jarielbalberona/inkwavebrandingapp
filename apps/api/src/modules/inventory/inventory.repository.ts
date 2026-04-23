@@ -6,13 +6,22 @@ import {
   inventoryMovements,
   type Cup,
   type InventoryMovement,
+  type User,
 } from "../../db/schema/index.js"
-import type { AppendInventoryMovementInput } from "./inventory.schemas.js"
+import type {
+  AppendInventoryMovementInput,
+  InventoryMovementsQuery,
+} from "./inventory.schemas.js"
 
 export interface InventoryBalanceSummary {
   cup: Cup
   onHand: number
   reserved: number
+}
+
+export interface InventoryMovementWithRelations extends InventoryMovement {
+  cup: Cup
+  createdByUser: User | null
 }
 
 export class InventoryRepository {
@@ -107,5 +116,27 @@ export class InventoryRepository {
       onHand: Number(row.onHand),
       reserved: Number(row.reserved),
     }
+  }
+
+  async listMovements(filters: InventoryMovementsQuery): Promise<InventoryMovementWithRelations[]> {
+    const conditions = [
+      filters.cup_id ? eq(inventoryMovements.cupId, filters.cup_id) : undefined,
+      filters.movement_type ? eq(inventoryMovements.movementType, filters.movement_type) : undefined,
+    ].filter(Boolean)
+
+    const rows = await this.db.query.inventoryMovements.findMany({
+      where: conditions.length === 0 ? undefined : and(...conditions),
+      with: {
+        cup: true,
+        createdByUser: true,
+      },
+      orderBy: [desc(inventoryMovements.createdAt)],
+      limit: 200,
+    })
+
+    return rows.map((row) => ({
+      ...row,
+      createdByUser: row.createdByUser ?? null,
+    }))
   }
 }

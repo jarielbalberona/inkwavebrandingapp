@@ -26,6 +26,12 @@ export const inventoryBalanceQuerySchema = z.object({
   include_inactive: z.coerce.boolean().default(false),
 })
 
+export const inventoryMovementsQuerySchema = z.object({
+  cup_id: z.string().uuid().optional(),
+  movement_type: inventoryMovementTypeSchema.optional(),
+})
+
 export type AppendInventoryMovementInput = z.infer<typeof appendInventoryMovementSchema>
 export type StockIntakeRequest = z.infer<typeof stockIntakeRequestSchema>
 export type InventoryBalanceQuery = z.infer<typeof inventoryBalanceQuerySchema>
+export type InventoryMovementsQuery = z.infer<typeof inventoryMovementsQuerySchema>

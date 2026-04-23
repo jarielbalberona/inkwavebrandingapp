@@ -22,6 +22,7 @@ import {
 import { InventoryRepository } from "./inventory.repository.js"
 import {
   inventoryBalanceQuerySchema,
+  inventoryMovementsQuerySchema,
   stockIntakeRequestSchema,
 } from "./inventory.schemas.js"
 
@@ -44,6 +45,19 @@ export async function handleInventoryRoute(
 
       sendJson(response, 200, {
         balances: await service.listBalances(query, user),
+      })
+    })
+    return true
+  }
+
+  if (path === "/inventory/movements" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const query = inventoryMovementsQuerySchema.parse(
+        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
+      )
+
+      sendJson(response, 200, {
+        movements: await service.listMovements(query, user),
       })
     })
     return true

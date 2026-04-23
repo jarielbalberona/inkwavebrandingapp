@@ -50,5 +50,6 @@ export { InventoryRepository } from "./modules/inventory/inventory.repository.js
 export { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
 export { InventoryService } from "./modules/inventory/inventory.service.js"
 export type { InventoryBalanceDto } from "./modules/inventory/inventory.types.js"
+export type { InventoryMovementDto } from "./modules/inventory/inventory.movement-types.js"
 export { hashPassword, verifyPassword } from "./modules/users/passwords.js"
 export { UsersRepository } from "./modules/users/users.repository.js"
