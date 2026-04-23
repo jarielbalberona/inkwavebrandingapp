@@ -43,6 +43,13 @@
       "when": 1776953001643,
       "tag": "0005_flashy_jean_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776953122169,
+      "tag": "0006_greedy_winter_soldier",
+      "breakpoints": true
     }
   ]
 }

@@ -25,6 +25,14 @@ export const orderStatusEnum = pgEnum("order_status", [
   "canceled",
 ])
 
+export const orderLineItemProgressStageEnum = pgEnum("order_line_item_progress_stage", [
+  "printed",
+  "qa_passed",
+  "packed",
+  "ready_for_release",
+  "released",
+])
+
 export const orders = pgTable(
   "orders",
   {
@@ -89,7 +97,31 @@ export const ordersRelations = relations(orders, ({ many, one }) => ({
   items: many(orderItems),
 }))
 
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+export const orderLineItemProgressEvents = pgTable(
+  "order_line_item_progress_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderLineItemId: uuid("order_line_item_id")
+      .notNull()
+      .references(() => orderItems.id, { onDelete: "cascade" }),
+    stage: orderLineItemProgressStageEnum("stage").notNull(),
+    quantity: integer("quantity").notNull(),
+    note: text("note"),
+    eventDate: timestamp("event_date", { withTimezone: true }).notNull().defaultNow(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("order_line_item_progress_events_line_item_id_idx").on(table.orderLineItemId),
+    index("order_line_item_progress_events_stage_idx").on(table.stage),
+    index("order_line_item_progress_events_event_date_idx").on(table.eventDate),
+    check("order_line_item_progress_events_quantity_positive", sql`${table.quantity} > 0`),
+  ],
+)
+
+export const orderItemsRelations = relations(orderItems, ({ many, one }) => ({
   order: one(orders, {
     fields: [orderItems.orderId],
     references: [orders.id],
@@ -98,9 +130,23 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
     fields: [orderItems.cupId],
     references: [cups.id],
   }),
+  progressEvents: many(orderLineItemProgressEvents),
+}))
+
+export const orderLineItemProgressEventsRelations = relations(orderLineItemProgressEvents, ({ one }) => ({
+  orderItem: one(orderItems, {
+    fields: [orderLineItemProgressEvents.orderLineItemId],
+    references: [orderItems.id],
+  }),
+  createdByUser: one(users, {
+    fields: [orderLineItemProgressEvents.createdByUserId],
+    references: [users.id],
+  }),
 }))
 
 export type Order = typeof orders.$inferSelect
 export type NewOrder = typeof orders.$inferInsert
 export type OrderItem = typeof orderItems.$inferSelect
 export type NewOrderItem = typeof orderItems.$inferInsert
+export type OrderLineItemProgressEvent = typeof orderLineItemProgressEvents.$inferSelect
+export type NewOrderLineItemProgressEvent = typeof orderLineItemProgressEvents.$inferInsert
