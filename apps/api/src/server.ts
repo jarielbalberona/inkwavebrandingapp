@@ -8,6 +8,7 @@ import { handleAuthRoute } from "./modules/auth/auth.routes.js"
 import { handleCustomersRoute } from "./modules/customers/customers.routes.js"
 import { handleCupsRoute } from "./modules/cups/cups.routes.js"
 import { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
+import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
 
 const env = loadApiEnv()
 
@@ -49,6 +50,10 @@ const server = createServer(async (request, response) => {
       return
     }
 
+    if (await handleOrdersRoute(request, response, { env: runtimeEnv })) {
+      return
+    }
+
     if (isPublicRoute(request.method, path) && request.method === "GET" && path === "/health") {
       sendJson(response, 200, { ok: true })
       return
@@ -75,6 +80,6 @@ function applyCors(request: IncomingMessage, response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", origin)
   response.setHeader("Access-Control-Allow-Credentials", "true")
   response.setHeader("Access-Control-Allow-Headers", "Content-Type")
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS")
   response.setHeader("Vary", "Origin")
 }

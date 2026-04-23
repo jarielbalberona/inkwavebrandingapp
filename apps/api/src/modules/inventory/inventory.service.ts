@@ -145,50 +145,64 @@ export class InventoryService {
     })
   }
 
-  async reserveOrderItems(input: ReserveOrderItemsInput) {
+  async reserveOrderItems(
+    input: ReserveOrderItemsInput,
+    options: { useExistingTransaction?: boolean } = {},
+  ) {
     const parsedInput = reserveOrderItemsSchema.parse(input)
 
-    return this.inventoryRepository.transaction(async (repository) => {
-      const totalsByCupId = new Map<string, number>()
+    if (options.useExistingTransaction) {
+      return this.reserveOrderItemsWithRepository(parsedInput, this.inventoryRepository)
+    }
 
-      for (const item of parsedInput.items) {
-        totalsByCupId.set(item.cupId, (totalsByCupId.get(item.cupId) ?? 0) + item.quantity)
+    return this.inventoryRepository.transaction((repository) =>
+      this.reserveOrderItemsWithRepository(parsedInput, repository),
+    )
+  }
+
+  private async reserveOrderItemsWithRepository(
+    input: ReserveOrderItemsInput,
+    repository: InventoryRepository,
+  ) {
+    const totalsByCupId = new Map<string, number>()
+
+    for (const item of input.items) {
+      totalsByCupId.set(item.cupId, (totalsByCupId.get(item.cupId) ?? 0) + item.quantity)
+    }
+
+    for (const [cupId, quantity] of totalsByCupId) {
+      const balance = await repository.getBalanceByCupId(cupId)
+
+      if (!balance) {
+        throw new InventoryBalanceCupNotFoundError()
       }
 
-      for (const [cupId, quantity] of totalsByCupId) {
-        const balance = await repository.getBalanceByCupId(cupId)
-
-        if (!balance) {
-          throw new InventoryBalanceCupNotFoundError()
-        }
-
-        if (!balance.cup.isActive) {
-          throw new InventoryCupInactiveError()
-        }
-
-        if (balance.onHand - balance.reserved < quantity) {
-          throw new InventoryReservationInsufficientStockError()
-        }
+      if (!balance.cup.isActive) {
+        throw new InventoryCupInactiveError()
       }
 
-      const movements = []
-
-      for (const item of parsedInput.items) {
-        movements.push(
-          await repository.appendMovement({
-            cupId: item.cupId,
-            movementType: "reserve",
-            quantity: item.quantity,
-            orderId: parsedInput.orderId,
-            orderItemId: item.orderItemId,
-            note: "Reserved for pending order",
-            reference: parsedInput.orderId,
-            createdByUserId: parsedInput.createdByUserId,
-          }),
-        )
+      if (balance.onHand - balance.reserved < quantity) {
+        throw new InventoryReservationInsufficientStockError()
       }
+    }
 
-      return movements
-    })
+    const movements = []
+
+    for (const item of input.items) {
+      movements.push(
+        await repository.appendMovement({
+          cupId: item.cupId,
+          movementType: "reserve",
+          quantity: item.quantity,
+          orderId: input.orderId,
+          orderItemId: item.orderItemId,
+          note: "Reserved for pending order",
+          reference: input.orderId,
+          createdByUserId: input.createdByUserId,
+        }),
+      )
+    }
+
+    return movements
   }
 }
