@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
+  createInventoryAdjustment,
   createStockIntake,
+  type InventoryAdjustmentPayload,
   listInventoryMovements,
   listInventoryBalances,
   type InventoryItemType,
@@ -44,6 +46,20 @@ export function useStockIntakeMutation() {
 
   return useMutation({
     mutationFn: (payload: StockIntakePayload) => createStockIntake(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: cupsQueryKey })
+      await queryClient.invalidateQueries({ queryKey: lidsQueryKey })
+      await queryClient.invalidateQueries({ queryKey: inventoryBalancesQueryKey })
+      await queryClient.invalidateQueries({ queryKey: inventoryMovementsQueryKey })
+    },
+  })
+}
+
+export function useInventoryAdjustmentMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: InventoryAdjustmentPayload) => createInventoryAdjustment(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cupsQueryKey })
       await queryClient.invalidateQueries({ queryKey: lidsQueryKey })

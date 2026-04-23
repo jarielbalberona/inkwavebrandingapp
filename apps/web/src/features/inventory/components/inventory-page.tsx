@@ -19,6 +19,21 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@workspace/ui/components/dialog"
+import {
   Table,
   TableBody,
   TableCell,
@@ -30,9 +45,11 @@ import {
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type { InventoryBalance } from "@/features/inventory/api/inventory-client"
 import {
+  useInventoryAdjustmentMutation,
   useInventoryBalancesQuery,
   useStockIntakeMutation,
 } from "@/features/inventory/hooks/use-inventory"
+import { PlusIcon } from "lucide-react"
 
 const stockIntakeFormSchema = z.object({
   quantity: z.number().int().positive("Quantity must be a positive whole number."),
@@ -40,9 +57,24 @@ const stockIntakeFormSchema = z.object({
   note: z.string().trim().max(500).optional(),
 })
 
+const adjustmentFormSchema = z.object({
+  movementType: z.enum(["adjustment_in", "adjustment_out"]),
+  quantity: z.number().int().positive("Quantity must be a positive whole number."),
+  reference: z.string().trim().max(160).optional(),
+  note: z.string().trim().min(1, "Reason is required.").max(500),
+})
+
 type StockIntakeFormValues = z.infer<typeof stockIntakeFormSchema>
+type AdjustmentFormValues = z.infer<typeof adjustmentFormSchema>
 
 const emptyFormValues: StockIntakeFormValues = {
+  quantity: 0,
+  reference: "",
+  note: "",
+}
+
+const emptyAdjustmentValues: AdjustmentFormValues = {
+  movementType: "adjustment_in",
   quantity: 0,
   reference: "",
   note: "",
@@ -52,15 +84,22 @@ export function InventoryPage() {
   const currentUser = useCurrentUser()
   const balancesQuery = useInventoryBalancesQuery()
   const stockIntake = useStockIntakeMutation()
+  const inventoryAdjustment = useInventoryAdjustmentMutation()
   const [search, setSearch] = useState("")
-  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null)
-  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
+  const [activeBalanceKey, setActiveBalanceKey] = useState<string | null>(null)
+  const [isReceiveStockDialogOpen, setIsReceiveStockDialogOpen] = useState(false)
+  const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false)
+  const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const isAdmin = currentUser.data?.role === "admin"
 
   const form = useForm<StockIntakeFormValues>({
     resolver: zodResolver(stockIntakeFormSchema),
     defaultValues: emptyFormValues,
+  })
+  const adjustmentForm = useForm<AdjustmentFormValues>({
+    resolver: zodResolver(adjustmentFormSchema),
+    defaultValues: emptyAdjustmentValues,
   })
 
   const filteredBalances = useMemo(
@@ -70,25 +109,23 @@ export function InventoryPage() {
 
   const selectedBalance = useMemo(
     () =>
-      balancesQuery.data?.find((balance) => toInventoryItemKey(balance) === selectedItemKey) ?? null,
-    [balancesQuery.data, selectedItemKey],
+      balancesQuery.data?.find((balance) => toInventoryItemKey(balance) === activeBalanceKey) ?? null,
+    [activeBalanceKey, balancesQuery.data],
   )
 
   async function onSubmit(values: StockIntakeFormValues) {
     if (!selectedBalance) {
       setSubmitError("Select a tracked item before recording stock intake.")
-      setSubmitSuccess(null)
       return
     }
 
     if (!isInventoryItemActive(selectedBalance)) {
       setSubmitError("Inactive items cannot receive stock intake.")
-      setSubmitSuccess(null)
       return
     }
 
     setSubmitError(null)
-    setSubmitSuccess(null)
+    setPageNotice(null)
 
     try {
       await stockIntake.mutateAsync(
@@ -110,7 +147,8 @@ export function InventoryPage() {
       )
 
       form.reset(emptyFormValues)
-      setSubmitSuccess(
+      setIsReceiveStockDialogOpen(false)
+      setPageNotice(
         `Recorded ${values.quantity} units as stock_in for ${formatInventoryItemLabel(selectedBalance)}.`,
       )
     } catch (error) {
@@ -118,8 +156,89 @@ export function InventoryPage() {
     }
   }
 
+  async function onSubmitAdjustment(values: AdjustmentFormValues) {
+    if (!selectedBalance) {
+      setSubmitError("Select a tracked item before recording an adjustment.")
+      return
+    }
+
+    if (!isInventoryItemActive(selectedBalance)) {
+      setSubmitError("Inactive items cannot be adjusted.")
+      return
+    }
+
+    setSubmitError(null)
+    setPageNotice(null)
+
+    try {
+      await inventoryAdjustment.mutateAsync(
+        selectedBalance.item_type === "cup"
+          ? {
+              itemType: "cup",
+              cupId: selectedBalance.cup.id,
+              movementType: values.movementType,
+              quantity: values.quantity,
+              note: values.note.trim(),
+              reference: values.reference?.trim() || undefined,
+            }
+          : {
+              itemType: "lid",
+              lidId: selectedBalance.lid.id,
+              movementType: values.movementType,
+              quantity: values.quantity,
+              note: values.note.trim(),
+              reference: values.reference?.trim() || undefined,
+            },
+      )
+
+      adjustmentForm.reset(emptyAdjustmentValues)
+      setIsAdjustmentDialogOpen(false)
+      setPageNotice(
+        `Recorded ${values.quantity} units as ${values.movementType} for ${formatInventoryItemLabel(selectedBalance)}.`,
+      )
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Unable to record inventory adjustment.",
+      )
+    }
+  }
+
+  function openReceiveStockDialog(balance: InventoryBalance) {
+    setActiveBalanceKey(toInventoryItemKey(balance))
+    setSubmitError(null)
+    setPageNotice(null)
+    form.reset(emptyFormValues)
+    setIsReceiveStockDialogOpen(true)
+  }
+
+  function openAdjustmentDialog(balance: InventoryBalance) {
+    setActiveBalanceKey(toInventoryItemKey(balance))
+    setSubmitError(null)
+    setPageNotice(null)
+    adjustmentForm.reset(emptyAdjustmentValues)
+    setIsAdjustmentDialogOpen(true)
+  }
+
+  function handleReceiveStockDialogOpenChange(open: boolean) {
+    setIsReceiveStockDialogOpen(open)
+
+    if (!open) {
+      setSubmitError(null)
+      form.reset(emptyFormValues)
+    }
+  }
+
+  function handleAdjustmentDialogOpenChange(open: boolean) {
+    setIsAdjustmentDialogOpen(open)
+
+    if (!open) {
+      setSubmitError(null)
+      adjustmentForm.reset(emptyAdjustmentValues)
+    }
+  }
+
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
+    <div className="grid gap-4">
       <Card className="rounded-none">
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -136,10 +255,14 @@ export function InventoryPage() {
               {isAdmin ? (
                 <>
                   <Button asChild type="button" variant="outline">
-                    <Link to="/cups">Create cup in catalog</Link>
+                    <Link to="/cups">
+                      <PlusIcon className="size-4" /> Cup
+                    </Link>
                   </Button>
                   <Button asChild type="button" variant="outline">
-                    <Link to="/lids">Create lid in catalog</Link>
+                    <Link to="/lids">
+                      <PlusIcon className="size-4" /> Lid
+                    </Link>
                   </Button>
                 </>
               ) : null}
@@ -149,7 +272,7 @@ export function InventoryPage() {
           {currentUser.data && !isAdmin ? (
             <Alert>
               <AlertDescription>
-                Your account can inspect stock balances, but stock intake remains admin-only.
+                Your account can inspect stock balances, but stock changes remain admin-only.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -157,6 +280,12 @@ export function InventoryPage() {
           {balancesQuery.isError ? (
             <Alert variant="destructive">
               <AlertDescription>{balancesQuery.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {pageNotice ? (
+            <Alert>
+              <AlertDescription>{pageNotice}</AlertDescription>
             </Alert>
           ) : null}
 
@@ -193,20 +322,12 @@ export function InventoryPage() {
                 <TableHead>Min stock</TableHead>
                 <TableHead>Risk</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredBalances.map((balance) => (
-                <TableRow
-                  key={toInventoryItemKey(balance)}
-                  className="cursor-pointer"
-                  data-state={toInventoryItemKey(balance) === selectedItemKey ? "selected" : undefined}
-                  onClick={() => {
-                    setSelectedItemKey(toInventoryItemKey(balance))
-                    setSubmitError(null)
-                    setSubmitSuccess(null)
-                  }}
-                >
+                <TableRow key={toInventoryItemKey(balance)}>
                   <TableCell>
                     <Badge variant="outline">{balance.item_type}</Badge>
                   </TableCell>
@@ -232,114 +353,271 @@ export function InventoryPage() {
                       {isInventoryItemActive(balance) ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Dialog
+                        open={
+                          isReceiveStockDialogOpen &&
+                          toInventoryItemKey(balance) === activeBalanceKey
+                        }
+                        onOpenChange={handleReceiveStockDialogOpenChange}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={!isAdmin || !isInventoryItemActive(balance)}
+                            onClick={() => openReceiveStockDialog(balance)}
+                          >
+                            Receive
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg">
+                          <DialogHeader>
+                            <DialogTitle>Receive Stock</DialogTitle>
+                            <DialogDescription>
+                              Record a new <code>stock_in</code> movement for the selected tracked
+                              item.
+                            </DialogDescription>
+                          </DialogHeader>
+
+                          {submitError ? (
+                            <Alert variant="destructive">
+                              <AlertDescription>{submitError}</AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          {selectedBalance ? (
+                            <InventoryItemSummary balance={selectedBalance} />
+                          ) : null}
+
+                          <Form {...form}>
+                            <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+                              <FormField
+                                control={form.control}
+                                name="quantity"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Quantity</FormLabel>
+                                    <FormControl>
+                                      <Input.Number
+                                        disabled={!isAdmin}
+                                        min={0}
+                                        value={field.value}
+                                        onChange={(value) => field.onChange(value ?? 0)}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name="reference"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Reference</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        disabled={!isAdmin}
+                                        {...field}
+                                        value={field.value ?? ""}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name="note"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Note</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        disabled={!isAdmin}
+                                        {...field}
+                                        value={field.value ?? ""}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <Button type="submit" disabled={!isAdmin || stockIntake.isPending}>
+                                {stockIntake.isPending ? "Recording..." : "Record stock intake"}
+                              </Button>
+                            </form>
+                          </Form>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Dialog
+                        open={
+                          isAdjustmentDialogOpen &&
+                          toInventoryItemKey(balance) === activeBalanceKey
+                        }
+                        onOpenChange={handleAdjustmentDialogOpenChange}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={!isAdmin || !isInventoryItemActive(balance)}
+                            onClick={() => openAdjustmentDialog(balance)}
+                          >
+                            Adjust
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg">
+                          <DialogHeader>
+                            <DialogTitle>Manual Adjustment</DialogTitle>
+                            <DialogDescription>
+                              Record a real <code>adjustment_in</code> or{" "}
+                              <code>adjustment_out</code> movement for the selected tracked item.
+                            </DialogDescription>
+                          </DialogHeader>
+
+                          {submitError ? (
+                            <Alert variant="destructive">
+                              <AlertDescription>{submitError}</AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          {selectedBalance ? (
+                            <InventoryItemSummary balance={selectedBalance} />
+                          ) : null}
+
+                          <Form {...adjustmentForm}>
+                            <form
+                              className="grid gap-4"
+                              onSubmit={adjustmentForm.handleSubmit(onSubmitAdjustment)}
+                            >
+                              <FormField
+                                control={adjustmentForm.control}
+                                name="movementType"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Adjustment type</FormLabel>
+                                    <Select
+                                      disabled={!isAdmin}
+                                      value={field.value}
+                                      onValueChange={field.onChange}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger className="w-full rounded-none border px-3">
+                                          <SelectValue placeholder="Select adjustment type" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent className="rounded-none">
+                                        <SelectItem value="adjustment_in">Adjustment in</SelectItem>
+                                        <SelectItem value="adjustment_out">
+                                          Adjustment out
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={adjustmentForm.control}
+                                name="quantity"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Quantity</FormLabel>
+                                    <FormControl>
+                                      <Input.Number
+                                        disabled={!isAdmin}
+                                        min={0}
+                                        value={field.value}
+                                        onChange={(value) => field.onChange(value ?? 0)}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={adjustmentForm.control}
+                                name="reference"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Reference</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        disabled={!isAdmin}
+                                        {...field}
+                                        value={field.value ?? ""}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={adjustmentForm.control}
+                                name="note"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Reason</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        disabled={!isAdmin}
+                                        {...field}
+                                        value={field.value ?? ""}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <Button
+                                type="submit"
+                                disabled={!isAdmin || inventoryAdjustment.isPending}
+                              >
+                                {inventoryAdjustment.isPending
+                                  ? "Recording..."
+                                  : "Record adjustment"}
+                              </Button>
+                            </form>
+                          </Form>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+    </div>
+  )
+}
 
-      <Card className="rounded-none">
-        <CardHeader>
-          <CardTitle>Receive Stock</CardTitle>
-          <CardDescription>
-            {selectedBalance
-              ? "Review the selected tracked item and record a new stock_in movement."
-              : "Select a tracked item from the list before recording stock intake."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          {submitError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{submitError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {submitSuccess ? (
-            <Alert>
-              <AlertDescription>{submitSuccess}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {selectedBalance ? (
-            <div className="grid gap-3 border p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="grid gap-1">
-                  <p className="text-sm font-medium">{formatInventoryItemLabel(selectedBalance)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatInventoryItemSecondaryLabel(selectedBalance)}
-                  </p>
-                </div>
-                <Badge variant={isInventoryItemActive(selectedBalance) ? "default" : "secondary"}>
-                  {isInventoryItemActive(selectedBalance) ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No tracked item selected yet. Pick one from the table to continue.
-            </p>
-          )}
-
-          <Form {...form}>
-            <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantity</FormLabel>
-                    <FormControl>
-                      <Input.Number
-                        disabled={!isAdmin}
-                        min={0}
-                        value={field.value}
-                        onChange={(value) => field.onChange(value ?? 0)}
-                      />
-                    </FormControl>
-                    
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="reference"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reference</FormLabel>
-                    <FormControl>
-                      <Input disabled={!isAdmin} {...field} value={field.value ?? ""} />
-                    </FormControl>
-                    
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="note"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Note</FormLabel>
-                    <FormControl>
-                      <Input disabled={!isAdmin} {...field} value={field.value ?? ""} />
-                    </FormControl>
-                    
-                  </FormItem>
-                )}
-              />
-
-              <Button
-                type="submit"
-                disabled={!isAdmin || !selectedBalance || stockIntake.isPending}
-              >
-                {stockIntake.isPending ? "Recording..." : "Record stock intake"}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+function InventoryItemSummary({ balance }: { balance: InventoryBalance }) {
+  return (
+    <div className="grid gap-3 border p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="grid gap-1">
+          <p className="text-sm font-medium">{formatInventoryItemLabel(balance)}</p>
+          <p className="text-sm text-muted-foreground">
+            {formatInventoryItemSecondaryLabel(balance)}
+          </p>
+        </div>
+        <Badge variant={isInventoryItemActive(balance) ? "default" : "secondary"}>
+          {isInventoryItemActive(balance) ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-sm text-muted-foreground">
+        <span>On hand: {balance.on_hand}</span>
+        <span>Reserved: {balance.reserved}</span>
+        <span>Available: {balance.available}</span>
+      </div>
     </div>
   )
 }

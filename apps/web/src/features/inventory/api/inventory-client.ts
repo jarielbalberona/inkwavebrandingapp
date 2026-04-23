@@ -29,7 +29,7 @@ const cupSchema = z.object({
 
 const lidSchema = z.object({
   id: z.string().uuid(),
-  sku: z.string(),
+  sku: z.string().default(""),
   type: z.enum(["paper", "plastic"]),
   brand: z.string(),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
@@ -131,6 +131,10 @@ const stockIntakeResponseSchema = z.object({
   movement: inventoryMovementSchema,
 })
 
+const inventoryAdjustmentResponseSchema = z.object({
+  movement: inventoryMovementSchema,
+})
+
 export type InventoryMovement = z.infer<typeof inventoryMovementSchema>
 export type InventoryBalance = z.infer<typeof inventoryBalanceSchema>
 export type InventoryMovementListItem = z.infer<typeof inventoryMovementListItemSchema>
@@ -143,6 +147,26 @@ export type StockIntakePayload =
       lidId?: undefined
       quantity: number
       note?: string
+      reference?: string
+    }
+
+export type InventoryAdjustmentPayload =
+  | {
+      itemType: "cup"
+      cupId: string
+      lidId?: undefined
+      movementType: "adjustment_in" | "adjustment_out"
+      quantity: number
+      note: string
+      reference?: string
+    }
+  | {
+      itemType: "lid"
+      cupId?: undefined
+      lidId: string
+      movementType: "adjustment_in" | "adjustment_out"
+      quantity: number
+      note: string
       reference?: string
     }
   | {
@@ -233,6 +257,55 @@ export async function createStockIntake(payload: StockIntakePayload): Promise<In
       }
 
       throw new Error("Unable to record stock intake.")
+    }
+
+    throw error
+  }
+}
+
+export async function createInventoryAdjustment(
+  payload: InventoryAdjustmentPayload,
+): Promise<InventoryMovement> {
+  try {
+    const data = await api.post<unknown, InventoryAdjustmentPayload>(
+      "/inventory/adjustments",
+      payload,
+    )
+
+    return inventoryAdjustmentResponseSchema.parse(data).movement
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.status === 403) {
+        throw new Error("Only admins can record manual inventory adjustments.")
+      }
+
+      if (error.status === 404) {
+        throw new Error(
+          payload.itemType === "cup"
+            ? "Selected cup no longer exists."
+            : "Selected lid no longer exists.",
+        )
+      }
+
+      if (error.status === 409) {
+        if (payload.movementType === "adjustment_out") {
+          throw new Error("Adjustment out cannot exceed the current on-hand stock.")
+        }
+
+        throw new Error(
+          payload.itemType === "cup"
+            ? "Selected cup is inactive and cannot be adjusted."
+            : "Selected lid is inactive and cannot be adjusted.",
+        )
+      }
+
+      if (error.status === 400) {
+        throw new Error(
+          "Enter a valid tracked item, adjustment type, quantity, and reason.",
+        )
+      }
+
+      throw new Error("Unable to record inventory adjustment.")
     }
 
     throw error
