@@ -37,6 +37,7 @@ pnpm --filter @workspace/api db:check
 pnpm --filter @workspace/api db:generate
 pnpm --filter @workspace/api db:migrate
 pnpm --filter @workspace/api db:drizzle-check
+pnpm --filter @workspace/api seed:admin
 pnpm --filter @workspace/ui lint
 pnpm --filter web typecheck
 ```

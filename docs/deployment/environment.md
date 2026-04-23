@@ -30,6 +30,9 @@ Backend variables must not be exposed to the frontend bundle.
 | `SENTRY_DSN` | no | Empty value disables Sentry initialization. |
 | `SENTRY_TRACES_SAMPLE_RATE` | no | Number from `0` to `1`; default `0`. |
 | `OPENAI_API_KEY` | no | Reserved for future API work. No OpenAI API calls exist yet. |
+| `ADMIN_EMAIL` | seed only | Used by `pnpm --filter @workspace/api seed:admin`; not required for normal runtime. |
+| `ADMIN_PASSWORD` | seed only | Must be a long generated value. Never commit a real password. |
+| `ADMIN_DISPLAY_NAME` | seed only | Optional display name for the bootstrap admin. |
 
 ## Current Render Status
 
