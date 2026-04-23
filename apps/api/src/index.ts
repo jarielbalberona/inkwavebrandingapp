@@ -16,6 +16,17 @@ export {
   sendUnauthenticated,
 } from "./modules/auth/auth.middleware.js"
 export type { AuthenticatedRequestContext } from "./modules/auth/auth.middleware.js"
+export {
+  AuthorizationError,
+  assertAdmin,
+  assertCanViewConfidentialFields,
+  canViewConfidentialFields,
+  confidentialFieldCategories,
+  isAdmin,
+  roleFromUnknown,
+  sendForbidden,
+} from "./modules/auth/authorization.js"
+export type { ConfidentialFieldCategory } from "./modules/auth/authorization.js"
 export { AuthService, AuthenticationError } from "./modules/auth/auth.service.js"
 export { createSessionToken, verifySessionToken } from "./modules/auth/sessions.js"
 export { hashPassword, verifyPassword } from "./modules/users/passwords.js"
