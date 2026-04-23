@@ -30,6 +30,7 @@ import { CustomerSearchSelect } from "@/features/customers/components/customer-s
 import type {
   Order,
   OrderStatus,
+  ProgressEvent,
   ProgressStage,
   ProgressTotals,
 } from "@/features/orders/api/orders-client"
@@ -501,6 +502,10 @@ export function OrdersPage() {
                       ) : null}
                     </div>
 
+                    {progressEventsQuery.data ? (
+                      <ProgressHistory events={progressEventsQuery.data.events} />
+                    ) : null}
+
                     <div className="grid gap-3">
                       <div className="grid gap-2">
                         <Label>Stage</Label>
@@ -656,6 +661,56 @@ function ProgressTotal({ label, value }: { label: string; value: number }) {
     <div className="border bg-muted/30 p-2">
       <p className="text-muted-foreground">{label}</p>
       <p className="text-base font-semibold">{value.toLocaleString()}</p>
+    </div>
+  )
+}
+
+function ProgressHistory({ events }: { events: ProgressEvent[] }) {
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <Label>Progress history</Label>
+        <Badge variant="secondary">{events.length} events</Badge>
+      </div>
+
+      {events.length === 0 ? (
+        <p className="border bg-muted/30 p-3 text-sm text-muted-foreground">
+          No progress events recorded for this line item yet.
+        </p>
+      ) : (
+        <div className="max-h-80 overflow-auto border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Event date</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Qty</TableHead>
+                <TableHead>Note</TableHead>
+                <TableHead>Created by</TableHead>
+                <TableHead>Recorded</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map((event) => (
+                <TableRow key={event.id}>
+                  <TableCell className="whitespace-nowrap">
+                    {new Date(event.event_date).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{formatStatus(event.stage)}</Badge>
+                  </TableCell>
+                  <TableCell>{event.quantity.toLocaleString()}</TableCell>
+                  <TableCell>{event.note ?? "—"}</TableCell>
+                  <TableCell>{event.created_by?.display_name ?? "System"}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {new Date(event.created_at).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   )
 }
