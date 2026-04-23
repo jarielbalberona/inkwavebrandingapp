@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import {
+  getCupUsageReport,
   getInventorySummaryReport,
   getLowStockReport,
   getOrderStatusReport,
@@ -26,5 +27,12 @@ export function useOrderStatusReportQuery() {
   return useQuery({
     queryKey: [...reportsQueryKey, "order-status"] as const,
     queryFn: getOrderStatusReport,
+  })
+}
+
+export function useCupUsageReportQuery() {
+  return useQuery({
+    queryKey: [...reportsQueryKey, "cup-usage"] as const,
+    queryFn: getCupUsageReport,
   })
 }

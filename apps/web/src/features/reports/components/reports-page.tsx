@@ -14,23 +14,27 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 
 import type {
+  CupUsageReport,
+  CupUsageReportItem,
   InventoryReportItem,
   OrderStatusReport,
   OrderStatusReportItem,
 } from "@/features/reports/api/reports-client"
 import {
+  useCupUsageReportQuery,
   useInventorySummaryReportQuery,
   useLowStockReportQuery,
   useOrderStatusReportQuery,
 } from "@/features/reports/hooks/use-reports"
 
 export function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<"inventory-summary" | "low-stock" | "order-status">(
-    "inventory-summary",
-  )
+  const [activeTab, setActiveTab] = useState<
+    "inventory-summary" | "low-stock" | "order-status" | "cup-usage"
+  >("inventory-summary")
   const inventorySummaryQuery = useInventorySummaryReportQuery()
   const lowStockQuery = useLowStockReportQuery()
   const orderStatusQuery = useOrderStatusReportQuery()
+  const cupUsageQuery = useCupUsageReportQuery()
   const inventoryReport =
     activeTab === "inventory-summary"
       ? inventorySummaryQuery.data
@@ -42,7 +46,9 @@ export function ReportsPage() {
       ? inventorySummaryQuery
       : activeTab === "low-stock"
         ? lowStockQuery
-        : orderStatusQuery
+        : activeTab === "order-status"
+          ? orderStatusQuery
+          : cupUsageQuery
 
   return (
     <div className="grid gap-4">
@@ -62,7 +68,8 @@ export function ReportsPage() {
               if (
                 value === "inventory-summary" ||
                 value === "low-stock" ||
-                value === "order-status"
+                value === "order-status" ||
+                value === "cup-usage"
               ) {
                 setActiveTab(value)
               }
@@ -72,11 +79,14 @@ export function ReportsPage() {
               <TabsTrigger value="inventory-summary">Inventory Summary</TabsTrigger>
               <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
               <TabsTrigger value="order-status">Order Status</TabsTrigger>
+              <TabsTrigger value="cup-usage">Cup Usage</TabsTrigger>
             </TabsList>
           </Tabs>
 
           {activeTab === "order-status" ? (
             <OrderStatusReportSection report={orderStatusQuery.data} />
+          ) : activeTab === "cup-usage" ? (
+            <CupUsageReportSection report={cupUsageQuery.data} />
           ) : (
             <InventoryReportSummaryCards
               activeTab={activeTab}
@@ -98,7 +108,7 @@ export function ReportsPage() {
             <p className="text-sm text-muted-foreground">Loading report data...</p>
           ) : null}
 
-          {!activeQuery.isLoading && activeTab !== "order-status" && inventoryReport?.items.length === 0 ? (
+          {!activeQuery.isLoading && activeTab !== "order-status" && activeTab !== "cup-usage" && inventoryReport?.items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {activeTab === "inventory-summary"
                 ? "No inventory report rows available yet."
@@ -112,8 +122,18 @@ export function ReportsPage() {
             <p className="text-sm text-muted-foreground">No orders recorded yet.</p>
           ) : null}
 
+          {!activeQuery.isLoading &&
+          activeTab === "cup-usage" &&
+          cupUsageQuery.data?.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No consume movements recorded yet.</p>
+          ) : null}
+
           {activeTab !== "order-status" && inventoryReport?.items.length ? (
             <InventoryReportTable items={inventoryReport.items} />
+          ) : null}
+
+          {activeTab === "cup-usage" && cupUsageQuery.data?.items.length ? (
+            <CupUsageReportTable items={cupUsageQuery.data.items} />
           ) : null}
         </CardContent>
       </Card>
@@ -258,8 +278,59 @@ function OrderStatusReportSection({ report }: { report: OrderStatusReport | unde
   )
 }
 
+function CupUsageReportSection({ report }: { report: CupUsageReport | undefined }) {
+  const sortedItems = [...(report?.items ?? [])].sort(
+    (left, right) => right.consumed_quantity - left.consumed_quantity,
+  )
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-3">
+        <MetricCard
+          label="Tracked SKUs"
+          value={sortedItems.length}
+          description="Only cups with consume movements appear"
+        />
+        <MetricCard
+          label="Total consumed"
+          value={report?.total_consumed_quantity ?? 0}
+          description="Sum of consume movement quantities"
+        />
+        <MetricCard
+          label="Inactive SKUs"
+          value={sumCupUsage(sortedItems, (item) => (item.cup.is_active ? 0 : 1))}
+          description="Inactive cups still counted if used historically"
+        />
+      </div>
+
+      {report ? (
+        <Card className="rounded-none">
+          <CardHeader>
+            <CardDescription>Filter basis</CardDescription>
+            <CardTitle className="text-lg">
+              {report.filters.start_date || report.filters.end_date
+                ? "Filtered date range"
+                : "All recorded consume movements"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Start: {report.filters.start_date ?? "Not set"} • End:{" "}
+              {report.filters.end_date ?? "Not set"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  )
+}
+
 function sum(items: InventoryReportItem[] | undefined, mapItem: (item: InventoryReportItem) => number) {
   return (items ?? []).reduce((total, item) => total + mapItem(item), 0)
+}
+
+function sumCupUsage(items: CupUsageReportItem[], mapItem: (item: CupUsageReportItem) => number) {
+  return items.reduce((total, item) => total + mapItem(item), 0)
 }
 
 function formatStatus(status: OrderStatusReportItem["status"]) {
@@ -299,4 +370,39 @@ function statusDescription(item: OrderStatusReportItem) {
     case "canceled":
       return "Order lifecycle closed"
   }
+}
+
+function CupUsageReportTable({ items }: { items: CupUsageReportItem[] }) {
+  const sortedItems = [...items].sort((left, right) => right.consumed_quantity - left.consumed_quantity)
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>SKU</TableHead>
+          <TableHead>Brand</TableHead>
+          <TableHead>Size</TableHead>
+          <TableHead>Dimension</TableHead>
+          <TableHead>Consumed Quantity</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sortedItems.map((item) => (
+          <TableRow key={item.cup.id}>
+            <TableCell className="font-medium">{item.cup.sku}</TableCell>
+            <TableCell>{item.cup.brand}</TableCell>
+            <TableCell>{item.cup.size}</TableCell>
+            <TableCell>{item.cup.dimension}</TableCell>
+            <TableCell>{item.consumed_quantity.toLocaleString()}</TableCell>
+            <TableCell>
+              <Badge variant={item.cup.is_active ? "default" : "secondary"}>
+                {item.cup.is_active ? "Active" : "Inactive"}
+              </Badge>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
 }

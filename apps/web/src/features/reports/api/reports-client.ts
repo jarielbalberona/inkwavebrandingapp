@@ -53,10 +53,39 @@ const orderStatusReportResponseSchema = z.object({
   report: orderStatusReportSchema,
 })
 
+const cupUsageReportItemSchema = z.object({
+  cup: z.object({
+    id: z.string().uuid(),
+    sku: z.string(),
+    brand: z.string(),
+    size: z.string(),
+    dimension: z.string(),
+    material: z.string().nullable(),
+    color: z.string().nullable(),
+    is_active: z.boolean(),
+  }),
+  consumed_quantity: z.number(),
+})
+
+const cupUsageReportSchema = z.object({
+  filters: z.object({
+    start_date: z.string().nullable(),
+    end_date: z.string().nullable(),
+  }),
+  items: z.array(cupUsageReportItemSchema),
+  total_consumed_quantity: z.number(),
+})
+
+const cupUsageReportResponseSchema = z.object({
+  report: cupUsageReportSchema,
+})
+
 export type InventoryReportItem = z.infer<typeof inventoryReportItemSchema>
 export type InventoryReport = z.infer<typeof inventoryReportSchema>
 export type OrderStatusReport = z.infer<typeof orderStatusReportSchema>
 export type OrderStatusReportItem = z.infer<typeof orderStatusReportItemSchema>
+export type CupUsageReport = z.infer<typeof cupUsageReportSchema>
+export type CupUsageReportItem = z.infer<typeof cupUsageReportItemSchema>
 
 export class ReportsApiError extends Error {
   readonly status: number
@@ -101,4 +130,16 @@ export async function getOrderStatusReport(): Promise<OrderStatusReport> {
   }
 
   return orderStatusReportResponseSchema.parse(await response.json()).report
+}
+
+export async function getCupUsageReport(): Promise<CupUsageReport> {
+  const response = await fetch(`${apiBaseUrl}/reports/cup-usage`, {
+    credentials: "include",
+  })
+
+  if (!response.ok) {
+    throw new ReportsApiError("Unable to load cup usage report.", response.status)
+  }
+
+  return cupUsageReportResponseSchema.parse(await response.json()).report
 }
