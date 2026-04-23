@@ -235,7 +235,7 @@ export class InventoryRepository {
         )
         .where(options.includeInactive ? undefined : eq(lids.isActive, true))
         .groupBy(lids.id)
-        .orderBy(asc(lids.type), asc(lids.brand), asc(lids.diameter), asc(lids.shape))
+        .orderBy(asc(lids.sku))
 
       balances.push(
         ...lidRows.map((row) => ({

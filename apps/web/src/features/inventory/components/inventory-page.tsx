@@ -15,7 +15,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -372,7 +371,7 @@ function formatInventoryItemLabel(balance: InventoryBalance): string {
     return balance.cup.sku
   }
 
-  return `${balance.lid.type} ${balance.lid.brand} ${balance.lid.diameter} ${balance.lid.shape} ${balance.lid.color}`
+  return balance.lid.sku
 }
 
 function formatInventoryItemPrimaryLabel(balance: InventoryBalance): string {
@@ -380,7 +379,7 @@ function formatInventoryItemPrimaryLabel(balance: InventoryBalance): string {
     return balance.cup.sku
   }
 
-  return `${balance.lid.diameter} ${balance.lid.shape}`
+  return balance.lid.sku
 }
 
 function formatInventoryItemSecondaryLabel(balance: InventoryBalance): string {

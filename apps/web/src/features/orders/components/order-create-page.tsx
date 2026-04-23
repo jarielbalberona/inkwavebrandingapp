@@ -14,7 +14,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import {
@@ -338,5 +337,5 @@ function formatCupOption(cup: Cup): string {
 }
 
 function formatLidOption(lid: Lid): string {
-  return `${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color}`
+  return `${lid.sku} · ${lid.type} · ${lid.brand} · ${lid.color}`
 }

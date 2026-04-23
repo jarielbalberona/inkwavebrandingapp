@@ -544,7 +544,7 @@ function createOrderNumber(): string {
 }
 
 function buildLidDescriptionSnapshot(lid: Lid): string {
-  return `${lid.type} ${lid.brand} ${lid.diameter} ${lid.shape} ${lid.color}`
+  return lid.sku
 }
 
 function calculateProgressTotals(

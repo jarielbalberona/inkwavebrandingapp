@@ -147,7 +147,7 @@ export function InventoryHistoryPage() {
                     <span className="font-medium">
                       {movement.item_type === "cup"
                         ? movement.cup.sku
-                        : `${movement.lid.diameter} ${movement.lid.shape}`}
+                        : movement.lid.sku}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {movement.item_type === "cup"
