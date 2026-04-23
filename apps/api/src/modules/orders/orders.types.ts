@@ -3,6 +3,10 @@ import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
 import { toCustomerDto } from "../customers/customers.types.js"
 import type { OrderWithRelations } from "./orders.repository.js"
+import type {
+  OrderLineItemProgressStage,
+} from "./orders.schemas.js"
+import type { ProgressEventWithRelations } from "./orders.repository.js"
 
 interface OrderCupDto {
   id: string
@@ -42,6 +46,29 @@ interface BaseOrderDto {
 }
 
 export type OrderDto = BaseOrderDto
+
+export interface ProgressTotalsDto {
+  total_printed: number
+  total_qa_passed: number
+  total_packed: number
+  total_ready_for_release: number
+  total_released: number
+  remaining_balance: number
+}
+
+export interface OrderLineItemProgressEventDto {
+  id: string
+  order_line_item_id: string
+  stage: OrderLineItemProgressStage
+  quantity: number
+  note: string | null
+  event_date: string
+  created_by: {
+    id: string
+    display_name: string | null
+  } | null
+  created_at: string
+}
 
 export function toOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto {
   const dto = shapeRoleAwareResponse(user, {
@@ -105,5 +132,25 @@ function toCupDto(cup: Cup): OrderCupDto {
     dimension: cup.dimension,
     material: cup.material ?? null,
     color: cup.color ?? null,
+  }
+}
+
+export function toProgressEventDto(
+  event: ProgressEventWithRelations,
+): OrderLineItemProgressEventDto {
+  return {
+    id: event.id,
+    order_line_item_id: event.orderLineItemId,
+    stage: event.stage,
+    quantity: event.quantity,
+    note: event.note ?? null,
+    event_date: event.eventDate.toISOString(),
+    created_by: event.createdByUser
+      ? {
+          id: event.createdByUser.id,
+          display_name: event.createdByUser.displayName ?? null,
+        }
+      : null,
+    created_at: event.createdAt.toISOString(),
   }
 }

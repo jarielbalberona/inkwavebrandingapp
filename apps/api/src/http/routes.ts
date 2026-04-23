@@ -21,6 +21,8 @@ export const routeDefinitions = [
   { access: "protected", method: "GET", path: "/inventory/movements" },
   { access: "protected", method: "POST", path: "/inventory/adjustments" },
   { access: "protected", method: "POST", path: "/inventory/stock-intake" },
+  { access: "protected", method: "GET", path: "/order-line-items/:id/progress-events" },
+  { access: "protected", method: "POST", path: "/order-line-items/:id/progress-events" },
   { access: "protected", method: "POST", path: "/orders" },
 ] as const satisfies readonly RouteDefinition[]
 

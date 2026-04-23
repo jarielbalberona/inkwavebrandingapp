@@ -19,6 +19,7 @@ import {
 } from "../inventory/inventory.service.js"
 import { UsersRepository } from "../users/users.repository.js"
 import { createOrderSchema } from "./orders.schemas.js"
+import { createOrderLineItemProgressEventSchema } from "./orders.schemas.js"
 import { OrdersRepository } from "./orders.repository.js"
 import {
   DuplicateOrderCupError,
@@ -26,6 +27,9 @@ import {
   OrderCupNotFoundError,
   OrderCustomerInactiveError,
   OrderCustomerNotFoundError,
+  OrderLineItemNotFoundError,
+  OrderProgressClosedError,
+  OrderProgressValidationError,
   OrdersService,
 } from "./orders.service.js"
 
@@ -45,6 +49,24 @@ export async function handleOrdersRoute(
       const input = createOrderSchema.parse(await readJsonBody(request))
 
       sendJson(response, 201, { order: await service.create(input, user) })
+    })
+    return true
+  }
+
+  const progressEventsMatch = path.match(/^\/order-line-items\/([^/]+)\/progress-events$/)
+
+  if (progressEventsMatch && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service) => {
+      sendJson(response, 200, await service.listProgressEvents(progressEventsMatch[1] ?? ""))
+    })
+    return true
+  }
+
+  if (progressEventsMatch && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const input = createOrderLineItemProgressEventSchema.parse(await readJsonBody(request))
+
+      sendJson(response, 201, await service.createProgressEvent(progressEventsMatch[1] ?? "", input, user))
     })
     return true
   }
@@ -107,6 +129,9 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderCupNotFoundError ||
     error instanceof OrderCupInactiveError ||
     error instanceof DuplicateOrderCupError ||
+    error instanceof OrderLineItemNotFoundError ||
+    error instanceof OrderProgressClosedError ||
+    error instanceof OrderProgressValidationError ||
     error instanceof InventoryBalanceCupNotFoundError ||
     error instanceof InventoryCupInactiveError ||
     error instanceof InventoryReservationInsufficientStockError

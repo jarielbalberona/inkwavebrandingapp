@@ -1,14 +1,20 @@
-import { eq } from "drizzle-orm"
+import { asc, eq } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
   orderItems,
+  orderLineItemProgressEvents,
   orders,
+  type NewOrderLineItemProgressEvent,
   type NewOrder,
   type NewOrderItem,
 } from "../../db/schema/index.js"
 
 export type OrderWithRelations = NonNullable<Awaited<ReturnType<OrdersRepository["findByIdWithRelations"]>>>
+export type OrderItemWithOrder = NonNullable<Awaited<ReturnType<OrdersRepository["findOrderItemWithOrder"]>>>
+export type ProgressEventWithRelations = Awaited<
+  ReturnType<OrdersRepository["listProgressEventsForOrderItem"]>
+>[number]
 
 export class OrdersRepository {
   constructor(private readonly db: DatabaseClient) {}
@@ -62,5 +68,53 @@ export class OrdersRepository {
         },
       },
     })
+  }
+
+  async findOrderItemWithOrder(id: string) {
+    return this.db.query.orderItems.findFirst({
+      where: eq(orderItems.id, id),
+      with: {
+        order: true,
+      },
+    })
+  }
+
+  async listProgressEventsForOrderItem(orderLineItemId: string) {
+    return this.db.query.orderLineItemProgressEvents.findMany({
+      where: eq(orderLineItemProgressEvents.orderLineItemId, orderLineItemId),
+      with: {
+        createdByUser: true,
+      },
+      orderBy: [
+        asc(orderLineItemProgressEvents.eventDate),
+        asc(orderLineItemProgressEvents.createdAt),
+      ],
+    })
+  }
+
+  async createProgressEvent(
+    input: NewOrderLineItemProgressEvent,
+  ): Promise<ProgressEventWithRelations> {
+    const rows = await this.db.insert(orderLineItemProgressEvents).values(input).returning()
+    const event = rows[0]
+
+    if (!event) {
+      throw new Error("Failed to create progress event")
+    }
+
+    const events = await this.db.query.orderLineItemProgressEvents.findMany({
+      where: eq(orderLineItemProgressEvents.id, event.id),
+      with: {
+        createdByUser: true,
+      },
+      limit: 1,
+    })
+    const eventWithRelations = events[0]
+
+    if (!eventWithRelations) {
+      throw new Error("Failed to load created progress event")
+    }
+
+    return eventWithRelations
   }
 }

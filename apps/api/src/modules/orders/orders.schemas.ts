@@ -16,6 +16,14 @@ export const orderStatusSchema = z.enum([
   "canceled",
 ])
 
+export const orderLineItemProgressStageSchema = z.enum([
+  "printed",
+  "qa_passed",
+  "packed",
+  "ready_for_release",
+  "released",
+])
+
 export const createOrderSchema = z.object({
   customer_id: z.string().uuid(),
   notes: optionalText(1000),
@@ -30,5 +38,16 @@ export const createOrderSchema = z.object({
     .min(1),
 })
 
+export const createOrderLineItemProgressEventSchema = z.object({
+  stage: orderLineItemProgressStageSchema,
+  quantity: z.number().int().positive(),
+  note: optionalText(500),
+  event_date: z.coerce.date(),
+})
+
 export type OrderStatus = z.infer<typeof orderStatusSchema>
+export type OrderLineItemProgressStage = z.infer<typeof orderLineItemProgressStageSchema>
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
+export type CreateOrderLineItemProgressEventInput = z.infer<
+  typeof createOrderLineItemProgressEventSchema
+>
