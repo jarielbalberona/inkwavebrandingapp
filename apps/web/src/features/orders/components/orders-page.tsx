@@ -1,4 +1,6 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react"
+import { useMemo, useState } from "react"
+
+import { Link } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
@@ -23,12 +25,6 @@ import {
 } from "@workspace/ui/components/table"
 import { Textarea } from "@workspace/ui/components/textarea"
 
-import type { Cup } from "@/features/cups/api/cups-client"
-import { useCupsQuery } from "@/features/cups/hooks/use-cups"
-import type { Customer } from "@/features/customers/api/customers-client"
-import { CustomerSearchSelect } from "@/features/customers/components/customer-search-select"
-import type { Lid } from "@/features/lids/api/lids-client"
-import { useLidsQuery } from "@/features/lids/hooks/use-lids"
 import type {
   Order,
   OrderStatus,
@@ -40,37 +36,14 @@ import {
   progressStageOptions,
   useCancelOrderMutation,
   useCreateProgressEventMutation,
-  useCreateOrderMutation,
   useOrderQuery,
   useProgressEventsQuery,
   orderStatusOptions,
-  useUpdateOrderMutation,
   useOrdersQuery,
 } from "@/features/orders/hooks/use-orders"
 
-interface DraftLineItem {
-  id: string
-  itemType: "cup" | "lid"
-  itemId: string
-  quantity: string
-  notes: string
-}
-
-const createDraftLineItem = (): DraftLineItem => ({
-  id: crypto.randomUUID(),
-  itemType: "cup",
-  itemId: "",
-  quantity: "1",
-  notes: "",
-})
-
 export function OrdersPage() {
   const [status, setStatus] = useState<OrderStatus | "all">("all")
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [notes, setNotes] = useState("")
-  const [lineItems, setLineItems] = useState<DraftLineItem[]>([createDraftLineItem()])
-  const [formError, setFormError] = useState<string | null>(null)
-  const [lastCreatedOrderNumber, setLastCreatedOrderNumber] = useState<string | null>(null)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [selectedLineItemId, setSelectedLineItemId] = useState<string | null>(null)
   const [progressStage, setProgressStage] = useState<ProgressStage>("printed")
@@ -81,10 +54,6 @@ export function OrdersPage() {
   )
   const [progressError, setProgressError] = useState<string | null>(null)
   const [progressSuccess, setProgressSuccess] = useState<string | null>(null)
-  const [editNotes, setEditNotes] = useState("")
-  const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
-  const [editError, setEditError] = useState<string | null>(null)
-  const [editSuccess, setEditSuccess] = useState<string | null>(null)
   const query = useMemo(
     () => ({
       status: status === "all" ? undefined : status,
@@ -94,20 +63,8 @@ export function OrdersPage() {
   const ordersQuery = useOrdersQuery(query)
   const selectedOrderQuery = useOrderQuery(selectedOrderId)
   const progressEventsQuery = useProgressEventsQuery(selectedLineItemId)
-  const cupsQuery = useCupsQuery()
-  const lidsQuery = useLidsQuery()
-  const createOrderMutation = useCreateOrderMutation()
   const createProgressEventMutation = useCreateProgressEventMutation()
   const cancelOrderMutation = useCancelOrderMutation()
-  const updateOrderMutation = useUpdateOrderMutation()
-  const activeCups = useMemo(
-    () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
-    [cupsQuery.data],
-  )
-  const activeLids = useMemo(
-    () => (lidsQuery.data ?? []).filter((lid) => lid.is_active),
-    [lidsQuery.data],
-  )
   const selectedOrder =
     selectedOrderQuery.data ?? ordersQuery.data?.find((order) => order.id === selectedOrderId) ?? null
   const selectedLineItem =
@@ -121,75 +78,11 @@ export function OrdersPage() {
       ? progressStage
       : (availableProgressStages[0] ?? "printed")
 
-  async function handleCreateOrder() {
-    setFormError(null)
-    setLastCreatedOrderNumber(null)
-
-    if (!selectedCustomer) {
-      setFormError("Select a customer before creating an order.")
-      return
-    }
-
-    const parsedLineItems = lineItems.map((item) =>
-      item.itemType === "cup"
-        ? {
-            item_type: "cup" as const,
-            cup_id: item.itemId,
-            quantity: Number(item.quantity),
-            notes: item.notes.trim() || undefined,
-          }
-        : {
-            item_type: "lid" as const,
-            lid_id: item.itemId,
-            quantity: Number(item.quantity),
-            notes: item.notes.trim() || undefined,
-          },
-    )
-
-    if (parsedLineItems.length === 0 || parsedLineItems.some((item) => !("cup_id" in item ? item.cup_id : item.lid_id))) {
-      setFormError("Select a source item for every line item.")
-      return
-    }
-
-    if (parsedLineItems.some((item) => !Number.isInteger(item.quantity) || item.quantity <= 0)) {
-      setFormError("Enter a positive whole-number quantity for every line item.")
-      return
-    }
-
-    const uniqueKeys = parsedLineItems.map((item) =>
-      item.item_type === "cup" ? `cup:${item.cup_id}` : `lid:${item.lid_id}`,
-    )
-
-    if (new Set(uniqueKeys).size !== uniqueKeys.length) {
-      setFormError("Each source item can only appear once per order.")
-      return
-    }
-
-    try {
-      const order = await createOrderMutation.mutateAsync({
-        customer_id: selectedCustomer.id,
-        notes: notes.trim() || undefined,
-        line_items: parsedLineItems,
-      })
-
-      setSelectedCustomer(null)
-      setNotes("")
-      setLineItems([createDraftLineItem()])
-      setLastCreatedOrderNumber(order.order_number)
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Unable to create order.")
-    }
-  }
-
   function handleSelectOrder(order: Order) {
     setSelectedOrderId(order.id)
     setSelectedLineItemId(order.items[0]?.id ?? null)
     setProgressError(null)
     setProgressSuccess(null)
-    setEditNotes(order.notes ?? "")
-    setEditCustomer(order.customer)
-    setEditError(null)
-    setEditSuccess(null)
   }
 
   async function handleCreateProgressEvent() {
@@ -260,46 +153,6 @@ export function OrdersPage() {
     }
   }
 
-  async function handleUpdateSelectedOrder() {
-    setEditError(null)
-    setEditSuccess(null)
-
-    if (!selectedOrder) {
-      return
-    }
-
-    const nextCustomerId = editCustomer?.id ?? selectedOrder.customer.id
-    const normalizedNotes = editNotes.trim() || null
-    const currentNotes = selectedOrder.notes ?? null
-    const payload: { customer_id?: string; notes?: string | null } = {}
-
-    if (nextCustomerId !== selectedOrder.customer.id) {
-      payload.customer_id = nextCustomerId
-    }
-
-    if (normalizedNotes !== currentNotes) {
-      payload.notes = normalizedNotes
-    }
-
-    if (!payload.customer_id && payload.notes === undefined) {
-      setEditError("No order changes to save.")
-      return
-    }
-
-    try {
-      const order = await updateOrderMutation.mutateAsync({
-        id: selectedOrder.id,
-        payload,
-      })
-
-      setEditNotes(order.notes ?? "")
-      setEditCustomer(order.customer)
-      setEditSuccess(`Updated ${order.order_number}.`)
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Unable to update order.")
-    }
-  }
-
   async function handleCancelSelectedOrder() {
     setProgressError(null)
     setProgressSuccess(null)
@@ -325,12 +178,16 @@ export function OrdersPage() {
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
       <Card className="rounded-none">
         <CardHeader className="gap-4">
-          <div className="grid gap-1">
-            <CardTitle>Orders</CardTitle>
-            <CardDescription>
-              Derived fulfillment status from production progress. No stale printing status, no
-              client-side financial redaction.
-            </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div className="grid gap-1">
+              <CardTitle>Orders</CardTitle>
+              <CardDescription>
+                Order creation and editing now live on dedicated pages. This screen stays focused on list visibility and fulfillment operations.
+              </CardDescription>
+            </div>
+            <Button asChild>
+              <Link to="/orders/new">Create Order</Link>
+            </Button>
           </div>
 
           <div className="grid gap-2 md:max-w-xs">
@@ -370,10 +227,10 @@ export function OrdersPage() {
                 <TableHead>Order</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Customer</TableHead>
-              <TableHead>Line Items</TableHead>
-              <TableHead>Total Qty</TableHead>
-              <TableHead>Updated</TableHead>
-              <TableHead>Fulfillment</TableHead>
+                <TableHead>Line Items</TableHead>
+                <TableHead>Total Qty</TableHead>
+                <TableHead>Updated</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -402,14 +259,21 @@ export function OrdersPage() {
                     {new Date(order.updated_at).toLocaleString()}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSelectOrder(order)}
-                    >
-                      Manage
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSelectOrder(order)}
+                      >
+                        Fulfillment
+                      </Button>
+                      <Button asChild type="button" variant="outline" size="sm">
+                        <Link to="/orders/$orderId/edit" params={{ orderId: order.id }}>
+                          Edit
+                        </Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -418,393 +282,177 @@ export function OrdersPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4">
-        <Card className="rounded-none">
-          <CardHeader>
-            <CardTitle>Create Pending Order</CardTitle>
-            <CardDescription>
-              Select a real customer and tracked items. Submission creates a pending order and reserves stock.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <CustomerSearchSelect
-              selectedCustomerId={selectedCustomer?.id ?? null}
-              onSelect={setSelectedCustomer}
-            />
-
-            <div className="grid gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <Label>Line items</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLineItems((items) => [...items, createDraftLineItem()])}
-                >
-                  Add item
-                </Button>
-              </div>
-
-              {lineItems.map((lineItem, index) => (
-                <div key={lineItem.id} className="grid gap-3 border p-3">
-                  <div className="grid gap-2">
-                    <Label>Item type</Label>
-                    <Select
-                      value={lineItem.itemType}
-                      onValueChange={(itemType) =>
-                        updateLineItem(setLineItems, lineItem.id, {
-                          itemType: itemType as "cup" | "lid",
-                          itemId: "",
-                        })
-                      }
-                    >
-                      <SelectTrigger className="w-full rounded-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-none">
-                        <SelectItem value="cup">Cup</SelectItem>
-                        <SelectItem value="lid">Lid</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label>{lineItem.itemType === "cup" ? "Cup SKU" : "Lid"}</Label>
-                    <Select
-                      value={lineItem.itemId || undefined}
-                      onValueChange={(itemId) => updateLineItem(setLineItems, lineItem.id, { itemId })}
-                    >
-                      <SelectTrigger className="w-full rounded-none">
-                        <SelectValue
-                          placeholder={
-                            lineItem.itemType === "cup"
-                              ? cupsQuery.isLoading
-                                ? "Loading cups..."
-                                : "Select cup"
-                              : lidsQuery.isLoading
-                                ? "Loading lids..."
-                                : "Select lid"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-none">
-                        {lineItem.itemType === "cup"
-                          ? activeCups.map((cup) => (
-                              <SelectItem key={cup.id} value={cup.id}>
-                                {formatCupOption(cup)}
-                              </SelectItem>
-                            ))
-                          : activeLids.map((lid) => (
-                              <SelectItem key={lid.id} value={lid.id}>
-                                {formatLidOption(lid)}
-                              </SelectItem>
-                            ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor={`line-item-quantity-${lineItem.id}`}>Quantity</Label>
-                    <Input.Number
-                      id={`line-item-quantity-${lineItem.id}`}
-                      min={1}
-                      value={Number(lineItem.quantity)}
-                      onChange={(value) =>
-                        updateLineItem(setLineItems, lineItem.id, {
-                          quantity: String(value ?? 0),
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor={`line-item-notes-${lineItem.id}`}>Line note</Label>
-                    <Input
-                      id={`line-item-notes-${lineItem.id}`}
-                      value={lineItem.notes}
-                      placeholder="Optional production note"
-                      onChange={(event) =>
-                        updateLineItem(setLineItems, lineItem.id, { notes: event.target.value })
-                      }
-                    />
-                  </div>
-
-                  {lineItems.length > 1 ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="justify-self-start px-0"
-                      onClick={() =>
-                        setLineItems((items) => items.filter((item) => item.id !== lineItem.id))
-                      }
-                    >
-                      Remove item {index + 1}
-                    </Button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="order-notes">Order notes</Label>
-              <Textarea
-                id="order-notes"
-                value={notes}
-                placeholder="Optional order note"
-                onChange={(event) => setNotes(event.target.value)}
-              />
-            </div>
-
-            {formError ? (
-              <Alert variant="destructive">
-                <AlertDescription>{formError}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {lastCreatedOrderNumber ? (
-              <Alert>
-                <AlertDescription>
-                  Created pending order {lastCreatedOrderNumber}. Stock was reserved by the API.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            <Button
-              type="button"
-              className="rounded-none"
-              disabled={createOrderMutation.isPending || cupsQuery.isLoading || lidsQuery.isLoading}
-              onClick={handleCreateOrder}
-            >
-              {createOrderMutation.isPending ? "Creating order..." : "Create pending order"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-none">
-          <CardHeader>
-            <CardTitle>Fulfillment Progress</CardTitle>
-            <CardDescription>
-              Select an order line item and record quantity-based progress events.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            {!selectedOrder ? (
-              <p className="text-sm text-muted-foreground">
-                Select Manage from an order row to record fulfillment progress.
-              </p>
-            ) : null}
-
-            {selectedOrder ? (
-              <>
-                <div className="grid gap-1 text-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{selectedOrder.order_number}</p>
-                      <p className="text-muted-foreground">
-                        {selectedOrder.customer.business_name} · {formatStatus(selectedOrder.status)}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      disabled={
-                        cancelOrderMutation.isPending ||
-                        selectedOrder.status === "canceled" ||
-                        selectedOrder.status === "completed"
-                      }
-                      onClick={handleCancelSelectedOrder}
-                    >
-                      {cancelOrderMutation.isPending ? "Canceling..." : "Cancel"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 border p-3">
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium">Allowed order edits</p>
-                    <p className="text-xs text-muted-foreground">
-                      Only notes and guarded customer reassignment are supported. Status and line items are
-                      not directly editable.
+      <Card className="rounded-none">
+        <CardHeader>
+          <CardTitle>Fulfillment Progress</CardTitle>
+          <CardDescription>
+            Select an order and line item to record quantity-based fulfillment events.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {!selectedOrder ? (
+            <p className="text-sm text-muted-foreground">
+              Select Fulfillment from an order row to manage line-item progress.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-1 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{selectedOrder.order_number}</p>
+                    <p className="text-muted-foreground">
+                      {selectedOrder.customer.business_name} · {formatStatus(selectedOrder.status)}
                     </p>
                   </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-order-notes">Order notes</Label>
-                    <Textarea
-                      id="edit-order-notes"
-                      value={editNotes}
-                      disabled={selectedOrder.status === "canceled" || selectedOrder.status === "completed"}
-                      onChange={(event) => setEditNotes(event.target.value)}
-                    />
-                  </div>
-
-                  <CustomerSearchSelect
-                    selectedCustomerId={editCustomer?.id ?? selectedOrder.customer.id}
-                    onSelect={setEditCustomer}
-                  />
-
-                  {editError ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>{editError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-
-                  {editSuccess ? (
-                    <Alert>
-                      <AlertDescription>{editSuccess}</AlertDescription>
-                    </Alert>
-                  ) : null}
-
                   <Button
                     type="button"
-                    className="rounded-none"
+                    variant="destructive"
+                    size="sm"
                     disabled={
-                      updateOrderMutation.isPending ||
+                      cancelOrderMutation.isPending ||
                       selectedOrder.status === "canceled" ||
                       selectedOrder.status === "completed"
                     }
-                    onClick={handleUpdateSelectedOrder}
+                    onClick={handleCancelSelectedOrder}
                   >
-                    {updateOrderMutation.isPending ? "Saving order..." : "Save allowed edits"}
+                    {cancelOrderMutation.isPending ? "Canceling..." : "Cancel"}
                   </Button>
                 </div>
+              </div>
 
-                <div className="grid gap-2">
-                  <Label>Line item</Label>
-                  <Select
-                    value={selectedLineItemId ?? undefined}
-                    onValueChange={(lineItemId) => {
-                      setSelectedLineItemId(lineItemId)
-                      setProgressError(null)
-                      setProgressSuccess(null)
-                    }}
-                  >
-                    <SelectTrigger className="w-full rounded-none">
-                      <SelectValue placeholder="Select line item" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-none">
-                      {selectedOrder.items.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {formatOrderItemLabel(item)} x {item.quantity.toLocaleString()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid gap-2">
+                <Label>Line item</Label>
+                <Select
+                  value={selectedLineItemId ?? undefined}
+                  onValueChange={(lineItemId) => {
+                    setSelectedLineItemId(lineItemId)
+                    setProgressError(null)
+                    setProgressSuccess(null)
+                  }}
+                >
+                  <SelectTrigger className="w-full rounded-none">
+                    <SelectValue placeholder="Select line item" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    {selectedOrder.items.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {formatOrderItemLabel(item)} x {item.quantity.toLocaleString()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {selectedLineItem ? (
-                  <div className="grid gap-4">
-                    <div className="grid gap-2 border p-3 text-sm">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium">{formatOrderItemLabel(selectedLineItem)}</p>
-                          <p className="text-muted-foreground">
-                            {formatOrderItemDetails(selectedLineItem)}
-                          </p>
-                        </div>
-                        <Badge variant="secondary">
-                          Ordered {selectedLineItem.quantity.toLocaleString()}
-                        </Badge>
+              {selectedLineItem ? (
+                <div className="grid gap-4">
+                  <div className="grid gap-2 border p-3 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{formatOrderItemLabel(selectedLineItem)}</p>
+                        <p className="text-muted-foreground">
+                          {formatOrderItemDetails(selectedLineItem)}
+                        </p>
                       </div>
-                      {progressEventsQuery.isLoading ? (
-                        <p className="text-muted-foreground">Loading progress totals...</p>
-                      ) : null}
-                      {progressEventsQuery.isError ? (
-                        <p className="text-destructive">{progressEventsQuery.error.message}</p>
-                      ) : null}
-                      {progressEventsQuery.data ? (
-                        <ProgressTotalsGrid totals={progressEventsQuery.data.totals} />
-                      ) : null}
+                      <Badge variant="secondary">
+                        Ordered {selectedLineItem.quantity.toLocaleString()}
+                      </Badge>
+                    </div>
+                    {progressEventsQuery.isLoading ? (
+                      <p className="text-muted-foreground">Loading progress totals...</p>
+                    ) : null}
+                    {progressEventsQuery.isError ? (
+                      <p className="text-destructive">{progressEventsQuery.error.message}</p>
+                    ) : null}
+                    {progressEventsQuery.data ? (
+                      <ProgressTotalsGrid totals={progressEventsQuery.data.totals} />
+                    ) : null}
+                  </div>
+
+                  {progressEventsQuery.data ? (
+                    <ProgressHistory events={progressEventsQuery.data.events} />
+                  ) : null}
+
+                  <div className="grid gap-3">
+                    <div className="grid gap-2">
+                      <Label>Stage</Label>
+                      <Select
+                        value={effectiveProgressStage}
+                        onValueChange={(value) => setProgressStage(value as ProgressStage)}
+                      >
+                        <SelectTrigger className="w-full rounded-none">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-none">
+                          {availableProgressStages.map((stage) => (
+                            <SelectItem key={stage} value={stage}>
+                              {formatStatus(stage)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    {progressEventsQuery.data ? (
-                      <ProgressHistory events={progressEventsQuery.data.events} />
+                    <div className="grid gap-2">
+                      <Label htmlFor="progress-quantity">Quantity</Label>
+                      <Input.Number
+                        id="progress-quantity"
+                        min={1}
+                        value={Number(progressQuantity)}
+                        onChange={(value) => setProgressQuantity(String(value ?? 0))}
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="progress-date">Event date</Label>
+                      <Input
+                        id="progress-date"
+                        type="date"
+                        value={progressEventDate}
+                        onChange={(event) => setProgressEventDate(event.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="progress-note">Note</Label>
+                      <Textarea
+                        id="progress-note"
+                        value={progressNote}
+                        placeholder="Optional fulfillment note"
+                        onChange={(event) => setProgressNote(event.target.value)}
+                      />
+                    </div>
+
+                    {progressError ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>{progressError}</AlertDescription>
+                      </Alert>
                     ) : null}
 
-                    <div className="grid gap-3">
-                      <div className="grid gap-2">
-                        <Label>Stage</Label>
-                        <Select
-                          value={effectiveProgressStage}
-                          onValueChange={(value) => setProgressStage(value as ProgressStage)}
-                        >
-                          <SelectTrigger className="w-full rounded-none">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-none">
-                            {availableProgressStages.map((stage) => (
-                              <SelectItem key={stage} value={stage}>
-                                {formatStatus(stage)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    {progressSuccess ? (
+                      <Alert>
+                        <AlertDescription>{progressSuccess}</AlertDescription>
+                      </Alert>
+                    ) : null}
 
-                      <div className="grid gap-2">
-                        <Label htmlFor="progress-quantity">Quantity</Label>
-                        <Input.Number
-                          id="progress-quantity"
-                          min={1}
-                          value={Number(progressQuantity)}
-                          onChange={(value) => setProgressQuantity(String(value ?? 0))}
-                        />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="progress-date">Event date</Label>
-                        <Input
-                          id="progress-date"
-                          type="date"
-                          value={progressEventDate}
-                          onChange={(event) => setProgressEventDate(event.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="progress-note">Note</Label>
-                        <Textarea
-                          id="progress-note"
-                          value={progressNote}
-                          placeholder="Optional production note"
-                          onChange={(event) => setProgressNote(event.target.value)}
-                        />
-                      </div>
-
-                      {progressError ? (
-                        <Alert variant="destructive">
-                          <AlertDescription>{progressError}</AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      {progressSuccess ? (
-                        <Alert>
-                          <AlertDescription>{progressSuccess}</AlertDescription>
-                        </Alert>
-                      ) : null}
-
-                      <Button
-                        type="button"
-                        className="rounded-none"
-                        disabled={
-                          createProgressEventMutation.isPending ||
-                          selectedOrder.status === "canceled" ||
-                          selectedOrder.status === "completed"
-                        }
-                        onClick={handleCreateProgressEvent}
-                      >
-                        {createProgressEventMutation.isPending ? "Recording progress..." : "Record progress"}
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      className="rounded-none"
+                      disabled={
+                        createProgressEventMutation.isPending ||
+                        selectedOrder.status === "canceled" ||
+                        selectedOrder.status === "completed"
+                      }
+                      onClick={handleCreateProgressEvent}
+                    >
+                      {createProgressEventMutation.isPending ? "Recording progress..." : "Record progress"}
+                    </Button>
                   </div>
-                ) : null}
-              </>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -842,24 +490,6 @@ function formatLineItems(order: Order): string {
   }
 
   return `${firstItemLabel} + ${remainingItems.length} more`
-}
-
-function updateLineItem(
-  setLineItems: Dispatch<SetStateAction<DraftLineItem[]>>,
-  id: string,
-  patch: Partial<Omit<DraftLineItem, "id">>,
-) {
-  setLineItems((items) =>
-    items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-  )
-}
-
-function formatCupOption(cup: Cup): string {
-  return `${cup.sku} · ${cup.type} · ${cup.brand} · ${cup.size} · ${cup.diameter}`
-}
-
-function formatLidOption(lid: Lid): string {
-  return `${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color}`
 }
 
 function formatOrderItemLabel(item: Order["items"][number]): string {
