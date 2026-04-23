@@ -12,8 +12,9 @@ import {
   type CreateOrderInput,
   type CreateOrderLineItemProgressEventInput,
   type OrderLineItemProgressStage,
+  type OrderStatus,
 } from "./orders.schemas.js"
-import { OrdersRepository } from "./orders.repository.js"
+import { OrdersRepository, type OrderItemWithProgressEvents } from "./orders.repository.js"
 import {
   toOrderDto,
   toProgressEventDto,
@@ -267,11 +268,17 @@ export class OrdersService {
         })
       }
 
+      const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(orderItem.orderId)
+      const orderStatus = deriveOrderStatus(orderItem.order.status, orderItems)
+
+      await ordersRepository.updateOrderStatus(orderItem.orderId, orderStatus)
+
       const events = [...existingEvents, event]
 
       return {
         event: toProgressEventDto(event),
         totals: calculateProgressTotals(orderItem.quantity, events),
+        order_status: orderStatus,
       }
     })
   }
@@ -360,4 +367,53 @@ function totalForStage(totals: ProgressTotalsDto, stage: OrderLineItemProgressSt
     case "released":
       return totals.total_released
   }
+}
+
+function deriveOrderStatus(
+  currentStatus: OrderStatus,
+  items: OrderItemWithProgressEvents[],
+): OrderStatus {
+  if (currentStatus === "canceled") {
+    return "canceled"
+  }
+
+  let hasAnyProgress = false
+  let hasAnyReleased = false
+  let allLineItemsReleased = items.length > 0
+
+  for (const item of items) {
+    const totals = calculateProgressTotals(item.quantity, item.progressEvents)
+    const itemProgressTotal =
+      totals.total_printed +
+      totals.total_qa_passed +
+      totals.total_packed +
+      totals.total_ready_for_release +
+      totals.total_released
+
+    if (itemProgressTotal > 0) {
+      hasAnyProgress = true
+    }
+
+    if (totals.total_released > 0) {
+      hasAnyReleased = true
+    }
+
+    if (totals.total_released < item.quantity) {
+      allLineItemsReleased = false
+    }
+  }
+
+  if (allLineItemsReleased) {
+    return "completed"
+  }
+
+  if (hasAnyReleased) {
+    return "partial_released"
+  }
+
+  if (hasAnyProgress) {
+    return "in_progress"
+  }
+
+  return "pending"
 }

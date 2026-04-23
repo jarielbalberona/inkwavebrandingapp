@@ -8,12 +8,16 @@ import {
   type NewOrderLineItemProgressEvent,
   type NewOrder,
   type NewOrderItem,
+  type Order,
 } from "../../db/schema/index.js"
 
 export type OrderWithRelations = NonNullable<Awaited<ReturnType<OrdersRepository["findByIdWithRelations"]>>>
 export type OrderItemWithOrder = NonNullable<Awaited<ReturnType<OrdersRepository["findOrderItemWithOrder"]>>>
 export type ProgressEventWithRelations = Awaited<
   ReturnType<OrdersRepository["listProgressEventsForOrderItem"]>
+>[number]
+export type OrderItemWithProgressEvents = Awaited<
+  ReturnType<OrdersRepository["listOrderItemsWithProgressEvents"]>
 >[number]
 
 export class OrdersRepository {
@@ -77,6 +81,25 @@ export class OrdersRepository {
         order: true,
       },
     })
+  }
+
+  async listOrderItemsWithProgressEvents(orderId: string) {
+    return this.db.query.orderItems.findMany({
+      where: eq(orderItems.orderId, orderId),
+      with: {
+        progressEvents: true,
+      },
+    })
+  }
+
+  async updateOrderStatus(orderId: string, status: Order["status"]): Promise<void> {
+    await this.db
+      .update(orders)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
   }
 
   async listProgressEventsForOrderItem(orderLineItemId: string) {
