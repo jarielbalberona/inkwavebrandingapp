@@ -68,6 +68,7 @@ export class OrdersRepository {
         items: {
           with: {
             cup: true,
+            lid: true,
           },
         },
       },
@@ -82,6 +83,7 @@ export class OrdersRepository {
         items: {
           with: {
             cup: true,
+            lid: true,
           },
         },
       },
@@ -95,6 +97,8 @@ export class OrdersRepository {
       where: eq(orderItems.id, id),
       with: {
         order: true,
+        cup: true,
+        lid: true,
       },
     })
   }

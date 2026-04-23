@@ -1,8 +1,7 @@
 import { z } from "zod"
 
 import { customerSchema } from "@/features/customers/api/customers-client"
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
+import { ApiClientError, api } from "@/lib/api"
 
 export const orderStatusSchema = z.enum([
   "pending",
@@ -30,16 +29,43 @@ const orderCupSchema = z.object({
   color: z.enum(["transparent", "black", "white", "kraft"]),
 })
 
-const orderItemSchema = z.object({
+const orderLidSchema = z.object({
   id: z.string().uuid(),
-  cup: orderCupSchema,
-  quantity: z.number().int().positive(),
-  notes: z.string().nullable(),
-  cost_price: z.string().optional(),
-  sell_price: z.string().optional(),
-  created_at: z.string(),
-  updated_at: z.string(),
+  type: z.enum(["paper", "plastic"]),
+  brand: z.string(),
+  diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
+  shape: z.string(),
+  color: z.enum(["transparent", "black", "white"]),
 })
+
+const orderItemSchema = z.discriminatedUnion("item_type", [
+  z.object({
+    id: z.string().uuid(),
+    item_type: z.literal("cup"),
+    cup: orderCupSchema,
+    lid: z.null(),
+    description_snapshot: z.string(),
+    quantity: z.number().int().positive(),
+    notes: z.string().nullable(),
+    unit_cost_price: z.string().optional(),
+    unit_sell_price: z.string().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    item_type: z.literal("lid"),
+    cup: z.null(),
+    lid: orderLidSchema,
+    description_snapshot: z.string(),
+    quantity: z.number().int().positive(),
+    notes: z.string().nullable(),
+    unit_cost_price: z.string().optional(),
+    unit_sell_price: z.string().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+])
 
 const orderSchema = z.object({
   id: z.string().uuid(),
@@ -105,11 +131,20 @@ export type ProgressEvent = z.infer<typeof progressEventSchema>
 export interface CreateOrderPayload {
   customer_id: string
   notes?: string
-  line_items: Array<{
-    cup_id: string
-    quantity: number
-    notes?: string
-  }>
+  line_items: Array<
+    | {
+        item_type: "cup"
+        cup_id: string
+        quantity: number
+        notes?: string
+      }
+    | {
+        item_type: "lid"
+        lid_id: string
+        quantity: number
+        notes?: string
+      }
+  >
 }
 
 export interface CreateProgressEventPayload {
@@ -124,15 +159,6 @@ export interface UpdateOrderPayload {
   notes?: string | null
 }
 
-export class OrdersApiError extends Error {
-  readonly status: number
-
-  constructor(message: string, status: number) {
-    super(message)
-    this.status = status
-  }
-}
-
 export async function listOrders(filters: { status?: OrderStatus } = {}): Promise<Order[]> {
   const searchParams = new URLSearchParams()
 
@@ -140,136 +166,120 @@ export async function listOrders(filters: { status?: OrderStatus } = {}): Promis
     searchParams.set("status", filters.status)
   }
 
-  const queryString = searchParams.toString()
-  const response = await fetch(`${apiBaseUrl}/orders${queryString ? `?${queryString}` : ""}`, {
-    credentials: "include",
-  })
-
-  if (!response.ok) {
-    throw new OrdersApiError("Unable to load orders.", response.status)
-  }
-
-  return ordersResponseSchema.parse(await response.json()).orders
+  const data = await api.get<unknown>(`/orders${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`)
+  return ordersResponseSchema.parse(data).orders
 }
 
 export async function getOrder(id: string): Promise<Order> {
-  const response = await fetch(`${apiBaseUrl}/orders/${id}`, {
-    credentials: "include",
-  })
+  try {
+    const data = await api.get<unknown>(`/orders/${id}`)
+    return orderResponseSchema.parse(data).order
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Order no longer exists.")
+    }
 
-  if (response.status === 404) {
-    throw new OrdersApiError("Order no longer exists.", response.status)
+    if (error instanceof ApiClientError) {
+      throw new Error("Unable to load order.")
+    }
+
+    throw error
   }
-
-  if (!response.ok) {
-    throw new OrdersApiError("Unable to load order.", response.status)
-  }
-
-  return orderResponseSchema.parse(await response.json()).order
 }
 
 export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
-  const response = await fetch(`${apiBaseUrl}/orders`, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  })
+  try {
+    const data = await api.post<unknown, CreateOrderPayload>("/orders", payload)
+    return orderResponseSchema.parse(data).order
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.status === 400) {
+        throw new Error("Check the selected customer, items, and quantities.")
+      }
 
-  if (response.status === 400) {
-    throw new OrdersApiError("Check the selected customer, cups, and quantities.", response.status)
+      if (error.status === 404) {
+        throw new Error("A selected customer, cup, or lid no longer exists.")
+      }
+
+      if (error.status === 409) {
+        throw new Error(
+          "Unable to create order. Check customer/item status, duplicate items, or available stock.",
+        )
+      }
+
+      throw new Error("Unable to create order.")
+    }
+
+    throw error
   }
-
-  if (response.status === 404) {
-    throw new OrdersApiError("A selected customer or cup no longer exists.", response.status)
-  }
-
-  if (response.status === 409) {
-    throw new OrdersApiError(
-      "Unable to create order. Check customer/cup status, duplicate cups, or available stock.",
-      response.status,
-    )
-  }
-
-  if (!response.ok) {
-    throw new OrdersApiError("Unable to create order.", response.status)
-  }
-
-  return orderResponseSchema.parse(await response.json()).order
 }
 
 export async function cancelOrder(id: string): Promise<Order> {
-  const response = await fetch(`${apiBaseUrl}/orders/${id}/cancel`, {
-    method: "PATCH",
-    credentials: "include",
-  })
+  try {
+    const data = await api.patch<unknown, undefined>(`/orders/${id}/cancel`)
+    return orderResponseSchema.parse(data).order
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.status === 404) {
+        throw new Error("Order no longer exists.")
+      }
 
-  if (response.status === 404) {
-    throw new OrdersApiError("Order no longer exists.", response.status)
+      if (error.status === 409) {
+        throw new Error("This order cannot be canceled in its current state.")
+      }
+
+      throw new Error("Unable to cancel order.")
+    }
+
+    throw error
   }
-
-  if (response.status === 409) {
-    throw new OrdersApiError("This order cannot be canceled in its current state.", response.status)
-  }
-
-  if (!response.ok) {
-    throw new OrdersApiError("Unable to cancel order.", response.status)
-  }
-
-  return orderResponseSchema.parse(await response.json()).order
 }
 
 export async function updateOrder(id: string, payload: UpdateOrderPayload): Promise<Order> {
-  const response = await fetch(`${apiBaseUrl}/orders/${id}`, {
-    method: "PATCH",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  })
+  try {
+    const data = await api.patch<unknown, UpdateOrderPayload>(`/orders/${id}`, payload)
+    return orderResponseSchema.parse(data).order
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.status === 400) {
+        throw new Error("Only customer and notes can be edited.")
+      }
 
-  if (response.status === 400) {
-    throw new OrdersApiError("Only customer and notes can be edited.", response.status)
+      if (error.status === 404) {
+        throw new Error("Order or selected customer no longer exists.")
+      }
+
+      if (error.status === 409) {
+        throw new Error(
+          "Order cannot be edited in its current state, or the selected customer is inactive.",
+        )
+      }
+
+      throw new Error("Unable to update order.")
+    }
+
+    throw error
   }
-
-  if (response.status === 404) {
-    throw new OrdersApiError("Order or selected customer no longer exists.", response.status)
-  }
-
-  if (response.status === 409) {
-    throw new OrdersApiError(
-      "Order cannot be edited in its current state, or the selected customer is inactive.",
-      response.status,
-    )
-  }
-
-  if (!response.ok) {
-    throw new OrdersApiError("Unable to update order.", response.status)
-  }
-
-  return orderResponseSchema.parse(await response.json()).order
 }
 
 export async function listProgressEvents(orderLineItemId: string): Promise<{
   events: ProgressEvent[]
   totals: ProgressTotals
 }> {
-  const response = await fetch(`${apiBaseUrl}/order-line-items/${orderLineItemId}/progress-events`, {
-    credentials: "include",
-  })
+  try {
+    const data = await api.get<unknown>(`/order-line-items/${orderLineItemId}/progress-events`)
+    return progressEventsResponseSchema.parse(data)
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Order line item no longer exists.")
+    }
 
-  if (response.status === 404) {
-    throw new OrdersApiError("Order line item no longer exists.", response.status)
+    if (error instanceof ApiClientError) {
+      throw new Error(error.message || "Unable to load progress events.")
+    }
+
+    throw error
   }
-
-  if (!response.ok) {
-    throw new OrdersApiError("Unable to load progress events.", response.status)
-  }
-
-  return progressEventsResponseSchema.parse(await response.json())
 }
 
 export async function createProgressEvent(
@@ -280,30 +290,30 @@ export async function createProgressEvent(
   totals: ProgressTotals
   order_status: OrderStatus
 }> {
-  const response = await fetch(`${apiBaseUrl}/order-line-items/${orderLineItemId}/progress-events`, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  })
+  try {
+    const data = await api.post<unknown, CreateProgressEventPayload>(
+      `/order-line-items/${orderLineItemId}/progress-events`,
+      payload,
+    )
 
-  if (response.status === 400) {
-    throw new OrdersApiError("Enter a valid progress stage, quantity, and event date.", response.status)
+    return createProgressEventResponseSchema.parse(data)
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.status === 400) {
+        throw new Error("Enter a valid progress stage, quantity, and event date.")
+      }
+
+      if (error.status === 404) {
+        throw new Error("Order line item no longer exists.")
+      }
+
+      if (error.status === 409) {
+        throw new Error(error.message || "Progress quantity exceeds the allowed stage balance.")
+      }
+
+      throw new Error("Unable to record progress event.")
+    }
+
+    throw error
   }
-
-  if (response.status === 404) {
-    throw new OrdersApiError("Order line item no longer exists.", response.status)
-  }
-
-  if (response.status === 409) {
-    throw new OrdersApiError("Progress quantity exceeds the allowed stage balance.", response.status)
-  }
-
-  if (!response.ok) {
-    throw new OrdersApiError("Unable to record progress event.", response.status)
-  }
-
-  return createProgressEventResponseSchema.parse(await response.json())
 }

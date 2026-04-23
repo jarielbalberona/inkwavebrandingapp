@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto"
 
 import type { DatabaseClient } from "../../db/client.js"
+import type { Cup, Lid } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
 import { InventoryService } from "../inventory/inventory.service.js"
+import { LidsRepository } from "../lids/lids.repository.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
@@ -58,11 +60,27 @@ export class OrderCupInactiveError extends Error {
   }
 }
 
-export class DuplicateOrderCupError extends Error {
+export class OrderLidNotFoundError extends Error {
+  readonly statusCode = 404
+
+  constructor() {
+    super("Lid not found")
+  }
+}
+
+export class OrderLidInactiveError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Cannot create an order for an inactive lid")
+  }
+}
+
+export class DuplicateOrderItemError extends Error {
   readonly statusCode = 400
 
   constructor() {
-    super("Duplicate cup in order line items")
+    super("Duplicate source item in order line items")
   }
 }
 
@@ -138,11 +156,26 @@ const progressStages = [
   "released",
 ] as const satisfies readonly OrderLineItemProgressStage[]
 
+type ResolvedOrderLineItem =
+  | {
+      itemType: "cup"
+      cup: Cup
+      quantity: number
+      notes?: string
+    }
+  | {
+      itemType: "lid"
+      lid: Lid
+      quantity: number
+      notes?: string
+    }
+
 export class OrdersService {
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private readonly customersRepository: CustomersRepository,
     private readonly cupsRepository: CupsRepository,
+    private readonly lidsRepository: LidsRepository,
     private readonly createInventoryService: (db: DatabaseClient) => InventoryService,
   ) {}
 
@@ -175,29 +208,55 @@ export class OrdersService {
       throw new OrderCustomerInactiveError()
     }
 
-    const cupIds = new Set<string>()
+    const seenSourceItems = new Set<string>()
 
     for (const item of parsedInput.line_items) {
-      if (cupIds.has(item.cup_id)) {
-        throw new DuplicateOrderCupError()
+      const key = item.item_type === "cup" ? `cup:${item.cup_id}` : `lid:${item.lid_id}`
+
+      if (seenSourceItems.has(key)) {
+        throw new DuplicateOrderItemError()
       }
 
-      cupIds.add(item.cup_id)
+      seenSourceItems.add(key)
     }
 
-    const cups = await Promise.all(
-      parsedInput.line_items.map(async (item) => {
-        const cup = await this.cupsRepository.findById(item.cup_id)
+    const resolvedItems = await Promise.all(
+      parsedInput.line_items.map(async (item): Promise<ResolvedOrderLineItem> => {
+        if (item.item_type === "cup") {
+          const cup = await this.cupsRepository.findById(item.cup_id)
 
-        if (!cup) {
-          throw new OrderCupNotFoundError()
+          if (!cup) {
+            throw new OrderCupNotFoundError()
+          }
+
+          if (!cup.isActive) {
+            throw new OrderCupInactiveError()
+          }
+
+          return {
+            itemType: "cup",
+            cup,
+            quantity: item.quantity,
+            notes: item.notes,
+          }
         }
 
-        if (!cup.isActive) {
-          throw new OrderCupInactiveError()
+        const lid = await this.lidsRepository.findById(item.lid_id)
+
+        if (!lid) {
+          throw new OrderLidNotFoundError()
         }
 
-        return cup
+        if (!lid.isActive) {
+          throw new OrderLidInactiveError()
+        }
+
+        return {
+          itemType: "lid",
+          lid,
+          quantity: item.quantity,
+          notes: item.notes,
+        }
       }),
     )
 
@@ -210,18 +269,28 @@ export class OrdersService {
           notes: parsedInput.notes,
           createdByUserId: user.id,
         },
-        items: parsedInput.line_items.map((item, index) => {
-          const cup = cups[index]
-
-          if (!cup) {
-            throw new OrderCupNotFoundError()
+        items: resolvedItems.map((item) => {
+          if (item.itemType === "cup") {
+            return {
+              itemType: "cup",
+              cupId: item.cup.id,
+              lidId: undefined,
+              descriptionSnapshot: item.cup.sku,
+              quantity: item.quantity,
+              unitCostPrice: item.cup.costPrice,
+              unitSellPrice: item.cup.defaultSellPrice,
+              notes: item.notes,
+            }
           }
 
           return {
-            cupId: item.cup_id,
+            itemType: "lid",
+            cupId: undefined,
+            lidId: item.lid.id,
+            descriptionSnapshot: buildLidDescriptionSnapshot(item.lid),
             quantity: item.quantity,
-            costPrice: cup.costPrice,
-            sellPrice: cup.defaultSellPrice,
+            unitCostPrice: item.lid.costPrice,
+            unitSellPrice: item.lid.defaultSellPrice,
             notes: item.notes,
           }
         }),
@@ -233,8 +302,9 @@ export class OrdersService {
           createdByUserId: user.id,
           items: order.items.map((item) => ({
             orderItemId: item.id,
-            itemType: "cup",
-            cupId: item.cupId,
+            itemType: item.itemType,
+            cupId: item.cupId ?? undefined,
+            lidId: item.lidId ?? undefined,
             quantity: item.quantity,
           })),
         },
@@ -287,7 +357,7 @@ export class OrdersService {
         },
       ])
 
-      validateProgressTotals(orderItem.quantity, nextTotals)
+      validateProgressTotals(orderItem.itemType, orderItem.quantity, nextTotals)
 
       const event = await ordersRepository.createProgressEvent({
         orderLineItemId,
@@ -298,9 +368,10 @@ export class OrdersService {
         createdByUserId: user.id,
       })
 
-      if (parsedInput.stage === "printed") {
-        const inventoryRepository = new InventoryRepository(db)
-        const balance = await inventoryRepository.getBalanceByCupId(orderItem.cupId)
+      const inventoryRepository = new InventoryRepository(db)
+
+      if (orderItem.itemType === "cup" && parsedInput.stage === "printed") {
+        const balance = await inventoryRepository.getBalanceByCupId(orderItem.cupId!)
 
         if (!balance) {
           throw new OrderCupNotFoundError()
@@ -312,12 +383,36 @@ export class OrdersService {
 
         await inventoryRepository.appendMovement({
           itemType: "cup",
-          cupId: orderItem.cupId,
+          cupId: orderItem.cupId!,
           movementType: "consume",
           quantity: parsedInput.quantity,
           orderId: orderItem.orderId,
           orderItemId: orderItem.id,
           note: "Consumed by printed progress event",
+          reference: event.id,
+          createdByUserId: user.id,
+        })
+      }
+
+      if (orderItem.itemType === "lid" && parsedInput.stage === "released") {
+        const balance = await inventoryRepository.getBalanceByLidId(orderItem.lidId!)
+
+        if (!balance) {
+          throw new OrderLidNotFoundError()
+        }
+
+        if (balance.reserved < parsedInput.quantity || balance.onHand < parsedInput.quantity) {
+          throw new OrderPrintedQuantityNotReservedError()
+        }
+
+        await inventoryRepository.appendMovement({
+          itemType: "lid",
+          lidId: orderItem.lidId!,
+          movementType: "consume",
+          quantity: parsedInput.quantity,
+          orderId: orderItem.orderId,
+          orderItemId: orderItem.id,
+          note: "Consumed by released lid progress event",
           reference: event.id,
           createdByUserId: user.id,
         })
@@ -359,15 +454,19 @@ export class OrdersService {
 
       for (const item of orderItems) {
         const totals = calculateProgressTotals(item.quantity, item.progressEvents)
-        const releaseQuantity = Math.max(item.quantity - totals.total_printed, 0)
+        const releaseQuantity =
+          item.itemType === "cup"
+            ? Math.max(item.quantity - totals.total_printed, 0)
+            : Math.max(item.quantity - totals.total_released, 0)
 
         if (releaseQuantity === 0) {
           continue
         }
 
         await inventoryRepository.appendMovement({
-          itemType: "cup",
-          cupId: item.cupId,
+          itemType: item.itemType,
+          cupId: item.cupId ?? undefined,
+          lidId: item.lidId ?? undefined,
           movementType: "release_reservation",
           quantity: releaseQuantity,
           orderId: order.id,
@@ -444,6 +543,10 @@ function createOrderNumber(): string {
   return `IW-${datePrefix}-${randomUUID().slice(0, 8).toUpperCase()}`
 }
 
+function buildLidDescriptionSnapshot(lid: Lid): string {
+  return `${lid.type} ${lid.brand} ${lid.diameter} ${lid.shape} ${lid.color}`
+}
+
 function calculateProgressTotals(
   orderedQuantity: number,
   events: Array<{ stage: OrderLineItemProgressStage; quantity: number }>,
@@ -482,13 +585,32 @@ function calculateProgressTotals(
   return totals
 }
 
-function validateProgressTotals(orderedQuantity: number, totals: ProgressTotalsDto) {
+function validateProgressTotals(
+  itemType: "cup" | "lid",
+  orderedQuantity: number,
+  totals: ProgressTotalsDto,
+) {
   for (const stage of progressStages) {
     const total = totalForStage(totals, stage)
 
     if (total > orderedQuantity) {
       throw new OrderProgressValidationError(`${stage} total cannot exceed ordered quantity`)
     }
+  }
+
+  if (itemType === "lid") {
+    if (
+      totals.total_printed > 0 ||
+      totals.total_qa_passed > 0 ||
+      totals.total_packed > 0 ||
+      totals.total_ready_for_release > 0
+    ) {
+      throw new OrderProgressValidationError(
+        "Lid line items only support released quantity events",
+      )
+    }
+
+    return
   }
 
   if (totals.total_qa_passed > totals.total_printed) {

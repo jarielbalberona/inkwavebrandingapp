@@ -119,11 +119,11 @@ export class ReportsRepository {
         },
         releasedQuantity: sql<number>`COALESCE(SUM(${orderLineItemProgressEvents.quantity}), 0)`,
         sellTotal:
-          sql<string>`COALESCE(SUM((${orderLineItemProgressEvents.quantity}::numeric) * ${orderItems.sellPrice}), 0)::text`,
+          sql<string>`COALESCE(SUM((${orderLineItemProgressEvents.quantity}::numeric) * ${orderItems.unitSellPrice}), 0)::text`,
         costTotal:
-          sql<string>`COALESCE(SUM((${orderLineItemProgressEvents.quantity}::numeric) * ${orderItems.costPrice}), 0)::text`,
+          sql<string>`COALESCE(SUM((${orderLineItemProgressEvents.quantity}::numeric) * ${orderItems.unitCostPrice}), 0)::text`,
         grossProfit:
-          sql<string>`COALESCE(SUM((${orderLineItemProgressEvents.quantity}::numeric) * (${orderItems.sellPrice} - ${orderItems.costPrice})), 0)::text`,
+          sql<string>`COALESCE(SUM((${orderLineItemProgressEvents.quantity}::numeric) * (${orderItems.unitSellPrice} - ${orderItems.unitCostPrice})), 0)::text`,
       })
       .from(orderLineItemProgressEvents)
       .innerJoin(orderItems, eq(orderLineItemProgressEvents.orderLineItemId, orderItems.id))

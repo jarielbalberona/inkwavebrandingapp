@@ -27,12 +27,14 @@ import {
 } from "./orders.schemas.js"
 import { OrdersRepository } from "./orders.repository.js"
 import {
-  DuplicateOrderCupError,
+  DuplicateOrderItemError,
   OrderClosedUpdateError,
   OrderCompletedCancellationError,
   OrderCustomerReassignmentProgressError,
   OrderCupInactiveError,
   OrderCupNotFoundError,
+  OrderLidInactiveError,
+  OrderLidNotFoundError,
   OrderCustomerInactiveError,
   OrderCustomerNotFoundError,
   OrderLineItemNotFoundError,
@@ -149,6 +151,7 @@ async function withAuthenticatedUser(
         new OrdersRepository(db),
         new CustomersRepository(db),
         new CupsRepository(db),
+        new LidsRepository(db),
         (transactionDb) =>
           new InventoryService(
             new InventoryRepository(transactionDb),
@@ -179,7 +182,9 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderCustomerInactiveError ||
     error instanceof OrderCupNotFoundError ||
     error instanceof OrderCupInactiveError ||
-    error instanceof DuplicateOrderCupError ||
+    error instanceof OrderLidNotFoundError ||
+    error instanceof OrderLidInactiveError ||
+    error instanceof DuplicateOrderItemError ||
     error instanceof OrderLineItemNotFoundError ||
     error instanceof OrderNotFoundError ||
     error instanceof OrderClosedUpdateError ||

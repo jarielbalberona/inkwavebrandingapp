@@ -15,6 +15,7 @@ import {
 
 import { cups } from "./cups.js"
 import { customers } from "./customers.js"
+import { lids } from "./lids.js"
 import { users } from "./users.js"
 
 export const orderStatusEnum = pgEnum("order_status", [
@@ -31,6 +32,11 @@ export const orderLineItemProgressStageEnum = pgEnum("order_line_item_progress_s
   "packed",
   "ready_for_release",
   "released",
+])
+
+export const orderLineItemTypeEnum = pgEnum("order_line_item_type", [
+  "cup",
+  "lid",
 ])
 
 export const orders = pgTable(
@@ -66,12 +72,13 @@ export const orderItems = pgTable(
     orderId: uuid("order_id")
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
-    cupId: uuid("cup_id")
-      .notNull()
-      .references(() => cups.id, { onDelete: "restrict" }),
+    itemType: orderLineItemTypeEnum("item_type").notNull(),
+    cupId: uuid("cup_id").references(() => cups.id, { onDelete: "restrict" }),
+    lidId: uuid("lid_id").references(() => lids.id, { onDelete: "restrict" }),
+    descriptionSnapshot: text("description_snapshot").notNull(),
     quantity: integer("quantity").notNull(),
-    costPrice: numeric("cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
-    sellPrice: numeric("sell_price", { precision: 12, scale: 2 }).notNull().default("0"),
+    unitCostPrice: numeric("unit_cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
+    unitSellPrice: numeric("unit_sell_price", { precision: 12, scale: 2 }).notNull().default("0"),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -79,9 +86,27 @@ export const orderItems = pgTable(
   (table) => [
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_cup_id_idx").on(table.cupId),
+    index("order_items_lid_id_idx").on(table.lidId),
     check("order_items_quantity_positive", sql`${table.quantity} > 0`),
-    check("order_items_cost_price_non_negative", sql`${table.costPrice} >= 0`),
-    check("order_items_sell_price_non_negative", sql`${table.sellPrice} >= 0`),
+    check("order_items_unit_cost_price_non_negative", sql`${table.unitCostPrice} >= 0`),
+    check("order_items_unit_sell_price_non_negative", sql`${table.unitSellPrice} >= 0`),
+    check("order_items_description_snapshot_not_blank", sql`length(trim(${table.descriptionSnapshot})) > 0`),
+    check(
+      "order_items_exactly_one_item",
+      sql`(
+        (${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL)
+        OR
+        (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL)
+      )`,
+    ),
+    check(
+      "order_items_item_type_matches_reference",
+      sql`(
+        (${table.itemType} = 'cup' AND ${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL)
+        OR
+        (${table.itemType} = 'lid' AND ${table.lidId} IS NOT NULL AND ${table.cupId} IS NULL)
+      )`,
+    ),
   ],
 )
 
@@ -129,6 +154,10 @@ export const orderItemsRelations = relations(orderItems, ({ many, one }) => ({
   cup: one(cups, {
     fields: [orderItems.cupId],
     references: [cups.id],
+  }),
+  lid: one(lids, {
+    fields: [orderItems.lidId],
+    references: [lids.id],
   }),
   progressEvents: many(orderLineItemProgressEvents),
 }))

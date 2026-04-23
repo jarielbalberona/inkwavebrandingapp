@@ -41,11 +41,20 @@ export const createOrderSchema = z.object({
   notes: optionalText(1000),
   line_items: z
     .array(
-      z.object({
-        cup_id: z.string().uuid(),
-        quantity: z.number().int().positive(),
-        notes: optionalText(500),
-      }),
+      z.discriminatedUnion("item_type", [
+        z.object({
+          item_type: z.literal("cup"),
+          cup_id: z.string().uuid(),
+          quantity: z.number().int().positive(),
+          notes: optionalText(500),
+        }),
+        z.object({
+          item_type: z.literal("lid"),
+          lid_id: z.string().uuid(),
+          quantity: z.number().int().positive(),
+          notes: optionalText(500),
+        }),
+      ]),
     )
     .min(1),
 })

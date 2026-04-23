@@ -1,12 +1,9 @@
-import type { Cup, Customer } from "../../db/schema/index.js"
+import type { Cup, Customer, Lid } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
 import { toCustomerDto } from "../customers/customers.types.js"
-import type { OrderWithRelations } from "./orders.repository.js"
-import type {
-  OrderLineItemProgressStage,
-} from "./orders.schemas.js"
-import type { ProgressEventWithRelations } from "./orders.repository.js"
+import type { OrderWithRelations, ProgressEventWithRelations } from "./orders.repository.js"
+import type { OrderLineItemProgressStage } from "./orders.schemas.js"
 
 interface OrderCupDto {
   id: string
@@ -18,9 +15,21 @@ interface OrderCupDto {
   color: string
 }
 
+interface OrderLidDto {
+  id: string
+  type: string
+  brand: string
+  diameter: string
+  shape: string
+  color: string
+}
+
 interface BaseOrderItemDto {
   id: string
-  cup: OrderCupDto
+  item_type: "cup" | "lid"
+  cup: OrderCupDto | null
+  lid: OrderLidDto | null
+  description_snapshot: string
   quantity: number
   notes: string | null
   created_at: string
@@ -28,8 +37,8 @@ interface BaseOrderItemDto {
 }
 
 interface AdminOrderItemDto extends BaseOrderItemDto {
-  cost_price: string
-  sell_price: string
+  unit_cost_price: string
+  unit_sell_price: string
 }
 
 type StaffOrderItemDto = BaseOrderItemDto
@@ -86,8 +95,8 @@ export function toOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto 
 function toAdminOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto {
   return toBaseOrderDto(order, user, (item) => ({
     ...toBaseOrderItemDto(item),
-    cost_price: item.costPrice,
-    sell_price: item.sellPrice,
+    unit_cost_price: item.unitCostPrice,
+    unit_sell_price: item.unitSellPrice,
   }))
 }
 
@@ -113,9 +122,26 @@ function toBaseOrderDto(
 }
 
 function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrderItemDto {
+  if (item.itemType === "cup") {
+    return {
+      id: item.id,
+      item_type: "cup",
+      cup: toCupDto(item.cup as Cup),
+      lid: null,
+      description_snapshot: item.descriptionSnapshot,
+      quantity: item.quantity,
+      notes: item.notes ?? null,
+      created_at: item.createdAt.toISOString(),
+      updated_at: item.updatedAt.toISOString(),
+    }
+  }
+
   return {
     id: item.id,
-    cup: toCupDto(item.cup as Cup),
+    item_type: "lid",
+    cup: null,
+    lid: toLidDto(item.lid as Lid),
+    description_snapshot: item.descriptionSnapshot,
     quantity: item.quantity,
     notes: item.notes ?? null,
     created_at: item.createdAt.toISOString(),
@@ -132,6 +158,17 @@ function toCupDto(cup: Cup): OrderCupDto {
     diameter: cup.diameter,
     size: cup.size,
     color: cup.color,
+  }
+}
+
+function toLidDto(lid: Lid): OrderLidDto {
+  return {
+    id: lid.id,
+    type: lid.type,
+    brand: lid.brand,
+    diameter: lid.diameter,
+    shape: lid.shape,
+    color: lid.color,
   }
 }
 

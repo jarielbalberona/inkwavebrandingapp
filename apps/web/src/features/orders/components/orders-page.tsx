@@ -27,6 +27,8 @@ import type { Cup } from "@/features/cups/api/cups-client"
 import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import type { Customer } from "@/features/customers/api/customers-client"
 import { CustomerSearchSelect } from "@/features/customers/components/customer-search-select"
+import type { Lid } from "@/features/lids/api/lids-client"
+import { useLidsQuery } from "@/features/lids/hooks/use-lids"
 import type {
   Order,
   OrderStatus,
@@ -48,14 +50,16 @@ import {
 
 interface DraftLineItem {
   id: string
-  cupId: string
+  itemType: "cup" | "lid"
+  itemId: string
   quantity: string
   notes: string
 }
 
 const createDraftLineItem = (): DraftLineItem => ({
   id: crypto.randomUUID(),
-  cupId: "",
+  itemType: "cup",
+  itemId: "",
   quantity: "1",
   notes: "",
 })
@@ -91,6 +95,7 @@ export function OrdersPage() {
   const selectedOrderQuery = useOrderQuery(selectedOrderId)
   const progressEventsQuery = useProgressEventsQuery(selectedLineItemId)
   const cupsQuery = useCupsQuery()
+  const lidsQuery = useLidsQuery()
   const createOrderMutation = useCreateOrderMutation()
   const createProgressEventMutation = useCreateProgressEventMutation()
   const cancelOrderMutation = useCancelOrderMutation()
@@ -99,10 +104,22 @@ export function OrdersPage() {
     () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
     [cupsQuery.data],
   )
+  const activeLids = useMemo(
+    () => (lidsQuery.data ?? []).filter((lid) => lid.is_active),
+    [lidsQuery.data],
+  )
   const selectedOrder =
     selectedOrderQuery.data ?? ordersQuery.data?.find((order) => order.id === selectedOrderId) ?? null
   const selectedLineItem =
     selectedOrder?.items.find((item) => item.id === selectedLineItemId) ?? null
+  const availableProgressStages = useMemo(
+    () => getAllowedProgressStages(selectedLineItem?.item_type),
+    [selectedLineItem?.item_type],
+  )
+  const effectiveProgressStage =
+    availableProgressStages.includes(progressStage)
+      ? progressStage
+      : (availableProgressStages[0] ?? "printed")
 
   async function handleCreateOrder() {
     setFormError(null)
@@ -113,14 +130,24 @@ export function OrdersPage() {
       return
     }
 
-    const parsedLineItems = lineItems.map((item) => ({
-      cup_id: item.cupId,
-      quantity: Number(item.quantity),
-      notes: item.notes.trim() || undefined,
-    }))
+    const parsedLineItems = lineItems.map((item) =>
+      item.itemType === "cup"
+        ? {
+            item_type: "cup" as const,
+            cup_id: item.itemId,
+            quantity: Number(item.quantity),
+            notes: item.notes.trim() || undefined,
+          }
+        : {
+            item_type: "lid" as const,
+            lid_id: item.itemId,
+            quantity: Number(item.quantity),
+            notes: item.notes.trim() || undefined,
+          },
+    )
 
-    if (parsedLineItems.length === 0 || parsedLineItems.some((item) => !item.cup_id)) {
-      setFormError("Select a cup for every line item.")
+    if (parsedLineItems.length === 0 || parsedLineItems.some((item) => !("cup_id" in item ? item.cup_id : item.lid_id))) {
+      setFormError("Select a source item for every line item.")
       return
     }
 
@@ -129,8 +156,12 @@ export function OrdersPage() {
       return
     }
 
-    if (new Set(parsedLineItems.map((item) => item.cup_id)).size !== parsedLineItems.length) {
-      setFormError("Each cup can only appear once per order.")
+    const uniqueKeys = parsedLineItems.map((item) =>
+      item.item_type === "cup" ? `cup:${item.cup_id}` : `lid:${item.lid_id}`,
+    )
+
+    if (new Set(uniqueKeys).size !== uniqueKeys.length) {
+      setFormError("Each source item can only appear once per order.")
       return
     }
 
@@ -187,14 +218,24 @@ export function OrdersPage() {
       return
     }
 
+    if (selectedLineItem.item_type === "lid" && effectiveProgressStage !== "released") {
+      setProgressError("Lid line items only support released quantity events.")
+      return
+    }
+
     const totals = progressEventsQuery.data?.totals
 
     if (totals) {
-      const maxQuantity = maxQuantityForStage(progressStage, selectedLineItem.quantity, totals)
+      const maxQuantity = maxQuantityForStage(
+        selectedLineItem.item_type,
+        effectiveProgressStage,
+        selectedLineItem.quantity,
+        totals,
+      )
 
       if (quantity > maxQuantity) {
         setProgressError(
-          `${formatStatus(progressStage)} quantity cannot exceed the current stage balance of ${maxQuantity}.`,
+          `${formatStatus(effectiveProgressStage)} quantity cannot exceed the current stage balance of ${maxQuantity}.`,
         )
         return
       }
@@ -204,7 +245,7 @@ export function OrdersPage() {
       const result = await createProgressEventMutation.mutateAsync({
         orderLineItemId: selectedLineItem.id,
         payload: {
-          stage: progressStage,
+          stage: effectiveProgressStage,
           quantity,
           note: progressNote.trim() || undefined,
           event_date: progressEventDate,
@@ -382,7 +423,7 @@ export function OrdersPage() {
           <CardHeader>
             <CardTitle>Create Pending Order</CardTitle>
             <CardDescription>
-              Select a real customer and cups. Submission creates a pending order and reserves stock.
+              Select a real customer and tracked items. Submission creates a pending order and reserves stock.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
@@ -407,34 +448,71 @@ export function OrdersPage() {
               {lineItems.map((lineItem, index) => (
                 <div key={lineItem.id} className="grid gap-3 border p-3">
                   <div className="grid gap-2">
-                    <Label>Cup SKU</Label>
+                    <Label>Item type</Label>
                     <Select
-                      value={lineItem.cupId || undefined}
-                      onValueChange={(cupId) => updateLineItem(setLineItems, lineItem.id, { cupId })}
+                      value={lineItem.itemType}
+                      onValueChange={(itemType) =>
+                        updateLineItem(setLineItems, lineItem.id, {
+                          itemType: itemType as "cup" | "lid",
+                          itemId: "",
+                        })
+                      }
                     >
                       <SelectTrigger className="w-full rounded-none">
-                        <SelectValue placeholder={cupsQuery.isLoading ? "Loading cups..." : "Select cup"} />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-none">
-                        {activeCups.map((cup) => (
-                          <SelectItem key={cup.id} value={cup.id}>
-                            {formatCupOption(cup)}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="cup">Cup</SelectItem>
+                        <SelectItem value="lid">Lid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>{lineItem.itemType === "cup" ? "Cup SKU" : "Lid"}</Label>
+                    <Select
+                      value={lineItem.itemId || undefined}
+                      onValueChange={(itemId) => updateLineItem(setLineItems, lineItem.id, { itemId })}
+                    >
+                      <SelectTrigger className="w-full rounded-none">
+                        <SelectValue
+                          placeholder={
+                            lineItem.itemType === "cup"
+                              ? cupsQuery.isLoading
+                                ? "Loading cups..."
+                                : "Select cup"
+                              : lidsQuery.isLoading
+                                ? "Loading lids..."
+                                : "Select lid"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none">
+                        {lineItem.itemType === "cup"
+                          ? activeCups.map((cup) => (
+                              <SelectItem key={cup.id} value={cup.id}>
+                                {formatCupOption(cup)}
+                              </SelectItem>
+                            ))
+                          : activeLids.map((lid) => (
+                              <SelectItem key={lid.id} value={lid.id}>
+                                {formatLidOption(lid)}
+                              </SelectItem>
+                            ))}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="grid gap-2">
                     <Label htmlFor={`line-item-quantity-${lineItem.id}`}>Quantity</Label>
-                    <Input
+                    <Input.Number
                       id={`line-item-quantity-${lineItem.id}`}
-                      inputMode="numeric"
                       min={1}
-                      type="number"
-                      value={lineItem.quantity}
-                      onChange={(event) =>
-                        updateLineItem(setLineItems, lineItem.id, { quantity: event.target.value })
+                      value={Number(lineItem.quantity)}
+                      onChange={(value) =>
+                        updateLineItem(setLineItems, lineItem.id, {
+                          quantity: String(value ?? 0),
+                        })
                       }
                     />
                   </div>
@@ -495,7 +573,7 @@ export function OrdersPage() {
             <Button
               type="button"
               className="rounded-none"
-              disabled={createOrderMutation.isPending || cupsQuery.isLoading}
+              disabled={createOrderMutation.isPending || cupsQuery.isLoading || lidsQuery.isLoading}
               onClick={handleCreateOrder}
             >
               {createOrderMutation.isPending ? "Creating order..." : "Create pending order"}
@@ -609,7 +687,7 @@ export function OrdersPage() {
                     <SelectContent className="rounded-none">
                       {selectedOrder.items.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
-                          {item.cup.sku} x {item.quantity.toLocaleString()}
+                          {formatOrderItemLabel(item)} x {item.quantity.toLocaleString()}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -621,10 +699,9 @@ export function OrdersPage() {
                     <div className="grid gap-2 border p-3 text-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-medium">{selectedLineItem.cup.sku}</p>
+                          <p className="font-medium">{formatOrderItemLabel(selectedLineItem)}</p>
                           <p className="text-muted-foreground">
-                            {selectedLineItem.cup.type} · {selectedLineItem.cup.brand} ·{" "}
-                            {selectedLineItem.cup.size} · {selectedLineItem.cup.diameter}
+                            {formatOrderItemDetails(selectedLineItem)}
                           </p>
                         </div>
                         <Badge variant="secondary">
@@ -650,14 +727,14 @@ export function OrdersPage() {
                       <div className="grid gap-2">
                         <Label>Stage</Label>
                         <Select
-                          value={progressStage}
+                          value={effectiveProgressStage}
                           onValueChange={(value) => setProgressStage(value as ProgressStage)}
                         >
                           <SelectTrigger className="w-full rounded-none">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="rounded-none">
-                            {progressStageOptions.map((stage) => (
+                            {availableProgressStages.map((stage) => (
                               <SelectItem key={stage} value={stage}>
                                 {formatStatus(stage)}
                               </SelectItem>
@@ -668,13 +745,11 @@ export function OrdersPage() {
 
                       <div className="grid gap-2">
                         <Label htmlFor="progress-quantity">Quantity</Label>
-                        <Input
+                        <Input.Number
                           id="progress-quantity"
-                          type="number"
-                          inputMode="numeric"
                           min={1}
-                          value={progressQuantity}
-                          onChange={(event) => setProgressQuantity(event.target.value)}
+                          value={Number(progressQuantity)}
+                          onChange={(value) => setProgressQuantity(String(value ?? 0))}
                         />
                       </div>
 
@@ -760,7 +835,7 @@ function formatLineItems(order: Order): string {
   }
 
   const [firstItem, ...remainingItems] = order.items
-  const firstItemLabel = `${firstItem.cup.sku} x ${firstItem.quantity.toLocaleString()}`
+  const firstItemLabel = `${formatOrderItemLabel(firstItem)} x ${firstItem.quantity.toLocaleString()}`
 
   if (remainingItems.length === 0) {
     return firstItemLabel
@@ -781,6 +856,30 @@ function updateLineItem(
 
 function formatCupOption(cup: Cup): string {
   return `${cup.sku} · ${cup.type} · ${cup.brand} · ${cup.size} · ${cup.diameter}`
+}
+
+function formatLidOption(lid: Lid): string {
+  return `${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color}`
+}
+
+function formatOrderItemLabel(item: Order["items"][number]): string {
+  return item.item_type === "cup" ? item.cup.sku : `${item.lid.diameter} ${item.lid.shape}`
+}
+
+function formatOrderItemDetails(item: Order["items"][number]): string {
+  return item.item_type === "cup"
+    ? `${item.cup.type} · ${item.cup.brand} · ${item.cup.size} · ${item.cup.diameter}`
+    : `${item.lid.type} · ${item.lid.brand} · ${item.lid.color} · ${item.description_snapshot}`
+}
+
+function getAllowedProgressStages(
+  itemType: Order["items"][number]["item_type"] | undefined,
+): ProgressStage[] {
+  if (itemType === "lid") {
+    return ["released"]
+  }
+
+  return [...progressStageOptions]
 }
 
 function ProgressTotalsGrid({ totals }: { totals: ProgressTotals }) {
@@ -856,10 +955,15 @@ function ProgressHistory({ events }: { events: ProgressEvent[] }) {
 }
 
 function maxQuantityForStage(
+  itemType: Order["items"][number]["item_type"],
   stage: ProgressStage,
   orderedQuantity: number,
   totals: ProgressTotals,
 ): number {
+  if (itemType === "lid") {
+    return stage === "released" ? Math.max(orderedQuantity - totals.total_released, 0) : 0
+  }
+
   switch (stage) {
     case "printed":
       return Math.max(orderedQuantity - totals.total_printed, 0)
