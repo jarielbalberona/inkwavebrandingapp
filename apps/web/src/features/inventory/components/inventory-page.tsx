@@ -1,11 +1,420 @@
-import { PlaceholderPage } from "@/components/placeholder-page"
+import { useMemo, useState } from "react"
+
+import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import { Badge } from "@workspace/ui/components/badge"
+import { Button } from "@workspace/ui/components/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@workspace/ui/components/dialog"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@workspace/ui/components/table"
+
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import type { Cup, CupPayload } from "@/features/cups/api/cups-client"
+import {
+  useCreateCupMutation,
+  useCupsQuery,
+} from "@/features/cups/hooks/use-cups"
+import { normalizeSku, skuSchema } from "@/features/cups/types/sku"
+import { useStockIntakeMutation } from "@/features/inventory/hooks/use-inventory"
+
+const emptyCupForm: CupPayload = {
+  sku: "",
+  brand: "",
+  size: "",
+  dimension: "",
+  material: "",
+  color: "",
+  min_stock: 0,
+  cost_price: "0",
+  default_sell_price: "0",
+  is_active: true,
+}
+
+const emptyIntakeForm = {
+  quantity: "0",
+  note: "",
+  reference: "",
+}
 
 export function InventoryPage() {
-  return (
-    <PlaceholderPage
-      eyebrow="Stock control"
-      title="Inventory"
-      description="Placeholder for ledger-backed stock intake, balances, reservations, and movement history. No inventory logic is implemented yet."
-    />
+  const currentUser = useCurrentUser()
+  const cupsQuery = useCupsQuery()
+  const createCup = useCreateCupMutation()
+  const stockIntake = useStockIntakeMutation()
+  const [search, setSearch] = useState("")
+  const [selectedCupId, setSelectedCupId] = useState<string | null>(null)
+  const [intakeForm, setIntakeForm] = useState(emptyIntakeForm)
+  const [intakeError, setIntakeError] = useState<string | null>(null)
+  const [intakeSuccess, setIntakeSuccess] = useState<string | null>(null)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createForm, setCreateForm] = useState<CupPayload>(emptyCupForm)
+  const [createError, setCreateError] = useState<string | null>(null)
+
+  const isAdmin = currentUser.data?.role === "admin"
+  const filteredCups = useMemo(() => filterCups(cupsQuery.data, search), [cupsQuery.data, search])
+  const selectedCup = useMemo(
+    () => cupsQuery.data?.find((cup) => cup.id === selectedCupId) ?? null,
+    [cupsQuery.data, selectedCupId],
   )
+
+  const submitIntake = () => {
+    if (!selectedCup) {
+      setIntakeError("Select a cup before recording stock intake.")
+      setIntakeSuccess(null)
+      return
+    }
+
+    if (!selectedCup.is_active) {
+      setIntakeError("Inactive cups cannot receive stock intake.")
+      setIntakeSuccess(null)
+      return
+    }
+
+    const quantity = Number(intakeForm.quantity)
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setIntakeError("Quantity must be a positive whole number.")
+      setIntakeSuccess(null)
+      return
+    }
+
+    setIntakeError(null)
+    setIntakeSuccess(null)
+
+    stockIntake.mutate(
+      {
+        cupId: selectedCup.id,
+        quantity,
+        note: intakeForm.note.trim() || undefined,
+        reference: intakeForm.reference.trim() || undefined,
+      },
+      {
+        onError: (error) => setIntakeError(error.message),
+        onSuccess: (movement) => {
+          setIntakeForm(emptyIntakeForm)
+          setIntakeSuccess(
+            `Recorded ${movement.quantity} units as stock_in for ${selectedCup.sku}.`,
+          )
+        },
+      },
+    )
+  }
+
+  const submitCreateCup = () => {
+    const validation = validateCupForm(createForm)
+
+    setCreateError(validation)
+
+    if (validation) {
+      return
+    }
+
+    const payload = {
+      ...createForm,
+      sku: normalizeSku(createForm.sku),
+      material: createForm.material || undefined,
+      color: createForm.color || undefined,
+    }
+
+    createCup.mutate(payload, {
+      onError: (error) => setCreateError(error.message),
+      onSuccess: (cup) => {
+        setSelectedCupId(cup.id)
+        setCreateForm(emptyCupForm)
+        setCreateError(null)
+        setCreateDialogOpen(false)
+        setIntakeError(null)
+        setIntakeSuccess(`Created ${cup.sku}. You can record stock intake now.`)
+      },
+    })
+  }
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <Card className="rounded-none">
+        <CardHeader className="gap-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="grid gap-1">
+              <CardTitle>Stock Intake</CardTitle>
+              <CardDescription>
+                Receive stock against an existing SKU and write a real <code>stock_in</code> movement.
+              </CardDescription>
+            </div>
+            {isAdmin ? (
+              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="outline">
+                    Create cup first
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="rounded-none sm:max-w-[520px]">
+                  <DialogHeader>
+                    <DialogTitle>Create Cup</DialogTitle>
+                    <DialogDescription>
+                      Use this only when the SKU does not exist yet, then continue the intake flow.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4">
+                    {createError ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>{createError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+
+                    <CupField label="SKU" value={createForm.sku} onChange={(value) => setCreateForm({ ...createForm, sku: value })} />
+                    <CupField label="Brand" value={createForm.brand} onChange={(value) => setCreateForm({ ...createForm, brand: value })} />
+                    <CupField label="Size" value={createForm.size} onChange={(value) => setCreateForm({ ...createForm, size: value })} />
+                    <CupField label="Dimension" value={createForm.dimension} onChange={(value) => setCreateForm({ ...createForm, dimension: value })} />
+                    <CupField label="Material" value={createForm.material ?? ""} onChange={(value) => setCreateForm({ ...createForm, material: value })} />
+                    <CupField label="Color" value={createForm.color ?? ""} onChange={(value) => setCreateForm({ ...createForm, color: value })} />
+                    <CupField label="Min stock" type="number" value={String(createForm.min_stock)} onChange={(value) => setCreateForm({ ...createForm, min_stock: Number(value) })} />
+                    <CupField label="Cost price" value={createForm.cost_price} onChange={(value) => setCreateForm({ ...createForm, cost_price: value })} />
+                    <CupField label="Default sell price" value={createForm.default_sell_price} onChange={(value) => setCreateForm({ ...createForm, default_sell_price: value })} />
+
+                    <div className="flex gap-2">
+                      <Button type="button" onClick={submitCreateCup} disabled={createCup.isPending}>
+                        {createCup.isPending ? "Creating..." : "Create cup"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setCreateDialogOpen(false)
+                          setCreateForm(emptyCupForm)
+                          setCreateError(null)
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : null}
+          </div>
+
+          {currentUser.data && !isAdmin ? (
+            <Alert>
+              <AlertDescription>
+                Your account can inspect cups, but stock intake is currently restricted to admins.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {cupsQuery.isError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{cupsQuery.error.message}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid gap-2">
+            <Label htmlFor="inventory-search">Find cup by SKU, brand, size, or dimension</Label>
+            <Input
+              id="inventory-search"
+              placeholder="Search cups"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {cupsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading cups for stock intake...</p>
+          ) : null}
+
+          {!cupsQuery.isLoading && filteredCups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No cups match the current search. Create the SKU first if it does not exist.
+            </p>
+          ) : null}
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead>Dimension</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredCups.map((cup) => (
+                <TableRow
+                  key={cup.id}
+                  className="cursor-pointer"
+                  data-state={cup.id === selectedCupId ? "selected" : undefined}
+                  onClick={() => {
+                    setSelectedCupId(cup.id)
+                    setIntakeError(null)
+                    setIntakeSuccess(null)
+                  }}
+                >
+                  <TableCell className="font-medium">{cup.sku}</TableCell>
+                  <TableCell>{cup.brand}</TableCell>
+                  <TableCell>{cup.size}</TableCell>
+                  <TableCell>{cup.dimension}</TableCell>
+                  <TableCell>
+                    <Badge variant={cup.is_active ? "default" : "secondary"}>
+                      {cup.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-none">
+        <CardHeader>
+          <CardTitle>Receive Stock</CardTitle>
+          <CardDescription>
+            {selectedCup
+              ? "Review the selected cup and record a new stock_in movement."
+              : "Select a cup from the list before recording stock intake."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {intakeError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{intakeError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {intakeSuccess ? (
+            <Alert>
+              <AlertDescription>{intakeSuccess}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {selectedCup ? (
+            <div className="grid gap-3 border p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{selectedCup.sku}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCup.brand} · {selectedCup.size} · {selectedCup.dimension}
+                  </p>
+                </div>
+                <Badge variant={selectedCup.is_active ? "default" : "secondary"}>
+                  {selectedCup.is_active ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Material: {selectedCup.material ?? "Not set"} | Color: {selectedCup.color ?? "Not set"}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No cup selected yet. Pick one from the table to continue.
+            </p>
+          )}
+
+          <CupField
+            label="Quantity"
+            type="number"
+            value={intakeForm.quantity}
+            disabled={!isAdmin}
+            onChange={(value) => setIntakeForm({ ...intakeForm, quantity: value })}
+          />
+          <CupField
+            label="Reference"
+            value={intakeForm.reference}
+            disabled={!isAdmin}
+            onChange={(value) => setIntakeForm({ ...intakeForm, reference: value })}
+          />
+          <CupField
+            label="Note"
+            value={intakeForm.note}
+            disabled={!isAdmin}
+            onChange={(value) => setIntakeForm({ ...intakeForm, note: value })}
+          />
+
+          <Button
+            type="button"
+            onClick={submitIntake}
+            disabled={!isAdmin || !selectedCup || stockIntake.isPending}
+          >
+            {stockIntake.isPending ? "Recording..." : "Record stock intake"}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function CupField({
+  disabled,
+  label,
+  onChange,
+  type = "text",
+  value,
+}: {
+  disabled?: boolean
+  label: string
+  onChange: (value: string) => void
+  type?: string
+  value: string
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label>{label}</Label>
+      <Input type={type} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  )
+}
+
+function filterCups(cups: Cup[] | undefined, search: string): Cup[] {
+  if (!cups) {
+    return []
+  }
+
+  const normalizedSearch = search.trim().toLowerCase()
+
+  if (!normalizedSearch) {
+    return cups
+  }
+
+  return cups.filter((cup) =>
+    [cup.sku, cup.brand, cup.size, cup.dimension, cup.material ?? "", cup.color ?? ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearch),
+  )
+}
+
+function validateCupForm(form: CupPayload): string | null {
+  if (!skuSchema.safeParse(form.sku).success) {
+    return "Enter a valid SKU. Use letters, numbers, hyphens, or underscores."
+  }
+
+  if (!form.brand.trim() || !form.size.trim() || !form.dimension.trim()) {
+    return "Brand, size, and dimension are required."
+  }
+
+  if (form.min_stock < 0 || !Number.isInteger(form.min_stock)) {
+    return "Minimum stock must be a non-negative whole number."
+  }
+
+  if (!/^\d+(\.\d{1,2})?$/.test(form.cost_price) || !/^\d+(\.\d{1,2})?$/.test(form.default_sell_price)) {
+    return "Prices must be non-negative money values with up to 2 decimals."
+  }
+
+  return null
 }
