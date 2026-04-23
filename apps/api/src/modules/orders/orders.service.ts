@@ -70,6 +70,22 @@ export class OrderLineItemNotFoundError extends Error {
   }
 }
 
+export class OrderNotFoundError extends Error {
+  readonly statusCode = 404
+
+  constructor() {
+    super("Order not found")
+  }
+}
+
+export class OrderCompletedCancellationError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Completed orders cannot be canceled without an explicit return workflow")
+  }
+}
+
 export class OrderProgressClosedError extends Error {
   readonly statusCode = 409
 
@@ -280,6 +296,57 @@ export class OrdersService {
         totals: calculateProgressTotals(orderItem.quantity, events),
         order_status: orderStatus,
       }
+    })
+  }
+
+  async cancel(orderId: string, user: SafeUser): Promise<OrderDto> {
+    return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
+      const order = await ordersRepository.findByIdWithRelations(orderId)
+
+      if (!order) {
+        throw new OrderNotFoundError()
+      }
+
+      if (order.status === "completed") {
+        throw new OrderCompletedCancellationError()
+      }
+
+      if (order.status === "canceled") {
+        return toOrderDto(order, user)
+      }
+
+      const inventoryRepository = new InventoryRepository(db)
+      const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
+
+      for (const item of orderItems) {
+        const totals = calculateProgressTotals(item.quantity, item.progressEvents)
+        const releaseQuantity = Math.max(item.quantity - totals.total_printed, 0)
+
+        if (releaseQuantity === 0) {
+          continue
+        }
+
+        await inventoryRepository.appendMovement({
+          cupId: item.cupId,
+          movementType: "release_reservation",
+          quantity: releaseQuantity,
+          orderId: order.id,
+          orderItemId: item.id,
+          note: "Released unconsumed reservation on order cancellation",
+          reference: order.id,
+          createdByUserId: user.id,
+        })
+      }
+
+      await ordersRepository.cancelOrder(order.id)
+
+      const canceledOrder = await ordersRepository.findByIdWithRelations(order.id)
+
+      if (!canceledOrder) {
+        throw new OrderNotFoundError()
+      }
+
+      return toOrderDto(canceledOrder, user)
     })
   }
 }

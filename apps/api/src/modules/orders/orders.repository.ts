@@ -102,6 +102,17 @@ export class OrdersRepository {
       .where(eq(orders.id, orderId))
   }
 
+  async cancelOrder(orderId: string): Promise<void> {
+    await this.db
+      .update(orders)
+      .set({
+        status: "canceled",
+        canceledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+  }
+
   async listProgressEventsForOrderItem(orderLineItemId: string) {
     return this.db.query.orderLineItemProgressEvents.findMany({
       where: eq(orderLineItemProgressEvents.orderLineItemId, orderLineItemId),

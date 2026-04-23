@@ -23,11 +23,13 @@ import { createOrderLineItemProgressEventSchema } from "./orders.schemas.js"
 import { OrdersRepository } from "./orders.repository.js"
 import {
   DuplicateOrderCupError,
+  OrderCompletedCancellationError,
   OrderCupInactiveError,
   OrderCupNotFoundError,
   OrderCustomerInactiveError,
   OrderCustomerNotFoundError,
   OrderLineItemNotFoundError,
+  OrderNotFoundError,
   OrderPrintedQuantityNotReservedError,
   OrderProgressClosedError,
   OrderProgressValidationError,
@@ -50,6 +52,15 @@ export async function handleOrdersRoute(
       const input = createOrderSchema.parse(await readJsonBody(request))
 
       sendJson(response, 201, { order: await service.create(input, user) })
+    })
+    return true
+  }
+
+  const cancelOrderMatch = path.match(/^\/orders\/([^/]+)\/cancel$/)
+
+  if (cancelOrderMatch && request.method === "PATCH") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { order: await service.cancel(cancelOrderMatch[1] ?? "", user) })
     })
     return true
   }
@@ -131,6 +142,8 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderCupInactiveError ||
     error instanceof DuplicateOrderCupError ||
     error instanceof OrderLineItemNotFoundError ||
+    error instanceof OrderNotFoundError ||
+    error instanceof OrderCompletedCancellationError ||
     error instanceof OrderPrintedQuantityNotReservedError ||
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||
