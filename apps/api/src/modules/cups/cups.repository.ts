@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
+import { hasCupHistoricalUsage } from "../../lib/master-data/item-history.js"
 import { cups, type Cup } from "../../db/schema/index.js"
 import type { CreateCupInput, UpdateCupInput } from "./cups.schemas.js"
 import { normalizeSku } from "./sku.js"
@@ -44,6 +45,10 @@ export class CupsRepository {
     const rows = await this.db.select().from(cups).where(eq(cups.sku, normalizeSku(sku))).limit(1)
 
     return rows[0]
+  }
+
+  async hasHistoricalUsage(id: string): Promise<boolean> {
+    return hasCupHistoricalUsage(this.db, id)
   }
 
   async create(input: CreateCupInput): Promise<Cup> {

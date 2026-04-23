@@ -1,6 +1,7 @@
 import { asc, eq } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
+import { hasLidHistoricalUsage } from "../../lib/master-data/item-history.js"
 import { lids, type Lid } from "../../db/schema/index.js"
 import type { CreateLidInput, UpdateLidInput } from "./lids.schemas.js"
 
@@ -18,6 +19,10 @@ export class LidsRepository {
   async findById(id: string): Promise<Lid | undefined> {
     const rows = await this.db.select().from(lids).where(eq(lids.id, id)).limit(1)
     return rows[0]
+  }
+
+  async hasHistoricalUsage(id: string): Promise<boolean> {
+    return hasLidHistoricalUsage(this.db, id)
   }
 
   async create(input: CreateLidInput): Promise<Lid> {

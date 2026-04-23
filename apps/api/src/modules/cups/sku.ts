@@ -1,10 +1,8 @@
 import { z } from "zod"
 
-export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9_-]{0,79}$/
+import { normalizeSku, SKU_PATTERN } from "../../lib/master-data/sku.js"
 
-export function normalizeSku(value: string): string {
-  return value.trim().replace(/\s+/g, "-").toUpperCase()
-}
+export { normalizeSku, SKU_PATTERN } from "../../lib/master-data/sku.js"
 
 export const skuSchema = z
   .string()
