@@ -80,12 +80,51 @@ const cupUsageReportResponseSchema = z.object({
   report: cupUsageReportSchema,
 })
 
+const salesCostReportItemSchema = z.object({
+  cup: z.object({
+    id: z.string().uuid(),
+    sku: z.string(),
+    brand: z.string(),
+    size: z.string(),
+    dimension: z.string(),
+    material: z.string().nullable(),
+    color: z.string().nullable(),
+    is_active: z.boolean(),
+  }),
+  released_quantity: z.number(),
+  sell_total: z.string(),
+  cost_total: z.string(),
+  gross_profit: z.string(),
+})
+
+const salesCostReportSchema = z.object({
+  quantity_basis: z.literal("released"),
+  date_basis: z.literal("event_date"),
+  filters: z.object({
+    start_date: z.string().nullable(),
+    end_date: z.string().nullable(),
+  }),
+  items: z.array(salesCostReportItemSchema),
+  totals: z.object({
+    released_quantity: z.number(),
+    sell_total: z.string(),
+    cost_total: z.string(),
+    gross_profit: z.string(),
+  }),
+})
+
+const salesCostReportResponseSchema = z.object({
+  report: salesCostReportSchema,
+})
+
 export type InventoryReportItem = z.infer<typeof inventoryReportItemSchema>
 export type InventoryReport = z.infer<typeof inventoryReportSchema>
 export type OrderStatusReport = z.infer<typeof orderStatusReportSchema>
 export type OrderStatusReportItem = z.infer<typeof orderStatusReportItemSchema>
 export type CupUsageReport = z.infer<typeof cupUsageReportSchema>
 export type CupUsageReportItem = z.infer<typeof cupUsageReportItemSchema>
+export type SalesCostReport = z.infer<typeof salesCostReportSchema>
+export type SalesCostReportItem = z.infer<typeof salesCostReportItemSchema>
 
 export class ReportsApiError extends Error {
   readonly status: number
@@ -142,4 +181,20 @@ export async function getCupUsageReport(): Promise<CupUsageReport> {
   }
 
   return cupUsageReportResponseSchema.parse(await response.json()).report
+}
+
+export async function getSalesCostReport(): Promise<SalesCostReport> {
+  const response = await fetch(`${apiBaseUrl}/reports/sales-cost-visibility`, {
+    credentials: "include",
+  })
+
+  if (response.status === 403) {
+    throw new ReportsApiError("Only admins can view sales and cost reporting.", response.status)
+  }
+
+  if (!response.ok) {
+    throw new ReportsApiError("Unable to load sales and cost report.", response.status)
+  }
+
+  return salesCostReportResponseSchema.parse(await response.json()).report
 }

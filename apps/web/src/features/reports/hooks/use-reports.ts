@@ -5,6 +5,7 @@ import {
   getInventorySummaryReport,
   getLowStockReport,
   getOrderStatusReport,
+  getSalesCostReport,
 } from "@/features/reports/api/reports-client"
 
 export const reportsQueryKey = ["reports"] as const
@@ -34,5 +35,13 @@ export function useCupUsageReportQuery() {
   return useQuery({
     queryKey: [...reportsQueryKey, "cup-usage"] as const,
     queryFn: getCupUsageReport,
+  })
+}
+
+export function useSalesCostReportQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: [...reportsQueryKey, "sales-cost"] as const,
+    queryFn: getSalesCostReport,
+    enabled,
   })
 }

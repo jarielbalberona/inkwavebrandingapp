@@ -13,34 +13,48 @@ import {
 } from "@workspace/ui/components/table"
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type {
   CupUsageReport,
   CupUsageReportItem,
   InventoryReportItem,
   OrderStatusReport,
   OrderStatusReportItem,
+  SalesCostReport,
+  SalesCostReportItem,
 } from "@/features/reports/api/reports-client"
 import {
   useCupUsageReportQuery,
   useInventorySummaryReportQuery,
   useLowStockReportQuery,
   useOrderStatusReportQuery,
+  useSalesCostReportQuery,
 } from "@/features/reports/hooks/use-reports"
 
+type ReportTab =
+  | "inventory-summary"
+  | "low-stock"
+  | "order-status"
+  | "cup-usage"
+  | "sales-cost"
+
 export function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<
-    "inventory-summary" | "low-stock" | "order-status" | "cup-usage"
-  >("inventory-summary")
+  const [activeTab, setActiveTab] = useState<ReportTab>("inventory-summary")
+  const currentUser = useCurrentUser()
+  const isAdmin = currentUser.data?.role === "admin"
   const inventorySummaryQuery = useInventorySummaryReportQuery()
   const lowStockQuery = useLowStockReportQuery()
   const orderStatusQuery = useOrderStatusReportQuery()
   const cupUsageQuery = useCupUsageReportQuery()
+  const salesCostQuery = useSalesCostReportQuery(isAdmin)
+
   const inventoryReport =
     activeTab === "inventory-summary"
       ? inventorySummaryQuery.data
       : activeTab === "low-stock"
         ? lowStockQuery.data
         : undefined
+
   const activeQuery =
     activeTab === "inventory-summary"
       ? inventorySummaryQuery
@@ -48,7 +62,9 @@ export function ReportsPage() {
         ? lowStockQuery
         : activeTab === "order-status"
           ? orderStatusQuery
-          : cupUsageQuery
+          : activeTab === "cup-usage"
+            ? cupUsageQuery
+            : salesCostQuery
 
   return (
     <div className="grid gap-4">
@@ -56,7 +72,8 @@ export function ReportsPage() {
         <CardHeader>
           <CardTitle>Reports</CardTitle>
           <CardDescription>
-            Inventory and order reporting now come from backend source data. No stale
+            Inventory, order, usage, and admin financial reporting now come from backend source
+            data. No stale
             <span className="mx-1 font-medium text-foreground">printing</span>
             status is shown anywhere in this screen.
           </CardDescription>
@@ -69,7 +86,8 @@ export function ReportsPage() {
                 value === "inventory-summary" ||
                 value === "low-stock" ||
                 value === "order-status" ||
-                value === "cup-usage"
+                value === "cup-usage" ||
+                value === "sales-cost"
               ) {
                 setActiveTab(value)
               }
@@ -80,6 +98,7 @@ export function ReportsPage() {
               <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
               <TabsTrigger value="order-status">Order Status</TabsTrigger>
               <TabsTrigger value="cup-usage">Cup Usage</TabsTrigger>
+              <TabsTrigger value="sales-cost">Sales & Cost</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -87,6 +106,8 @@ export function ReportsPage() {
             <OrderStatusReportSection report={orderStatusQuery.data} />
           ) : activeTab === "cup-usage" ? (
             <CupUsageReportSection report={cupUsageQuery.data} />
+          ) : activeTab === "sales-cost" ? (
+            <SalesCostReportSection isAdmin={isAdmin} report={salesCostQuery.data} />
           ) : (
             <InventoryReportSummaryCards
               activeTab={activeTab}
@@ -108,7 +129,11 @@ export function ReportsPage() {
             <p className="text-sm text-muted-foreground">Loading report data...</p>
           ) : null}
 
-          {!activeQuery.isLoading && activeTab !== "order-status" && activeTab !== "cup-usage" && inventoryReport?.items.length === 0 ? (
+          {!activeQuery.isLoading &&
+          activeTab !== "order-status" &&
+          activeTab !== "cup-usage" &&
+          activeTab !== "sales-cost" &&
+          inventoryReport?.items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {activeTab === "inventory-summary"
                 ? "No inventory report rows available yet."
@@ -128,12 +153,28 @@ export function ReportsPage() {
             <p className="text-sm text-muted-foreground">No consume movements recorded yet.</p>
           ) : null}
 
-          {activeTab !== "order-status" && inventoryReport?.items.length ? (
+          {!activeQuery.isLoading &&
+          activeTab === "sales-cost" &&
+          isAdmin &&
+          salesCostQuery.data?.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No released quantity has been recorded for financial reporting yet.
+            </p>
+          ) : null}
+
+          {activeTab !== "order-status" &&
+          activeTab !== "cup-usage" &&
+          activeTab !== "sales-cost" &&
+          inventoryReport?.items.length ? (
             <InventoryReportTable items={inventoryReport.items} />
           ) : null}
 
           {activeTab === "cup-usage" && cupUsageQuery.data?.items.length ? (
             <CupUsageReportTable items={cupUsageQuery.data.items} />
+          ) : null}
+
+          {activeTab === "sales-cost" && isAdmin && salesCostQuery.data?.items.length ? (
+            <SalesCostReportTable items={salesCostQuery.data.items} />
           ) : null}
         </CardContent>
       </Card>
@@ -183,6 +224,28 @@ function MetricCard({
       <CardHeader className="gap-1">
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-2xl">{value.toLocaleString()}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MoneyMetricCard({
+  description,
+  label,
+  value,
+}: {
+  description: string
+  label: string
+  value: string
+}) {
+  return (
+    <Card className="rounded-none">
+      <CardHeader className="gap-1">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl">{value}</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground">{description}</p>
@@ -325,6 +388,69 @@ function CupUsageReportSection({ report }: { report: CupUsageReport | undefined 
   )
 }
 
+function SalesCostReportSection({
+  isAdmin,
+  report,
+}: {
+  isAdmin: boolean
+  report: SalesCostReport | undefined
+}) {
+  if (!isAdmin) {
+    return (
+      <Alert>
+        <AlertDescription>
+          Sales and cost reporting is admin-only. This page does not request or render financial
+          data for staff users.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          label="Released quantity"
+          value={report?.totals.released_quantity ?? 0}
+          description="Explicit quantity basis from backend"
+        />
+        <MoneyMetricCard
+          label="Sell total"
+          value={report?.totals.sell_total ?? "0.00"}
+          description="Backend-calculated released sell value"
+        />
+        <MoneyMetricCard
+          label="Cost total"
+          value={report?.totals.cost_total ?? "0.00"}
+          description="Backend-calculated released cost value"
+        />
+        <MoneyMetricCard
+          label="Gross profit"
+          value={report?.totals.gross_profit ?? "0.00"}
+          description="Simple released-basis profit visibility"
+        />
+      </div>
+
+      {report ? (
+        <Card className="rounded-none">
+          <CardHeader>
+            <CardTitle className="text-lg">Financial Basis</CardTitle>
+            <CardDescription>
+              Quantity basis: {report.quantity_basis}. Date basis: {report.date_basis}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Start: {report.filters.start_date ?? "Not set"} • End:{" "}
+              {report.filters.end_date ?? "Not set"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  )
+}
+
 function sum(items: InventoryReportItem[] | undefined, mapItem: (item: InventoryReportItem) => number) {
   return (items ?? []).reduce((total, item) => total + mapItem(item), 0)
 }
@@ -395,6 +521,45 @@ function CupUsageReportTable({ items }: { items: CupUsageReportItem[] }) {
             <TableCell>{item.cup.size}</TableCell>
             <TableCell>{item.cup.dimension}</TableCell>
             <TableCell>{item.consumed_quantity.toLocaleString()}</TableCell>
+            <TableCell>
+              <Badge variant={item.cup.is_active ? "default" : "secondary"}>
+                {item.cup.is_active ? "Active" : "Inactive"}
+              </Badge>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+}
+
+function SalesCostReportTable({ items }: { items: SalesCostReportItem[] }) {
+  const sortedItems = [...items].sort(
+    (left, right) => Number(right.sell_total) - Number(left.sell_total),
+  )
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>SKU</TableHead>
+          <TableHead>Brand</TableHead>
+          <TableHead>Released Quantity</TableHead>
+          <TableHead>Sell Total</TableHead>
+          <TableHead>Cost Total</TableHead>
+          <TableHead>Gross Profit</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sortedItems.map((item) => (
+          <TableRow key={item.cup.id}>
+            <TableCell className="font-medium">{item.cup.sku}</TableCell>
+            <TableCell>{item.cup.brand}</TableCell>
+            <TableCell>{item.released_quantity.toLocaleString()}</TableCell>
+            <TableCell>{item.sell_total}</TableCell>
+            <TableCell>{item.cost_total}</TableCell>
+            <TableCell>{item.gross_profit}</TableCell>
             <TableCell>
               <Badge variant={item.cup.is_active ? "default" : "secondary"}>
                 {item.cup.is_active ? "Active" : "Inactive"}
