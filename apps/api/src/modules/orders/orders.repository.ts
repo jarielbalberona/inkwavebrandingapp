@@ -102,6 +102,20 @@ export class OrdersRepository {
       .where(eq(orders.id, orderId))
   }
 
+  async updateOrderMetadata(
+    orderId: string,
+    input: { customerId?: string; notes?: string | null },
+  ): Promise<void> {
+    await this.db
+      .update(orders)
+      .set({
+        customerId: input.customerId,
+        notes: input.notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+  }
+
   async cancelOrder(orderId: string): Promise<void> {
     await this.db
       .update(orders)

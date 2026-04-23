@@ -18,12 +18,17 @@ import {
   InventoryService,
 } from "../inventory/inventory.service.js"
 import { UsersRepository } from "../users/users.repository.js"
-import { createOrderSchema } from "./orders.schemas.js"
-import { createOrderLineItemProgressEventSchema } from "./orders.schemas.js"
+import {
+  createOrderLineItemProgressEventSchema,
+  createOrderSchema,
+  updateOrderSchema,
+} from "./orders.schemas.js"
 import { OrdersRepository } from "./orders.repository.js"
 import {
   DuplicateOrderCupError,
+  OrderClosedUpdateError,
   OrderCompletedCancellationError,
+  OrderCustomerReassignmentProgressError,
   OrderCupInactiveError,
   OrderCupNotFoundError,
   OrderCustomerInactiveError,
@@ -52,6 +57,17 @@ export async function handleOrdersRoute(
       const input = createOrderSchema.parse(await readJsonBody(request))
 
       sendJson(response, 201, { order: await service.create(input, user) })
+    })
+    return true
+  }
+
+  const updateOrderMatch = path.match(/^\/orders\/([^/]+)$/)
+
+  if (updateOrderMatch && request.method === "PATCH") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const input = updateOrderSchema.parse(await readJsonBody(request))
+
+      sendJson(response, 200, { order: await service.update(updateOrderMatch[1] ?? "", input, user) })
     })
     return true
   }
@@ -143,7 +159,9 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof DuplicateOrderCupError ||
     error instanceof OrderLineItemNotFoundError ||
     error instanceof OrderNotFoundError ||
+    error instanceof OrderClosedUpdateError ||
     error instanceof OrderCompletedCancellationError ||
+    error instanceof OrderCustomerReassignmentProgressError ||
     error instanceof OrderPrintedQuantityNotReservedError ||
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||

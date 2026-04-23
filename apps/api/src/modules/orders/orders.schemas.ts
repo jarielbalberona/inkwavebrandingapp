@@ -8,6 +8,18 @@ const optionalText = (max: number) =>
     .optional()
     .transform((value) => (value === "" ? undefined : value))
 
+const nullableOptionalText = (max: number) =>
+  z
+    .union([z.string().trim().max(max), z.null()])
+    .optional()
+    .transform((value) => {
+      if (value === "") {
+        return null
+      }
+
+      return value
+    })
+
 export const orderStatusSchema = z.enum([
   "pending",
   "in_progress",
@@ -45,9 +57,20 @@ export const createOrderLineItemProgressEventSchema = z.object({
   event_date: z.coerce.date(),
 })
 
+export const updateOrderSchema = z
+  .object({
+    customer_id: z.string().uuid().optional(),
+    notes: nullableOptionalText(1000),
+  })
+  .strict()
+  .refine((input) => input.customer_id !== undefined || input.notes !== undefined, {
+    message: "At least one supported order field is required",
+  })
+
 export type OrderStatus = z.infer<typeof orderStatusSchema>
 export type OrderLineItemProgressStage = z.infer<typeof orderLineItemProgressStageSchema>
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
+export type UpdateOrderInput = z.infer<typeof updateOrderSchema>
 export type CreateOrderLineItemProgressEventInput = z.infer<
   typeof createOrderLineItemProgressEventSchema
 >

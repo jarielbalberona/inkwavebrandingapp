@@ -9,10 +9,12 @@ import { InventoryService } from "../inventory/inventory.service.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
+  updateOrderSchema,
   type CreateOrderInput,
   type CreateOrderLineItemProgressEventInput,
   type OrderLineItemProgressStage,
   type OrderStatus,
+  type UpdateOrderInput,
 } from "./orders.schemas.js"
 import { OrdersRepository, type OrderItemWithProgressEvents } from "./orders.repository.js"
 import {
@@ -83,6 +85,22 @@ export class OrderCompletedCancellationError extends Error {
 
   constructor() {
     super("Completed orders cannot be canceled without an explicit return workflow")
+  }
+}
+
+export class OrderClosedUpdateError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Canceled or completed orders cannot be edited")
+  }
+}
+
+export class OrderCustomerReassignmentProgressError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Customer cannot be changed after fulfillment progress has started")
   }
 }
 
@@ -349,6 +367,53 @@ export class OrdersService {
       return toOrderDto(canceledOrder, user)
     })
   }
+
+  async update(orderId: string, input: UpdateOrderInput, user: SafeUser): Promise<OrderDto> {
+    const parsedInput = updateOrderSchema.parse(input)
+
+    return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
+      const order = await ordersRepository.findByIdWithRelations(orderId)
+
+      if (!order) {
+        throw new OrderNotFoundError()
+      }
+
+      if (order.status === "canceled" || order.status === "completed") {
+        throw new OrderClosedUpdateError()
+      }
+
+      if (parsedInput.customer_id && parsedInput.customer_id !== order.customerId) {
+        const customer = await new CustomersRepository(db).findById(parsedInput.customer_id)
+
+        if (!customer) {
+          throw new OrderCustomerNotFoundError()
+        }
+
+        if (!customer.isActive) {
+          throw new OrderCustomerInactiveError()
+        }
+
+        const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
+
+        if (hasFulfillmentProgress(orderItems)) {
+          throw new OrderCustomerReassignmentProgressError()
+        }
+      }
+
+      await ordersRepository.updateOrderMetadata(order.id, {
+        customerId: parsedInput.customer_id,
+        notes: parsedInput.notes,
+      })
+
+      const updatedOrder = await ordersRepository.findByIdWithRelations(order.id)
+
+      if (!updatedOrder) {
+        throw new OrderNotFoundError()
+      }
+
+      return toOrderDto(updatedOrder, user)
+    })
+  }
 }
 
 function createOrderNumber(): string {
@@ -483,4 +548,8 @@ function deriveOrderStatus(
   }
 
   return "pending"
+}
+
+function hasFulfillmentProgress(items: OrderItemWithProgressEvents[]): boolean {
+  return items.some((item) => item.progressEvents.length > 0)
 }
