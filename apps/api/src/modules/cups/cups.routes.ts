@@ -16,7 +16,12 @@ import {
   cupListQuerySchema,
   updateCupRequestSchema,
 } from "./cups.schemas.js"
-import { CupNotFoundError, CupsService, DuplicateCupSkuError } from "./cups.service.js"
+import {
+  CupIdentityLockedError,
+  CupNotFoundError,
+  CupsService,
+  DuplicateCupSkuError,
+} from "./cups.service.js"
 
 interface CupsRouteContext {
   env: ApiEnv & { authSessionSecret: string }
@@ -119,7 +124,7 @@ function handleCupsError(response: ServerResponse, error: unknown) {
     return
   }
 
-  if (error instanceof CupNotFoundError) {
+  if (error instanceof CupNotFoundError || error instanceof CupIdentityLockedError) {
     sendJson(response, error.statusCode, { error: error.message })
     return
   }

@@ -24,7 +24,6 @@ const cupResponseSchema = z.object({ cup: cupSchema })
 export type Cup = z.infer<typeof cupSchema>
 
 export interface CupPayload {
-  sku: string
   type: "paper" | "plastic"
   brand: "dabba" | "grecoopack" | "china_supplier" | "other_supplier"
   diameter: "80mm" | "90mm" | "95mm" | "98mm"
@@ -75,7 +74,12 @@ async function sendCupRequest(path: string, method: "POST" | "PATCH", payload: C
       : await api.patch<unknown, typeof payload>(path, payload)
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 409) {
-      throw new CupsApiError("SKU already exists. Use a different SKU.", error.status)
+      throw new CupsApiError(
+        error.message.includes("historical records")
+          ? error.message
+          : "Cup SKU already exists for that contract combination.",
+        error.status,
+      )
     }
 
     if (error instanceof ApiClientError && error.status === 403) {

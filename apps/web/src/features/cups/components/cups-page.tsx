@@ -24,7 +24,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import {
@@ -58,11 +57,10 @@ import {
   getAllowedCupDiameters,
   getAllowedCupSizes,
 } from "@/features/cups/types/cup-contract"
-import { normalizeSku, skuSchema } from "@/features/cups/types/sku"
+import { generateCupSkuPreview } from "@/features/cups/types/sku"
 
 const cupFormSchema = z
   .object({
-    sku: skuSchema,
     type: z.enum(cupTypes),
     brand: z.enum(cupBrands),
     diameter: z.enum(cupDiameters),
@@ -110,7 +108,6 @@ const cupFormSchema = z
 type CupFormValues = z.infer<typeof cupFormSchema>
 
 const emptyFormValues: CupFormValues = {
-  sku: "",
   type: "plastic",
   brand: "dabba",
   diameter: "95mm",
@@ -143,12 +140,24 @@ export function CupsPage() {
 
   const selectedType = useWatch({ control: form.control, name: "type" })
   const selectedBrand = useWatch({ control: form.control, name: "brand" })
+  const selectedSize = useWatch({ control: form.control, name: "size" })
+  const selectedColor = useWatch({ control: form.control, name: "color" })
   const availableBrands = useMemo(() => getAllowedCupBrands(selectedType), [selectedType])
   const availableDiameters = useMemo(() => getAllowedCupDiameters(selectedType), [selectedType])
   const availableSizes = useMemo(() => getAllowedCupSizes(selectedType), [selectedType])
   const availableColors = useMemo(
     () => getAllowedCupColors(selectedType, selectedBrand),
     [selectedType, selectedBrand],
+  )
+  const skuPreview = useMemo(
+    () =>
+      generateCupSkuPreview({
+        type: selectedType,
+        brand: selectedBrand,
+        size: selectedSize,
+        color: selectedColor,
+      }),
+    [selectedType, selectedBrand, selectedSize, selectedColor],
   )
 
   useEffect(() => {
@@ -188,7 +197,6 @@ export function CupsPage() {
 
     const payload: CupPayload = {
       ...values,
-      sku: normalizeSku(values.sku),
       cost_price: values.cost_price.toFixed(2),
       default_sell_price: values.default_sell_price.toFixed(2),
     }
@@ -318,7 +326,7 @@ export function CupsPage() {
           <Form {...form}>
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
-                <TextFormField control={form.control} disabled={!isAdmin} label="SKU" name="sku" />
+                <ReadOnlySkuField value={skuPreview} />
                 <SelectFormField
                   control={form.control}
                   disabled={!isAdmin}
@@ -411,35 +419,15 @@ export function CupsPage() {
   )
 }
 
-function TextFormField({
-  control,
-  disabled,
-  label,
-  name,
-}: {
-  control: ReturnType<typeof useForm<CupFormValues>>["control"]
-  disabled: boolean
-  label: string
-  name: "sku"
-}) {
+function ReadOnlySkuField({ value }: { value: string }) {
   return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input
-              disabled={disabled}
-              value={field.value}
-              onChange={(event) => field.onChange(event.target.value)}
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
+    <FormItem>
+      <FormLabel>SKU</FormLabel>
+      <FormControl>
+        <Input disabled readOnly value={value} />
+      </FormControl>
+      <FormDescription>Generated automatically from size, type, brand, and color.</FormDescription>
+    </FormItem>
   )
 }
 
@@ -477,7 +465,6 @@ function SelectFormField({
               ))}
             </SelectContent>
           </Select>
-          <FormMessage />
         </FormItem>
       )}
     />
@@ -510,7 +497,6 @@ function NumberFormField({
               onChange={(value) => field.onChange(value ?? 0)}
             />
           </FormControl>
-          <FormMessage />
         </FormItem>
       )}
     />
@@ -543,7 +529,6 @@ function CurrencyFormField({
               onChange={(value) => field.onChange(value ?? 0)}
             />
           </FormControl>
-          <FormMessage />
         </FormItem>
       )}
     />
@@ -556,7 +541,6 @@ function hasPricing(cups: Cup[] | undefined): boolean {
 
 function toFormValues(cup: Cup): CupFormValues {
   return {
-    sku: cup.sku,
     type: cup.type,
     brand: cup.brand,
     diameter: cup.diameter,

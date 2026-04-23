@@ -3,6 +3,7 @@ import { assertAdmin, AuthorizationError } from "../auth/authorization.js"
 import { CupsRepository } from "./cups.repository.js"
 import type { CupListQuery, CreateCupInput, UpdateCupInput } from "./cups.schemas.js"
 import { toCupDto, type CupDto } from "./cups.types.js"
+import { generateCupSku, wouldRegenerateCupSku } from "../../lib/master-data/sku.js"
 
 export class CupNotFoundError extends Error {
   readonly statusCode = 404
@@ -17,6 +18,14 @@ export class DuplicateCupSkuError extends Error {
 
   constructor() {
     super("Cup SKU already exists")
+  }
+}
+
+export class CupIdentityLockedError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("This cup is already used in historical records. Create a new cup instead of changing SKU-driving fields.")
   }
 }
 
@@ -59,7 +68,15 @@ export class CupsService {
     assertAdmin(user)
 
     try {
-      return toCupDto(await this.cupsRepository.create(input), user)
+      const sku = generateCupSku(input)
+
+      return toCupDto(
+        await this.cupsRepository.create({
+          ...input,
+          sku,
+        }),
+        user,
+      )
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new DuplicateCupSkuError()
@@ -73,7 +90,31 @@ export class CupsService {
     assertAdmin(user)
 
     try {
-      const cup = await this.cupsRepository.update(id, input)
+      const existingCup = await this.cupsRepository.findById(id)
+
+      if (!existingCup) {
+        throw new CupNotFoundError()
+      }
+
+      const regeneratesSku = wouldRegenerateCupSku(existingCup, input)
+
+      if (regeneratesSku && (await this.cupsRepository.hasHistoricalUsage(id))) {
+        throw new CupIdentityLockedError()
+      }
+
+      const cup = await this.cupsRepository.update(id, {
+        ...input,
+        ...(regeneratesSku
+          ? {
+              sku: generateCupSku({
+                type: input.type ?? existingCup.type,
+                brand: input.brand ?? existingCup.brand,
+                size: input.size ?? existingCup.size,
+                color: input.color ?? existingCup.color,
+              }),
+            }
+          : undefined),
+      })
 
       if (!cup) {
         throw new CupNotFoundError()
@@ -81,7 +122,11 @@ export class CupsService {
 
       return toCupDto(cup, user)
     } catch (error) {
-      if (error instanceof AuthorizationError || error instanceof CupNotFoundError) {
+      if (
+        error instanceof AuthorizationError ||
+        error instanceof CupIdentityLockedError ||
+        error instanceof CupNotFoundError
+      ) {
         throw error
       }
 

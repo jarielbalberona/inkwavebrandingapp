@@ -6,6 +6,14 @@ import { cups, type Cup } from "../../db/schema/index.js"
 import type { CreateCupInput, UpdateCupInput } from "./cups.schemas.js"
 import { normalizeSku } from "./sku.js"
 
+export interface PersistedCreateCupInput extends CreateCupInput {
+  sku: string
+}
+
+export interface PersistedUpdateCupInput extends UpdateCupInput {
+  sku?: string
+}
+
 export class CupsRepository {
   constructor(private readonly db: DatabaseClient) {}
 
@@ -51,13 +59,13 @@ export class CupsRepository {
     return hasCupHistoricalUsage(this.db, id)
   }
 
-  async create(input: CreateCupInput): Promise<Cup> {
+  async create(input: PersistedCreateCupInput): Promise<Cup> {
     const rows = await this.db.insert(cups).values(input).returning()
 
     return requireCup(rows[0], "Failed to create cup")
   }
 
-  async update(id: string, input: UpdateCupInput): Promise<Cup | undefined> {
+  async update(id: string, input: PersistedUpdateCupInput): Promise<Cup | undefined> {
     const rows = await this.db
       .update(cups)
       .set({

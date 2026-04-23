@@ -8,7 +8,6 @@ import {
   cupSizeSchema,
   cupTypeSchema,
 } from "./cups.contract.js"
-import { skuSchema } from "./sku.js"
 
 export const cupMoneySchema = z
   .string()
@@ -16,7 +15,6 @@ export const cupMoneySchema = z
   .regex(/^\d+(\.\d{1,2})?$/, "Must be a non-negative money amount with up to 2 decimals")
 
 const baseCupSchema = z.object({
-  sku: skuSchema,
   type: cupTypeSchema,
   brand: cupBrandSchema,
   diameter: cupDiameterSchema,
@@ -70,7 +68,6 @@ export const cupListQuerySchema = z.object({
 
 export const createCupRequestSchema = z
   .object({
-    sku: baseCupSchema.shape.sku,
     type: baseCupSchema.shape.type,
     brand: baseCupSchema.shape.brand,
     diameter: baseCupSchema.shape.diameter,
@@ -83,7 +80,6 @@ export const createCupRequestSchema = z
   })
   .transform((input) =>
     createCupSchema.parse({
-      sku: input.sku,
       type: input.type,
       brand: input.brand,
       diameter: input.diameter,
@@ -102,7 +98,6 @@ export const updateCupRequestSchema = createCupRequestSchema
   .refine((value) => Object.keys(value).length > 0, "At least one cup field is required")
   .transform((input) =>
     updateCupSchema.parse({
-      sku: input.sku,
       type: input.type,
       brand: input.brand,
       diameter: input.diameter,
