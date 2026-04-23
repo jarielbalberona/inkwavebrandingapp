@@ -11,6 +11,7 @@ import { AuthService } from "../auth/auth.service.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import { ReportsRepository } from "./reports.repository.js"
+import { cupUsageReportQuerySchema } from "./reports.schemas.js"
 import { ReportsService } from "./reports.service.js"
 
 interface ReportsRouteContext {
@@ -41,6 +42,17 @@ export async function handleReportsRoute(
   if (path === "/reports/order-status" && request.method === "GET") {
     await withAuthenticatedUser(request, response, context, async (service) => {
       sendJson(response, 200, { report: await service.getOrderStatusReport() })
+    })
+    return true
+  }
+
+  if (path === "/reports/cup-usage" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service) => {
+      const query = cupUsageReportQuerySchema.parse(
+        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
+      )
+
+      sendJson(response, 200, { report: await service.getCupUsageReport(query) })
     })
     return true
   }

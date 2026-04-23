@@ -1,8 +1,11 @@
 import { ReportsRepository } from "./reports.repository.js"
+import type { CupUsageReportQuery } from "./reports.schemas.js"
 import {
   orderReportStatuses,
+  toCupUsageReportDto,
   toInventoryReportItemDto,
   type InventoryReportDto,
+  type CupUsageReportDto,
   type OrderStatusReportDto,
 } from "./reports.types.js"
 
@@ -39,5 +42,17 @@ export class ReportsService {
       statuses,
       total_orders: statuses.reduce((total, item) => total + item.count, 0),
     }
+  }
+
+  async getCupUsageReport(query: CupUsageReportQuery): Promise<CupUsageReportDto> {
+    const rows = await this.reportsRepository.listCupUsage(query)
+
+    return toCupUsageReportDto(
+      query,
+      rows.map((row) => ({
+        cup: row.cup,
+        consumed_quantity: row.consumedQuantity,
+      })),
+    )
   }
 }
