@@ -1,0 +1,99 @@
+# Deployment Notes
+
+This repo now has source-controlled Render service definitions. That is not the same as proven deployment readiness.
+
+Use this runbook to deploy without guessing.
+
+## Environment Model
+
+The repo supports two deployment environments in principle:
+
+- staging
+- production
+
+Current honest state:
+
+- the service contract is the same for both
+- the repo does not prove a separate staging stack already exists
+- if staging does not exist yet, create it before treating production as the first real smoke target
+
+Do not call a direct production push “staging by confidence.” That is lazy and it is how people create outages.
+
+## Deployment Order
+
+1. Confirm Render environment values are present for the target web and API services.
+2. Confirm `DATABASE_URL` points to the Ink Wave database only.
+3. Confirm the API build still passes locally:
+   - `pnpm --filter @workspace/api build`
+4. Confirm the web build still passes locally:
+   - `pnpm --filter web build`
+5. Run migrations against the target database:
+   - `pnpm --filter @workspace/api db:migrate`
+6. Deploy the API service.
+7. Wait for the API health check at `/health` to return `200`.
+8. Deploy the web service.
+9. Run the smoke checks below.
+
+If step 2 is skipped, the rest of this runbook is worthless.
+
+## Smoke Checks
+
+Minimum smoke after deploy:
+
+### Platform
+
+- web loads without a blank screen
+- API `/health` returns `200`
+- browser requests point to the intended API origin
+
+### Auth
+
+- admin can log in
+- logout clears the session
+- unauthenticated access to protected routes returns `401`
+
+### Master Data
+
+- cups list loads
+- lids list loads
+- create/edit forms still submit for admin
+
+### Inventory
+
+- balances page loads
+- movement history loads
+- stock intake works for an active tracked item
+- manual adjustment works for an active tracked item
+
+### Orders
+
+- orders list loads
+- order detail loads
+- create order still validates inventory/customer inputs
+
+### Authorization
+
+- staff can view allowed inventory/order surfaces
+- staff does not receive confidential pricing/customer payloads where the backend is supposed to filter them
+
+Do not mark the deploy healthy just because `/health` is green. That only proves the process is standing up.
+
+## Rollback Reality
+
+- Render can redeploy a previous service version.
+- Database migrations are the hard part. There is no automatic safe rollback for a bad destructive migration.
+- If a migration is wrong, recovery depends on backups and restore procedure, not optimism.
+
+That means:
+
+- keep migrations deliberate
+- deploy small increments
+- verify database target before every migration run
+
+## Known Manual Work
+
+- Render environment values are still dashboard-managed
+- no CI/CD pipeline is handling promotion automatically
+- no live post-deploy smoke automation exists in this repo yet
+
+This is acceptable for an internal MVP. It is not mature operations.
