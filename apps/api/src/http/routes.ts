@@ -13,6 +13,8 @@ export const routeDefinitions = [
   { access: "public", method: "POST", path: "/auth/login" },
   { access: "public", method: "POST", path: "/auth/logout" },
   { access: "protected", method: "GET", path: "/auth/me" },
+  { access: "protected", method: "GET", path: "/cups" },
+  { access: "protected", method: "POST", path: "/cups" },
 ] as const satisfies readonly RouteDefinition[]
 
 export function getRequestPath(request: IncomingMessage): string {

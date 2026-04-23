@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm"
+import { and, asc, eq, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import { cups, type Cup } from "../../db/schema/index.js"
@@ -13,6 +13,24 @@ export class CupsRepository {
     }
 
     return this.db.select().from(cups).where(eq(cups.isActive, true)).orderBy(asc(cups.sku))
+  }
+
+  async listBySkuSearch(search: string, options: { includeInactive?: boolean } = {}): Promise<Cup[]> {
+    const normalizedSearch = `%${search}%`
+
+    if (options.includeInactive) {
+      return this.db
+        .select()
+        .from(cups)
+        .where(sql`${cups.sku} ILIKE ${normalizedSearch}`)
+        .orderBy(asc(cups.sku))
+    }
+
+    return this.db
+      .select()
+      .from(cups)
+      .where(and(eq(cups.isActive, true), sql`${cups.sku} ILIKE ${normalizedSearch}`))
+      .orderBy(asc(cups.sku))
   }
 
   async findById(id: string): Promise<Cup | undefined> {
