@@ -365,7 +365,7 @@ function StatChip({
   return (
     <div
       className={cn(
-        "rounded-xl border px-3 py-2",
+        "xl border px-3 py-2",
         tone === "positive" ? "border-primary/20 bg-primary/5" : "bg-muted/40"
       )}
     >
@@ -402,7 +402,7 @@ function ColorHueScaleRow({
           {shades.map((step) => (
             <div key={step} className="flex min-w-0 flex-col items-center gap-1">
               <div
-                className="aspect-square w-full max-h-11 rounded-md border border-black/10 sm:max-h-12 dark:border-white/15"
+                className="aspect-square w-full max-h-11 md border border-black/10 sm:max-h-12 dark:border-white/15"
                 style={{
                   backgroundColor:
                     getTailwindDefaultSwatch(name, step) ??
@@ -427,7 +427,7 @@ function ColorHueScaleRow({
 
 function KbdInline({ children }: { children: ReactNode }) {
   return (
-    <kbd className="pointer-events-none inline-flex h-5 w-fit min-w-5 items-center justify-center gap-1 rounded-sm bg-muted px-1 font-sans text-muted-foreground text-xs font-medium select-none">
+    <kbd className="pointer-events-none inline-flex h-5 w-fit min-w-5 items-center justify-center gap-1 sm bg-muted px-1 font-sans text-muted-foreground text-xs font-medium select-none">
       {children}
     </kbd>
   );
@@ -468,7 +468,7 @@ function DatePickerSample() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <Label>Start</Label>
-              <div className="overflow-hidden rounded-xl border">
+              <div className="overflow-hidden xl border">
                 <Calendar
                   mode="single"
                   selected={rangeStart}
@@ -482,7 +482,7 @@ function DatePickerSample() {
             </div>
             <div className="space-y-1">
               <Label>End</Label>
-              <div className="overflow-hidden rounded-xl border">
+              <div className="overflow-hidden xl border">
                 <Calendar
                   mode="single"
                   selected={rangeEnd}
@@ -552,7 +552,7 @@ function DateRangeForm({ today, maxDate }: { today: Date; maxDate: Date }) {
               <FormItem>
                 <FormLabel>Start</FormLabel>
                 <FormControl>
-                  <div className="overflow-hidden rounded-xl border">
+                  <div className="overflow-hidden xl border">
                     <Calendar
                       mode="single"
                       selected={field.value}
@@ -574,7 +574,7 @@ function DateRangeForm({ today, maxDate }: { today: Date; maxDate: Date }) {
               <FormItem>
                 <FormLabel>End</FormLabel>
                 <FormControl>
-                  <div className="overflow-hidden rounded-xl border">
+                  <div className="overflow-hidden xl border">
                     <Calendar
                       mode="single"
                       selected={field.value}
@@ -877,7 +877,7 @@ export function DesignSystemPage() {
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {paletteSwatches.map((swatch) => (
                     <div key={swatch} className="space-y-2">
-                      <div className={cn("h-10 rounded-xl border", swatch)} />
+                      <div className={cn("h-10  border", swatch)} />
                       <p className="truncate text-muted-foreground text-xs">
                         {swatch.replace("bg-", "")}
                       </p>
@@ -917,7 +917,7 @@ export function DesignSystemPage() {
                   <Button variant="ghost">Ghost</Button>
                 </div>
 
-                <div className="relative flex h-9 w-full items-center rounded-lg px-1 border border-input">
+                <div className="relative flex h-9 w-full items-center px-1 border border-input">
                   <Input
                     placeholder="Search components"
                     className="flex-1 border-0 shadow-none ring-0 focus-visible:ring-0"
@@ -1058,7 +1058,7 @@ export function DesignSystemPage() {
                 ].map(([label, value]) => (
                   <div
                     key={label}
-                    className="flex items-center justify-between rounded-xl border px-3 py-2"
+                    className="flex items-center justify-between xl border px-3 py-2"
                   >
                     <span className="font-medium text-xs">{label}</span>
                     <span className="max-w-[11rem] truncate text-muted-foreground text-xs">
@@ -1097,7 +1097,7 @@ export function DesignSystemPage() {
               title="Form primitives"
               description="react-hook-form + form primitives from @workspace/ui."
               footer={
-                <div className="w-full rounded-xl border bg-muted/20 px-3 py-2 text-muted-foreground text-sm">
+                <div className="w-full xl border bg-muted/20 px-3 py-2 text-muted-foreground text-sm">
                   {demoFormStatus}
                 </div>
               }
@@ -1178,7 +1178,7 @@ export function DesignSystemPage() {
                     control={demoForm.control}
                     name="notifyStakeholders"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-xl border px-3 py-3">
+                      <FormItem className="flex flex-row items-center justify-between xl border px-3 py-3">
                         <div className="space-y-1">
                           <FormLabel className="text-sm">Notify stakeholders</FormLabel>
                           <FormDescription>
@@ -1224,7 +1224,7 @@ export function DesignSystemPage() {
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-2">
-                        <div className="rounded-xl border px-3 py-2">
+                        <div className="xl border px-3 py-2">
                           <p className="font-medium text-sm">Version 2.4.0</p>
                           <p className="text-muted-foreground text-sm">
                             12 improvements, 3 fixes, one onboarding refresh.
@@ -1246,7 +1246,7 @@ export function DesignSystemPage() {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <div className="mb-2 inline-flex size-10 items-center justify-center rounded-md bg-muted">
+                        <div className="mb-2 inline-flex size-10 items-center justify-center md bg-muted">
                           <AlertTriangle className="size-5" />
                         </div>
                         <AlertDialogTitle>Delete draft?</AlertDialogTitle>
@@ -1316,7 +1316,7 @@ export function DesignSystemPage() {
                   </DropdownMenu>
                 </div>
 
-                <div className="rounded-xl border bg-muted/20 p-3">
+                <div className="xl border bg-muted/20 p-3">
                   <p className="font-medium text-sm">Menu preview</p>
                   <p className="mt-1 text-muted-foreground text-sm">
                     {includeSummary ? "Summary included" : "Summary omitted"} for{" "}
@@ -1422,7 +1422,7 @@ export function DesignSystemPage() {
                     {densityRows.map(([value, lbl]) => (
                       <div
                         key={value}
-                        className="flex items-center justify-between rounded-xl border px-3 py-2.5"
+                        className="flex items-center justify-between xl border px-3 py-2.5"
                       >
                         <Label htmlFor={`density-${value}`}>{lbl}</Label>
                         <RadioGroupItem id={`density-${value}`} value={value} />
@@ -1446,7 +1446,7 @@ export function DesignSystemPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
+                <div className="flex items-center justify-between xl border px-3 py-2.5">
                   <div>
                     <p className="font-medium text-sm">Pin summary</p>
                     <p className="text-muted-foreground text-xs">Keep visible while reviewing.</p>
@@ -1496,7 +1496,7 @@ export function DesignSystemPage() {
                 </div>
               }
             >
-              <div className="overflow-hidden rounded-xl border">
+              <div className="overflow-hidden xl border">
                 <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} />
               </div>
             </DemoTile>
@@ -1517,7 +1517,7 @@ export function DesignSystemPage() {
                     A required environment variable is missing in production.
                   </AlertDescription>
                 </Alert>
-                <div className="rounded-xl border p-3">
+                <div className="xl border p-3">
                   <div className="mb-3 flex items-center gap-2 font-medium text-sm">
                     <Loader2 className="size-4 animate-spin" />
                     Syncing tokens
@@ -1525,7 +1525,7 @@ export function DesignSystemPage() {
                   <div className="space-y-2">
                     <Skeleton className="h-4 w-2/3" />
                     <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-10 w-full rounded-xl" />
+                    <Skeleton className="h-10 w-full xl" />
                   </div>
                 </div>
               </div>
@@ -1568,7 +1568,7 @@ export function DesignSystemPage() {
               }
             >
               <div className="grid gap-4 md:grid-cols-[152px_1fr]">
-                <div className="mx-auto flex h-36 w-36 items-center justify-center rounded-full border">
+                <div className="mx-auto flex h-36 w-36 items-center justify-center full border">
                   <div className="space-y-1 text-center">
                     <p className="font-semibold text-3xl">935</p>
                     <p className="text-muted-foreground text-xs">Visitors</p>
@@ -1593,7 +1593,7 @@ export function DesignSystemPage() {
                     {browserShare.map((item) => (
                       <div
                         key={item.name}
-                        className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-2"
+                        className="flex items-center justify-between bg-muted/50 px-2.5 py-2"
                       >
                         <span>{item.name}</span>
                         <span className="font-medium">{item.value}%</span>
@@ -1610,12 +1610,12 @@ export function DesignSystemPage() {
                   {fitnessDays.map((day, index) => (
                     <div
                       key={`${day.label}-${String(index)}`}
-                      className="rounded-xl border bg-muted/30 px-2 py-3 text-center"
+                      className="xl border bg-muted/30 px-2 py-3 text-center"
                     >
                       <p className="mb-3 text-muted-foreground text-xs">{day.label}</p>
-                      <div className="mx-auto flex h-12 w-5 items-end rounded-full bg-background p-0.5">
+                      <div className="mx-auto flex h-12 w-5 items-end full bg-background p-0.5">
                         <div
-                          className="w-full rounded-full bg-foreground/70"
+                          className="w-full full bg-foreground/70"
                           style={{ height: `${day.value}%` }}
                         />
                       </div>
@@ -1649,7 +1649,7 @@ export function DesignSystemPage() {
                   </Empty>
                 </TabsContent>
                 <TabsContent value="local" className="pt-2">
-                  <div className="rounded-xl border p-4">
+                  <div className="xl border p-4">
                     <p className="font-medium">Local ready</p>
                     <p className="mt-1 text-muted-foreground text-sm">
                       Apps and packages linked via the monorepo.
@@ -1682,8 +1682,8 @@ export function DesignSystemPage() {
             </DemoTile>
 
             <DemoTile title="File upload" description="Drop zone pattern.">
-              <div className="rounded-2xl border border-dashed px-4 py-8 text-center">
-                <div className="mx-auto mb-4 flex size-10 items-center justify-center rounded-full bg-muted">
+              <div className="2xl border border-dashed px-4 py-8 text-center">
+                <div className="mx-auto mb-4 flex size-10 items-center justify-center full bg-muted">
                   <CloudUpload className="size-5 text-muted-foreground" />
                 </div>
                 <p className="font-medium">Upload files</p>
@@ -1746,9 +1746,9 @@ export function DesignSystemPage() {
               <div className="flex items-end justify-between gap-3">
                 {sleepBlocks.map((block) => (
                   <div key={block.label} className="flex flex-1 flex-col items-center gap-2">
-                    <div className="flex h-24 w-4 items-end rounded-full bg-muted/70 p-0.5">
+                    <div className="flex h-24 w-4 items-end full bg-muted/70 p-0.5">
                       <div
-                        className="w-full rounded-full bg-foreground/70"
+                        className="w-full full bg-foreground/70"
                         style={{ height: `${block.value}%` }}
                       />
                     </div>
@@ -1872,7 +1872,7 @@ export function DesignSystemPage() {
 
             <DemoTile title="Shortcuts" description="Keyboard hints.">
               <div className="space-y-3">
-                <div className="relative flex h-9 w-full items-center rounded-md border border-input">
+                <div className="relative flex h-9 w-full items-center md border border-input">
                   <Input
                     placeholder="Search"
                     className="flex-1 border-0 shadow-none ring-0 focus-visible:ring-0"
@@ -1885,7 +1885,7 @@ export function DesignSystemPage() {
                 {shortcutRows.map((shortcut) => (
                   <div
                     key={shortcut.label}
-                    className="flex items-center justify-between rounded-xl border px-3 py-2.5"
+                    className="flex items-center justify-between xl border px-3 py-2.5"
                   >
                     <span className="text-sm">{shortcut.label}</span>
                     <div className="inline-flex items-center gap-1">
@@ -1903,14 +1903,14 @@ export function DesignSystemPage() {
               footer={<Button size="sm">Save</Button>}
             >
               <div className="space-y-4">
-                <div className="flex items-start gap-3 rounded-xl border p-3">
+                <div className="flex items-start gap-3 xl border p-3">
                   <Checkbox defaultChecked className="mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-medium text-sm">Make profile private</p>
                     <p className="text-muted-foreground text-sm">Hide public activity totals.</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between rounded-xl bg-muted/40 px-3 py-2.5">
+                <div className="flex items-center justify-between xl bg-muted/40 px-3 py-2.5">
                   <div>
                     <p className="font-medium text-sm">Anomaly alerts</p>
                     <p className="text-muted-foreground text-xs">
@@ -1930,11 +1930,11 @@ export function DesignSystemPage() {
                       <AvatarFallback>{name}</AvatarFallback>
                     </Avatar>
                   ))}
-                  <div className="relative flex size-8 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-muted-foreground text-sm ring-2 ring-background">
+                  <div className="relative flex size-8 shrink-0 items-center justify-center full bg-muted font-medium text-muted-foreground text-sm ring-2 ring-background">
                     +12
                   </div>
                 </div>
-                <div className="rounded-xl border border-dashed p-4">
+                <div className="xl border border-dashed p-4">
                   <p className="font-medium text-sm">Ship with confidence</p>
                   <ul className="mt-2 space-y-2 text-muted-foreground text-sm">
                     <li>Reviews with full product context.</li>
@@ -1978,7 +1978,7 @@ export function DesignSystemPage() {
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                  <div className="relative flex h-9 w-full items-center rounded-md border border-input">
+                  <div className="relative flex h-9 w-full items-center md border border-input">
                     <div className="pl-2 text-muted-foreground">
                       <Search className="size-4" />
                     </div>
@@ -2006,7 +2006,7 @@ export function DesignSystemPage() {
               }
             >
               <div className="space-y-3">
-                <div className="rounded-2xl bg-gradient-to-br from-foreground/8 via-foreground/4 to-transparent p-4">
+                <div className="2xl bg-gradient-to-br from-foreground/8 via-foreground/4 to-transparent p-4">
                   <p className="font-medium text-sm">Monitoring defaults</p>
                   <p className="mt-1 text-muted-foreground text-sm">
                     Useful baselines without hand-building every dashboard.
@@ -2061,7 +2061,7 @@ export function DesignSystemPage() {
                 ).map(([label, checked]) => (
                   <div
                     key={label}
-                    className="flex items-center justify-between rounded-xl border px-3 py-2.5"
+                    className="flex items-center justify-between xl border px-3 py-2.5"
                   >
                     <span className="text-sm">{label}</span>
                     <Checkbox checked={checked} />
@@ -2072,8 +2072,8 @@ export function DesignSystemPage() {
 
             <DemoTile title="Next release" description="Closing CTA pattern.">
               <div className="space-y-4">
-                <div className="flex items-start gap-3 rounded-2xl border p-4">
-                  <div className="rounded-xl bg-primary/10 p-2 text-primary">
+                <div className="flex items-start gap-3 2xl border p-4">
+                  <div className="xl bg-primary/10 p-2 text-primary">
                     <Palette className="size-4" />
                   </div>
                   <div className="space-y-1">
@@ -2145,7 +2145,7 @@ export function DesignSystemPage() {
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
                   {semanticThemeSwatches.map(({ label: token, className }) => (
                     <div key={token} className="space-y-1.5">
-                      <div className={cn("h-10 rounded-xl border", className)} title={token} />
+                      <div className={cn("h-10 xl border", className)} title={token} />
                       <p className="truncate text-muted-foreground text-[10px]">{token}</p>
                     </div>
                   ))}
@@ -2158,7 +2158,7 @@ export function DesignSystemPage() {
                   {chartSwatches.map((key) => (
                     <div key={key} className="flex flex-col items-center gap-1">
                       <div
-                        className="h-10 w-14 rounded-xl border border-black/10 dark:border-white/15"
+                        className="h-10 w-14 xl border border-black/10 dark:border-white/15"
                         style={{ backgroundColor: `var(--color-${key})` }}
                         title={`--color-${key}`}
                       />
@@ -2186,7 +2186,7 @@ export function DesignSystemPage() {
                   {(["10", "20", "40", "60", "80"] as const).map((step) => (
                     <div key={step} className="space-y-1 text-center">
                       <div
-                        className={cn("h-10 w-14 rounded-xl border", `bg-primary/${step}`)}
+                        className={cn("h-10 w-14 xl border", `bg-primary/${step}`)}
                         title={`bg-primary/${step}`}
                       />
                       <span className="text-muted-foreground text-[10px]">{step}%</span>
