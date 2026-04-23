@@ -119,6 +119,11 @@ export interface CreateProgressEventPayload {
   event_date: string
 }
 
+export interface UpdateOrderPayload {
+  customer_id?: string
+  notes?: string | null
+}
+
 export class OrdersApiError extends Error {
   readonly status: number
 
@@ -211,6 +216,38 @@ export async function cancelOrder(id: string): Promise<Order> {
 
   if (!response.ok) {
     throw new OrdersApiError("Unable to cancel order.", response.status)
+  }
+
+  return orderResponseSchema.parse(await response.json()).order
+}
+
+export async function updateOrder(id: string, payload: UpdateOrderPayload): Promise<Order> {
+  const response = await fetch(`${apiBaseUrl}/orders/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (response.status === 400) {
+    throw new OrdersApiError("Only customer and notes can be edited.", response.status)
+  }
+
+  if (response.status === 404) {
+    throw new OrdersApiError("Order or selected customer no longer exists.", response.status)
+  }
+
+  if (response.status === 409) {
+    throw new OrdersApiError(
+      "Order cannot be edited in its current state, or the selected customer is inactive.",
+      response.status,
+    )
+  }
+
+  if (!response.ok) {
+    throw new OrdersApiError("Unable to update order.", response.status)
   }
 
   return orderResponseSchema.parse(await response.json()).order

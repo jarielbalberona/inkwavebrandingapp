@@ -7,9 +7,11 @@ import {
   getOrder,
   listOrders,
   listProgressEvents,
+  updateOrder,
   type CreateOrderPayload,
   type CreateProgressEventPayload,
   type OrderStatus,
+  type UpdateOrderPayload,
 } from "@/features/orders/api/orders-client"
 
 export const ordersQueryKey = ["orders"] as const
@@ -65,6 +67,18 @@ export function useCancelOrderMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
       await queryClient.invalidateQueries({ queryKey: orderProgressEventsQueryKey })
+    },
+  })
+}
+
+export function useUpdateOrderMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateOrderPayload }) =>
+      updateOrder(id, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
     },
   })
 }

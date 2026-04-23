@@ -42,6 +42,7 @@ import {
   useOrderQuery,
   useProgressEventsQuery,
   orderStatusOptions,
+  useUpdateOrderMutation,
   useOrdersQuery,
 } from "@/features/orders/hooks/use-orders"
 
@@ -76,6 +77,10 @@ export function OrdersPage() {
   )
   const [progressError, setProgressError] = useState<string | null>(null)
   const [progressSuccess, setProgressSuccess] = useState<string | null>(null)
+  const [editNotes, setEditNotes] = useState("")
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editSuccess, setEditSuccess] = useState<string | null>(null)
   const query = useMemo(
     () => ({
       status: status === "all" ? undefined : status,
@@ -89,6 +94,7 @@ export function OrdersPage() {
   const createOrderMutation = useCreateOrderMutation()
   const createProgressEventMutation = useCreateProgressEventMutation()
   const cancelOrderMutation = useCancelOrderMutation()
+  const updateOrderMutation = useUpdateOrderMutation()
   const activeCups = useMemo(
     () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
     [cupsQuery.data],
@@ -149,6 +155,10 @@ export function OrdersPage() {
     setSelectedLineItemId(order.items[0]?.id ?? null)
     setProgressError(null)
     setProgressSuccess(null)
+    setEditNotes(order.notes ?? "")
+    setEditCustomer(order.customer)
+    setEditError(null)
+    setEditSuccess(null)
   }
 
   async function handleCreateProgressEvent() {
@@ -206,6 +216,46 @@ export function OrdersPage() {
       setProgressSuccess(`Recorded ${formatStatus(result.event.stage)} x ${result.event.quantity}.`)
     } catch (error) {
       setProgressError(error instanceof Error ? error.message : "Unable to record progress.")
+    }
+  }
+
+  async function handleUpdateSelectedOrder() {
+    setEditError(null)
+    setEditSuccess(null)
+
+    if (!selectedOrder) {
+      return
+    }
+
+    const nextCustomerId = editCustomer?.id ?? selectedOrder.customer.id
+    const normalizedNotes = editNotes.trim() || null
+    const currentNotes = selectedOrder.notes ?? null
+    const payload: { customer_id?: string; notes?: string | null } = {}
+
+    if (nextCustomerId !== selectedOrder.customer.id) {
+      payload.customer_id = nextCustomerId
+    }
+
+    if (normalizedNotes !== currentNotes) {
+      payload.notes = normalizedNotes
+    }
+
+    if (!payload.customer_id && payload.notes === undefined) {
+      setEditError("No order changes to save.")
+      return
+    }
+
+    try {
+      const order = await updateOrderMutation.mutateAsync({
+        id: selectedOrder.id,
+        payload,
+      })
+
+      setEditNotes(order.notes ?? "")
+      setEditCustomer(order.customer)
+      setEditSuccess(`Updated ${order.order_number}.`)
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Unable to update order.")
     }
   }
 
@@ -491,6 +541,56 @@ export function OrdersPage() {
                       {cancelOrderMutation.isPending ? "Canceling..." : "Cancel"}
                     </Button>
                   </div>
+                </div>
+
+                <div className="grid gap-3 border p-3">
+                  <div className="grid gap-1">
+                    <p className="text-sm font-medium">Allowed order edits</p>
+                    <p className="text-xs text-muted-foreground">
+                      Only notes and guarded customer reassignment are supported. Status and line items are
+                      not directly editable.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-order-notes">Order notes</Label>
+                    <Textarea
+                      id="edit-order-notes"
+                      value={editNotes}
+                      disabled={selectedOrder.status === "canceled" || selectedOrder.status === "completed"}
+                      onChange={(event) => setEditNotes(event.target.value)}
+                    />
+                  </div>
+
+                  <CustomerSearchSelect
+                    selectedCustomerId={editCustomer?.id ?? selectedOrder.customer.id}
+                    onSelect={setEditCustomer}
+                  />
+
+                  {editError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>{editError}</AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  {editSuccess ? (
+                    <Alert>
+                      <AlertDescription>{editSuccess}</AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  <Button
+                    type="button"
+                    className="rounded-none"
+                    disabled={
+                      updateOrderMutation.isPending ||
+                      selectedOrder.status === "canceled" ||
+                      selectedOrder.status === "completed"
+                    }
+                    onClick={handleUpdateSelectedOrder}
+                  >
+                    {updateOrderMutation.isPending ? "Saving order..." : "Save allowed edits"}
+                  </Button>
                 </div>
 
                 <div className="grid gap-2">
