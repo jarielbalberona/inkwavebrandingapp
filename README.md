@@ -47,6 +47,7 @@ pnpm --filter web typecheck
 - Initial Render contract lives in `render.yaml`.
 - Deployment/env details live in `docs/deployment/environment.md`.
 - Database provisioning/isolation notes live in `docs/deployment/database.md`.
+- Logging/incident notes live in `docs/deployment/observability.md`.
 - The current Render web service is buildable as a static site.
 - The current Render API service contract targets `pnpm --filter @workspace/api build`, `pnpm --filter @workspace/api start`, and `/health`.
 - Render config is source-controlled, but live deployment still requires dashboard-managed environment values and an actual smoke.

@@ -1,9 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
+import { randomUUID } from "node:crypto"
 
 import { loadApiEnv } from "./config/env.js"
 import { sendJson } from "./http/json.js"
 import { getRequestPath, isPublicRoute } from "./http/routes.js"
 import { initSentry } from "./instrumentation/sentry.js"
+import { logError, logInfo, serializeError } from "./lib/logger.js"
 import { handleAuthRoute } from "./modules/auth/auth.routes.js"
 import { handleCustomersRoute } from "./modules/customers/customers.routes.js"
 import { handleCupsRoute } from "./modules/cups/cups.routes.js"
@@ -28,9 +30,24 @@ const runtimeEnv = {
 initSentry()
 
 const server = createServer(async (request, response) => {
+  const requestId = randomUUID()
+  const path = getRequestPath(request)
+  const startedAt = Date.now()
+
+  response.setHeader("X-Request-Id", requestId)
+  response.once("finish", () => {
+    logInfo({
+      event: "http_request_completed",
+      requestId,
+      method: request.method ?? "UNKNOWN",
+      path,
+      statusCode: response.statusCode,
+      durationMs: Date.now() - startedAt,
+    })
+  })
+
   try {
     applyCors(request, response)
-    const path = getRequestPath(request)
 
     if (request.method === "OPTIONS") {
       response.writeHead(204)
@@ -81,13 +98,27 @@ const server = createServer(async (request, response) => {
 
     sendJson(response, 404, { error: "Not found" })
   } catch (error) {
-    console.error(error)
-    sendJson(response, 500, { error: "Internal server error" })
+    logError({
+      event: "http_request_failed",
+      requestId,
+      method: request.method ?? "UNKNOWN",
+      path,
+      statusCode: 500,
+      ...serializeError(error),
+    })
+    sendJson(response, 500, { error: "Internal server error", requestId })
   }
 })
 
 server.listen(env.port, () => {
-  console.log(`API listening on port ${env.port}`)
+  logInfo({
+    event: "api_server_started",
+    nodeEnv: env.nodeEnv,
+    port: env.port,
+    databaseConfigured: Boolean(env.databaseUrl),
+    sentryEnabled: Boolean(env.sentryDsn),
+    webOriginConfigured: Boolean(env.webOrigin),
+  })
 })
 
 function applyCors(request: IncomingMessage, response: ServerResponse) {
