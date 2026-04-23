@@ -48,8 +48,22 @@ const ordersResponseSchema = z.object({
   orders: z.array(orderSchema),
 })
 
+const orderResponseSchema = z.object({
+  order: orderSchema,
+})
+
 export type OrderStatus = z.infer<typeof orderStatusSchema>
 export type Order = z.infer<typeof orderSchema>
+
+export interface CreateOrderPayload {
+  customer_id: string
+  notes?: string
+  line_items: Array<{
+    cup_id: string
+    quantity: number
+    notes?: string
+  }>
+}
 
 export class OrdersApiError extends Error {
   readonly status: number
@@ -77,4 +91,36 @@ export async function listOrders(filters: { status?: OrderStatus } = {}): Promis
   }
 
   return ordersResponseSchema.parse(await response.json()).orders
+}
+
+export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
+  const response = await fetch(`${apiBaseUrl}/orders`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (response.status === 400) {
+    throw new OrdersApiError("Check the selected customer, cups, and quantities.", response.status)
+  }
+
+  if (response.status === 404) {
+    throw new OrdersApiError("A selected customer or cup no longer exists.", response.status)
+  }
+
+  if (response.status === 409) {
+    throw new OrdersApiError(
+      "Unable to create order. Check customer/cup status, duplicate cups, or available stock.",
+      response.status,
+    )
+  }
+
+  if (!response.ok) {
+    throw new OrdersApiError("Unable to create order.", response.status)
+  }
+
+  return orderResponseSchema.parse(await response.json()).order
 }
