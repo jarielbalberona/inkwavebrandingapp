@@ -25,6 +25,7 @@ import {
   toOrderDto,
   toProgressEventDto,
   type OrderDto,
+  type OrderLineItemDerivedStatus,
   type ProgressTotalsDto,
 } from "./orders.types.js"
 
@@ -144,13 +145,19 @@ export class OrderPrintedQuantityNotReservedError extends Error {
   readonly statusCode = 409
 
   constructor() {
-    super("Printed quantity exceeds remaining reserved stock")
+    super("Fulfillment quantity exceeds remaining reserved stock")
   }
 }
 
-const progressStages = [
+const cupProgressStages = [
   "printed",
   "qa_passed",
+  "packed",
+  "ready_for_release",
+  "released",
+] as const satisfies readonly OrderLineItemProgressStage[]
+
+const lidProgressStages = [
   "packed",
   "ready_for_release",
   "released",
@@ -326,7 +333,7 @@ export class OrdersService {
 
     return {
       events: events.map(toProgressEventDto),
-      totals: calculateProgressTotals(orderItem.quantity, events),
+      totals: calculateProgressTotals(orderItem.itemType, orderItem.quantity, events),
     }
   }
 
@@ -349,7 +356,7 @@ export class OrdersService {
       }
 
       const existingEvents = await ordersRepository.listProgressEventsForOrderItem(orderLineItemId)
-      const nextTotals = calculateProgressTotals(orderItem.quantity, [
+      const nextTotals = calculateProgressTotals(orderItem.itemType, orderItem.quantity, [
         ...existingEvents,
         {
           stage: parsedInput.stage,
@@ -427,7 +434,7 @@ export class OrdersService {
 
       return {
         event: toProgressEventDto(event),
-        totals: calculateProgressTotals(orderItem.quantity, events),
+        totals: calculateProgressTotals(orderItem.itemType, orderItem.quantity, events),
         order_status: orderStatus,
       }
     })
@@ -453,7 +460,7 @@ export class OrdersService {
       const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
 
       for (const item of orderItems) {
-        const totals = calculateProgressTotals(item.quantity, item.progressEvents)
+        const totals = calculateProgressTotals(item.itemType, item.quantity, item.progressEvents)
         const releaseQuantity =
           item.itemType === "cup"
             ? Math.max(item.quantity - totals.total_printed, 0)
@@ -548,10 +555,12 @@ function buildLidDescriptionSnapshot(lid: Lid): string {
 }
 
 function calculateProgressTotals(
+  itemType: "cup" | "lid",
   orderedQuantity: number,
   events: Array<{ stage: OrderLineItemProgressStage; quantity: number }>,
 ): ProgressTotalsDto {
   const totals = {
+    line_item_status: "not_started" as OrderLineItemDerivedStatus,
     total_printed: 0,
     total_qa_passed: 0,
     total_packed: 0,
@@ -581,6 +590,7 @@ function calculateProgressTotals(
   }
 
   totals.remaining_balance = orderedQuantity - totals.total_released
+  totals.line_item_status = deriveLineItemStatus(itemType, orderedQuantity, totals)
 
   return totals
 }
@@ -590,7 +600,7 @@ function validateProgressTotals(
   orderedQuantity: number,
   totals: ProgressTotalsDto,
 ) {
-  for (const stage of progressStages) {
+  for (const stage of getAllowedProgressStages(itemType)) {
     const total = totalForStage(totals, stage)
 
     if (total > orderedQuantity) {
@@ -599,15 +609,18 @@ function validateProgressTotals(
   }
 
   if (itemType === "lid") {
-    if (
-      totals.total_printed > 0 ||
-      totals.total_qa_passed > 0 ||
-      totals.total_packed > 0 ||
-      totals.total_ready_for_release > 0
-    ) {
+    if (totals.total_printed > 0 || totals.total_qa_passed > 0) {
       throw new OrderProgressValidationError(
-        "Lid line items only support released quantity events",
+        "Lid line items only support packed, ready_for_release, and released events",
       )
+    }
+
+    if (totals.total_ready_for_release > totals.total_packed) {
+      throw new OrderProgressValidationError("Ready for release quantity cannot exceed packed quantity")
+    }
+
+    if (totals.total_released > totals.total_ready_for_release) {
+      throw new OrderProgressValidationError("Released quantity cannot exceed ready for release quantity")
     }
 
     return
@@ -645,6 +658,58 @@ function totalForStage(totals: ProgressTotalsDto, stage: OrderLineItemProgressSt
   }
 }
 
+function getAllowedProgressStages(itemType: "cup" | "lid"): readonly OrderLineItemProgressStage[] {
+  return itemType === "lid" ? lidProgressStages : cupProgressStages
+}
+
+function deriveLineItemStatus(
+  itemType: "cup" | "lid",
+  orderedQuantity: number,
+  totals: ProgressTotalsDto,
+): OrderLineItemDerivedStatus {
+  if (orderedQuantity > 0 && totals.total_released === orderedQuantity) {
+    return "completed"
+  }
+
+  if (itemType === "cup") {
+    if (totals.total_released > 0) {
+      return "released"
+    }
+
+    if (totals.total_ready_for_release > 0) {
+      return "ready_for_release"
+    }
+
+    if (totals.total_packed > 0) {
+      return "packed"
+    }
+
+    if (totals.total_qa_passed > 0) {
+      return "qa_passed"
+    }
+
+    if (totals.total_printed > 0) {
+      return "printed"
+    }
+
+    return "not_started"
+  }
+
+  if (totals.total_released > 0) {
+    return "released"
+  }
+
+  if (totals.total_ready_for_release > 0) {
+    return "ready_for_release"
+  }
+
+  if (totals.total_packed > 0) {
+    return "packed"
+  }
+
+  return "not_started"
+}
+
 function deriveOrderStatus(
   currentStatus: OrderStatus,
   items: OrderItemWithProgressEvents[],
@@ -658,7 +723,7 @@ function deriveOrderStatus(
   let allLineItemsReleased = items.length > 0
 
   for (const item of items) {
-    const totals = calculateProgressTotals(item.quantity, item.progressEvents)
+    const totals = calculateProgressTotals(item.itemType, item.quantity, item.progressEvents)
     const itemProgressTotal =
       totals.total_printed +
       totals.total_qa_passed +

@@ -120,11 +120,6 @@ export function OrdersPage() {
       return
     }
 
-    if (selectedLineItem.item_type === "lid" && effectiveProgressStage !== "released") {
-      setProgressError("Lid line items only support released quantity events.")
-      return
-    }
-
     const totals = progressEventsQuery.data?.totals
 
     if (totals) {
@@ -400,7 +395,10 @@ export function OrdersPage() {
                       <p className="text-destructive">{progressEventsQuery.error.message}</p>
                     ) : null}
                     {progressEventsQuery.data ? (
-                      <ProgressTotalsGrid totals={progressEventsQuery.data.totals} />
+                      <ProgressTotalsGrid
+                        itemType={selectedLineItem.item_type}
+                        totals={progressEventsQuery.data.totals}
+                      />
                     ) : null}
                   </div>
 
@@ -584,7 +582,7 @@ function InvoicePanel({
   )
 }
 
-function formatStatus(status: OrderStatus | ProgressStage): string {
+function formatStatus(status: string): string {
   return status.replaceAll("_", " ")
 }
 
@@ -633,17 +631,27 @@ function getAllowedProgressStages(
   itemType: Order["items"][number]["item_type"] | undefined,
 ): ProgressStage[] {
   if (itemType === "lid") {
-    return ["released"]
+    return ["packed", "ready_for_release", "released"]
   }
 
   return [...progressStageOptions]
 }
 
-function ProgressTotalsGrid({ totals }: { totals: ProgressTotals }) {
+function ProgressTotalsGrid({
+  itemType,
+  totals,
+}: {
+  itemType: Order["items"][number]["item_type"]
+  totals: ProgressTotals
+}) {
   return (
     <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-      <ProgressTotal label="Printed" value={totals.total_printed} />
-      <ProgressTotal label="QA passed" value={totals.total_qa_passed} />
+      <div className="border bg-muted/30 p-2">
+        <p className="text-muted-foreground">Status</p>
+        <p className="text-base font-semibold">{formatStatus(totals.line_item_status)}</p>
+      </div>
+      {itemType === "cup" ? <ProgressTotal label="Printed" value={totals.total_printed} /> : null}
+      {itemType === "cup" ? <ProgressTotal label="QA passed" value={totals.total_qa_passed} /> : null}
       <ProgressTotal label="Packed" value={totals.total_packed} />
       <ProgressTotal label="Ready" value={totals.total_ready_for_release} />
       <ProgressTotal label="Released" value={totals.total_released} />
@@ -671,7 +679,7 @@ function ProgressHistory({ events }: { events: ProgressEvent[] }) {
 
       {events.length === 0 ? (
         <p className="border bg-muted/30 p-3 text-sm text-muted-foreground">
-          No progress events recorded for this line item yet.
+          No progress events recorded for this line item yet. Current derived status: not started.
         </p>
       ) : (
         <div className="max-h-80 overflow-auto border">
@@ -718,7 +726,16 @@ function maxQuantityForStage(
   totals: ProgressTotals,
 ): number {
   if (itemType === "lid") {
-    return stage === "released" ? Math.max(orderedQuantity - totals.total_released, 0) : 0
+    switch (stage) {
+      case "packed":
+        return Math.max(orderedQuantity - totals.total_packed, 0)
+      case "ready_for_release":
+        return Math.max(totals.total_packed - totals.total_ready_for_release, 0)
+      case "released":
+        return Math.max(totals.total_ready_for_release - totals.total_released, 0)
+      default:
+        return 0
+    }
   }
 
   switch (stage) {

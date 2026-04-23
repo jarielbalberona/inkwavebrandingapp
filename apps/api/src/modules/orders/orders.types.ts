@@ -57,7 +57,17 @@ interface BaseOrderDto {
 
 export type OrderDto = BaseOrderDto
 
+export type OrderLineItemDerivedStatus =
+  | "not_started"
+  | "printed"
+  | "qa_passed"
+  | "packed"
+  | "ready_for_release"
+  | "released"
+  | "completed"
+
 export interface ProgressTotalsDto {
+  line_item_status: OrderLineItemDerivedStatus
   total_printed: number
   total_qa_passed: number
   total_packed: number

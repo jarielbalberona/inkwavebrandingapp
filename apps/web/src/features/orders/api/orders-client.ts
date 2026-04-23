@@ -19,6 +19,16 @@ export const progressStageSchema = z.enum([
   "released",
 ])
 
+export const lineItemStatusSchema = z.enum([
+  "not_started",
+  "printed",
+  "qa_passed",
+  "packed",
+  "ready_for_release",
+  "released",
+  "completed",
+])
+
 const orderCupSchema = z.object({
   id: z.string().uuid(),
   sku: z.string(),
@@ -123,6 +133,7 @@ const invoiceResponseSchema = z.object({
 })
 
 const progressTotalsSchema = z.object({
+  line_item_status: lineItemStatusSchema,
   total_printed: z.number(),
   total_qa_passed: z.number(),
   total_packed: z.number(),
