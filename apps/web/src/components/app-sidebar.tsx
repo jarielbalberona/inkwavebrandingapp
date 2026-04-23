@@ -21,6 +21,7 @@ import {
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import type { AuthenticatedUser } from "@/features/auth/api/auth-client"
 
 const operationsItems = [
   { title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon },
@@ -34,7 +35,9 @@ const supportItems = [
   { title: "Login", to: "/login", icon: LogInIcon },
 ] as const
 
-export function AppSidebar() {
+export function AppSidebar({ user }: { user: AuthenticatedUser }) {
+  const displayName = user.displayName ?? user.email
+
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
@@ -59,13 +62,22 @@ export function AppSidebar() {
       <SidebarFooter>
         <NavUser
           user={{
-            name: "Internal User",
-            email: "auth not wired",
-            fallback: "IW",
+            name: displayName,
+            email: user.email,
+            fallback: buildFallback(displayName),
           }}
         />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
+}
+
+function buildFallback(value: string) {
+  return value
+    .split(/[^\da-z]+/i)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "IW"
 }

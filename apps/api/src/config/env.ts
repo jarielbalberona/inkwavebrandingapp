@@ -5,12 +5,21 @@ const optionalNonEmptyString = z.preprocess(
   z.string().trim().min(1).optional(),
 )
 
+const optionalSessionSecret = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(32).optional(),
+)
+
 export const apiEnvSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: optionalNonEmptyString,
   DATABASE_SSL_MODE: z.enum(["disable", "require"]).default("disable"),
+  AUTH_SESSION_SECRET: optionalSessionSecret,
+  AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
+  WEB_ORIGIN: optionalNonEmptyString,
   SENTRY_DSN: optionalNonEmptyString,
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
   OPENAI_API_KEY: optionalNonEmptyString,
@@ -21,8 +30,12 @@ export type DatabaseSslMode = ParsedApiEnv["DATABASE_SSL_MODE"]
 
 export interface ApiEnv {
   nodeEnv: ParsedApiEnv["NODE_ENV"]
+  port: number
   databaseUrl?: string
   databaseSslMode: DatabaseSslMode
+  authSessionSecret?: string
+  authSessionTtlSeconds: number
+  webOrigin?: string
   sentryDsn?: string
   sentryTracesSampleRate: number
   openaiApiKey?: string
@@ -46,8 +59,12 @@ export function parseApiEnv(input: unknown): ApiEnv {
 
   return {
     nodeEnv: result.data.NODE_ENV,
+    port: result.data.PORT,
     databaseUrl: result.data.DATABASE_URL,
     databaseSslMode: result.data.DATABASE_SSL_MODE,
+    authSessionSecret: result.data.AUTH_SESSION_SECRET,
+    authSessionTtlSeconds: result.data.AUTH_SESSION_TTL_SECONDS,
+    webOrigin: result.data.WEB_ORIGIN,
     sentryDsn: result.data.SENTRY_DSN,
     sentryTracesSampleRate: result.data.SENTRY_TRACES_SAMPLE_RATE,
     openaiApiKey: result.data.OPENAI_API_KEY,

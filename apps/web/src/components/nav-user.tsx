@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router"
+import { useNavigate } from "@tanstack/react-router"
 import { CircleUserRoundIcon, LogOutIcon } from "lucide-react"
 
 import {
@@ -21,6 +21,8 @@ import {
   useSidebar,
 } from "@workspace/ui/components/sidebar"
 
+import { useLogoutMutation } from "@/features/auth/hooks/use-auth"
+
 export function NavUser({
   user,
 }: {
@@ -31,6 +33,8 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const navigate = useNavigate()
+  const logout = useLogoutMutation()
 
   return (
     <SidebarMenu>
@@ -79,15 +83,22 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem disabled>
                 <CircleUserRoundIcon />
-                Auth pending
+                API session active
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link to="/login">
-                <LogOutIcon />
-                Login route
-              </Link>
+            <DropdownMenuItem
+              disabled={logout.isPending}
+              onClick={() => {
+                logout.mutate(undefined, {
+                  onSettled: () => {
+                    void navigate({ to: "/login" })
+                  },
+                })
+              }}
+            >
+              <LogOutIcon />
+              {logout.isPending ? "Signing out..." : "Sign out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

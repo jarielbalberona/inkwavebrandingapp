@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "dev": "node --import tsx src/server.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:check": "node --import tsx src/db/check.ts",

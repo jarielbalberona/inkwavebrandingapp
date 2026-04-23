@@ -1,9 +1,8 @@
 # Initial Render deployment contract for Ink Wave Branding App.
 #
-# The web static site is deployable with the current workspace.
-# The API service is intentionally documented below as a skeleton until the API
-# has an HTTP server, start command, and health route. Do not turn it into a
-# live service without that implementation.
+# The web static site is deployable with the current workspace. The API service
+# shape is documented below, but it remains commented out until deployment work
+# wires Render database credentials and performs a live smoke.
 
 services:
   - type: web
@@ -32,6 +31,12 @@ services:
 #       sync: false
 #     - key: DATABASE_SSL_MODE
 #       value: require
+#     - key: AUTH_SESSION_SECRET
+#       sync: false
+#     - key: AUTH_SESSION_TTL_SECONDS
+#       value: "28800"
+#     - key: WEB_ORIGIN
+#       sync: false
 #     - key: SENTRY_DSN
 #       sync: false
 #     - key: SENTRY_TRACES_SAMPLE_RATE

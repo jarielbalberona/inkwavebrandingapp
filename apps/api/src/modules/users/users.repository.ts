@@ -17,6 +17,16 @@ export class UsersRepository {
     return rows[0]
   }
 
+  async findById(id: string): Promise<User | undefined> {
+    const rows = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1)
+
+    return rows[0]
+  }
+
   async upsertAdminUser(input: BootstrapAdminInput & { passwordHash: string }): Promise<User> {
     const rows = await this.db
       .insert(users)

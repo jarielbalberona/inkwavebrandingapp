@@ -1,0 +1,63 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
+
+import { loadApiEnv } from "./config/env.js"
+import { sendJson } from "./http/json.js"
+import { initSentry } from "./instrumentation/sentry.js"
+import { handleAuthRoute } from "./modules/auth/auth.routes.js"
+
+const env = loadApiEnv()
+
+if (!env.authSessionSecret) {
+  throw new Error("Invalid API environment: AUTH_SESSION_SECRET is required")
+}
+
+const runtimeEnv = {
+  ...env,
+  authSessionSecret: env.authSessionSecret,
+}
+
+initSentry()
+
+const server = createServer(async (request, response) => {
+  try {
+    applyCors(request, response)
+
+    if (request.method === "OPTIONS") {
+      response.writeHead(204)
+      response.end()
+      return
+    }
+
+    if (await handleAuthRoute(request, response, { env: runtimeEnv })) {
+      return
+    }
+
+    if (request.method === "GET" && request.url === "/health") {
+      sendJson(response, 200, { ok: true })
+      return
+    }
+
+    sendJson(response, 404, { error: "Not found" })
+  } catch (error) {
+    console.error(error)
+    sendJson(response, 500, { error: "Internal server error" })
+  }
+})
+
+server.listen(env.port, () => {
+  console.log(`API listening on port ${env.port}`)
+})
+
+function applyCors(request: IncomingMessage, response: ServerResponse) {
+  const origin = request.headers.origin
+
+  if (!origin || !env.webOrigin || origin !== env.webOrigin) {
+    return
+  }
+
+  response.setHeader("Access-Control-Allow-Origin", origin)
+  response.setHeader("Access-Control-Allow-Credentials", "true")
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type")
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+  response.setHeader("Vary", "Origin")
+}

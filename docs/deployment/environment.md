@@ -25,8 +25,12 @@ Backend variables must not be exposed to the frontend bundle.
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `NODE_ENV` | yes | `development`, `test`, or `production`. |
+| `PORT` | yes | API HTTP port. Render injects this; local default is `3000`. |
 | `DATABASE_URL` | yes for DB/runtime | Must target this app's database only. |
 | `DATABASE_SSL_MODE` | yes | Use `require` on Render unless local DB setup does not need SSL. |
+| `AUTH_SESSION_SECRET` | yes for API runtime | At least 32 random characters. Used only for signing HTTP-only auth session cookies. |
+| `AUTH_SESSION_TTL_SECONDS` | no | Session cookie lifetime. Defaults to 8 hours. |
+| `WEB_ORIGIN` | yes for browser API calls | Exact frontend origin allowed for credentialed CORS, for example the Render web URL or `http://localhost:5173`. |
 | `SENTRY_DSN` | no | Empty value disables Sentry initialization. |
 | `SENTRY_TRACES_SAMPLE_RATE` | no | Number from `0` to `1`; default `0`. |
 | `OPENAI_API_KEY` | no | Reserved for future API work. No OpenAI API calls exist yet. |
@@ -38,12 +42,7 @@ Backend variables must not be exposed to the frontend bundle.
 
 `render.yaml` contains a live static web service definition because the web app has a buildable output at `apps/web/dist`.
 
-The API service is documented as a skeleton only. It must not be enabled as a live Render service until a later ticket adds:
-
-- HTTP server startup
-- `start` script for `@workspace/api`
-- `/health` or equivalent health check
-- runtime smoke verification
+The API service is still commented out in `render.yaml`. It now has HTTP startup, `pnpm --filter @workspace/api start`, and `/health`, but it must not be enabled as a live Render service until deployment work wires real database/auth environment variables and performs a live smoke.
 
 ## Migration Ownership
 
