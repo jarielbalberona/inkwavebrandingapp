@@ -39,5 +39,14 @@ export { createSessionToken, verifySessionToken } from "./modules/auth/sessions.
 export { CupsRepository } from "./modules/cups/cups.repository.js"
 export { CupsService } from "./modules/cups/cups.service.js"
 export type { AdminCupDto, CupDto, StaffCupDto } from "./modules/cups/cups.types.js"
+export {
+  calculateAvailable,
+  getMovementDelta,
+  inventoryMovementDeltas,
+  inventoryMovementTypes,
+} from "./modules/inventory/inventory.rules.js"
+export type { InventoryBalanceDelta, InventoryMovementType } from "./modules/inventory/inventory.rules.js"
+export { InventoryRepository } from "./modules/inventory/inventory.repository.js"
+export { InventoryService } from "./modules/inventory/inventory.service.js"
 export { hashPassword, verifyPassword } from "./modules/users/passwords.js"
 export { UsersRepository } from "./modules/users/users.repository.js"
