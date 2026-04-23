@@ -14,6 +14,7 @@ import { AuthService } from "../auth/auth.service.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import {
+  InventoryAdjustmentOutInsufficientStockError,
   InventoryCupInactiveError,
   InventoryBalanceCupNotFoundError,
   InventoryCupNotFoundError,
@@ -21,6 +22,7 @@ import {
 } from "./inventory.service.js"
 import { InventoryRepository } from "./inventory.repository.js"
 import {
+  inventoryAdjustmentRequestSchema,
   inventoryBalanceQuerySchema,
   inventoryMovementsQuerySchema,
   stockIntakeRequestSchema,
@@ -58,6 +60,17 @@ export async function handleInventoryRoute(
 
       sendJson(response, 200, {
         movements: await service.listMovements(query, user),
+      })
+    })
+    return true
+  }
+
+  if (path === "/inventory/adjustments" && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const input = inventoryAdjustmentRequestSchema.parse(await readJsonBody(request))
+
+      sendJson(response, 201, {
+        movement: await service.recordAdjustment(input, user),
       })
     })
     return true
@@ -132,7 +145,8 @@ function handleInventoryError(response: ServerResponse, error: unknown) {
   if (
     error instanceof InventoryCupNotFoundError ||
     error instanceof InventoryCupInactiveError ||
-    error instanceof InventoryBalanceCupNotFoundError
+    error instanceof InventoryBalanceCupNotFoundError ||
+    error instanceof InventoryAdjustmentOutInsufficientStockError
   ) {
     sendJson(response, error.statusCode, { error: error.message })
     return

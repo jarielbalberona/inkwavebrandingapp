@@ -4,9 +4,11 @@ import { CupsRepository } from "../cups/cups.repository.js"
 import { InventoryRepository } from "./inventory.repository.js"
 import {
   appendInventoryMovementSchema,
+  inventoryAdjustmentRequestSchema,
   inventoryBalanceQuerySchema,
   inventoryMovementsQuerySchema,
   type AppendInventoryMovementInput,
+  type InventoryAdjustmentRequest,
   type InventoryBalanceQuery,
   type InventoryMovementsQuery,
   type StockIntakeRequest,
@@ -35,6 +37,14 @@ export class InventoryBalanceCupNotFoundError extends Error {
 
   constructor() {
     super("Cup not found")
+  }
+}
+
+export class InventoryAdjustmentOutInsufficientStockError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Adjustment out exceeds current on-hand stock")
   }
 }
 
@@ -96,5 +106,32 @@ export class InventoryService {
     const movements = await this.inventoryRepository.listMovements(parsedQuery)
 
     return movements.map((movement) => toInventoryMovementDto(movement, user))
+  }
+
+  async recordAdjustment(input: InventoryAdjustmentRequest, user: SafeUser) {
+    assertAdmin(user)
+
+    const parsedInput = inventoryAdjustmentRequestSchema.parse(input)
+
+    if (parsedInput.movementType === "adjustment_out") {
+      const balance = await this.inventoryRepository.getBalanceByCupId(parsedInput.cupId)
+
+      if (!balance) {
+        throw new InventoryBalanceCupNotFoundError()
+      }
+
+      if (balance.onHand < parsedInput.quantity) {
+        throw new InventoryAdjustmentOutInsufficientStockError()
+      }
+    }
+
+    return this.appendMovement({
+      cupId: parsedInput.cupId,
+      movementType: parsedInput.movementType,
+      quantity: parsedInput.quantity,
+      note: parsedInput.note,
+      reference: parsedInput.reference,
+      createdByUserId: user.id,
+    })
   }
 }

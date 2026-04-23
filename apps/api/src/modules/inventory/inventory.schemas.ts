@@ -31,7 +31,21 @@ export const inventoryMovementsQuerySchema = z.object({
   movement_type: inventoryMovementTypeSchema.optional(),
 })
 
+export const inventoryAdjustmentTypeSchema = z.enum([
+  "adjustment_in",
+  "adjustment_out",
+])
+
+export const inventoryAdjustmentRequestSchema = z.object({
+  cupId: z.string().uuid(),
+  movementType: inventoryAdjustmentTypeSchema,
+  quantity: z.number().int().positive(),
+  note: z.string().trim().min(1).max(500),
+  reference: z.string().trim().max(160).optional(),
+})
+
 export type AppendInventoryMovementInput = z.infer<typeof appendInventoryMovementSchema>
 export type StockIntakeRequest = z.infer<typeof stockIntakeRequestSchema>
 export type InventoryBalanceQuery = z.infer<typeof inventoryBalanceQuerySchema>
 export type InventoryMovementsQuery = z.infer<typeof inventoryMovementsQuerySchema>
+export type InventoryAdjustmentRequest = z.infer<typeof inventoryAdjustmentRequestSchema>
