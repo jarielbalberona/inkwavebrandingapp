@@ -15,11 +15,13 @@ import { CupsRepository } from "../cups/cups.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import {
   InventoryCupInactiveError,
+  InventoryBalanceCupNotFoundError,
   InventoryCupNotFoundError,
   InventoryService,
 } from "./inventory.service.js"
 import { InventoryRepository } from "./inventory.repository.js"
 import {
+  inventoryBalanceQuerySchema,
   stockIntakeRequestSchema,
 } from "./inventory.schemas.js"
 
@@ -34,12 +36,36 @@ export async function handleInventoryRoute(
 ): Promise<boolean> {
   const path = getRequestPath(request)
 
+  if (path === "/inventory/balances" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const query = inventoryBalanceQuerySchema.parse(
+        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
+      )
+
+      sendJson(response, 200, {
+        balances: await service.listBalances(query, user),
+      })
+    })
+    return true
+  }
+
   if (path === "/inventory/stock-intake" && request.method === "POST") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
       const input = stockIntakeRequestSchema.parse(await readJsonBody(request))
       const movement = await service.recordStockIntake(input, user)
 
       sendJson(response, 201, { movement })
+    })
+    return true
+  }
+
+  const balanceByCupMatch = path.match(/^\/inventory\/balances\/([^/]+)$/)
+
+  if (balanceByCupMatch && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, {
+        balance: await service.getBalanceByCupId(balanceByCupMatch[1] ?? "", user),
+      })
     })
     return true
   }
@@ -91,7 +117,8 @@ function handleInventoryError(response: ServerResponse, error: unknown) {
 
   if (
     error instanceof InventoryCupNotFoundError ||
-    error instanceof InventoryCupInactiveError
+    error instanceof InventoryCupInactiveError ||
+    error instanceof InventoryBalanceCupNotFoundError
   ) {
     sendJson(response, error.statusCode, { error: error.message })
     return

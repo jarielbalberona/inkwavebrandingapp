@@ -22,5 +22,10 @@ export const stockIntakeRequestSchema = z.object({
   reference: z.string().trim().max(160).optional(),
 })
 
+export const inventoryBalanceQuerySchema = z.object({
+  include_inactive: z.coerce.boolean().default(false),
+})
+
 export type AppendInventoryMovementInput = z.infer<typeof appendInventoryMovementSchema>
 export type StockIntakeRequest = z.infer<typeof stockIntakeRequestSchema>
+export type InventoryBalanceQuery = z.infer<typeof inventoryBalanceQuerySchema>

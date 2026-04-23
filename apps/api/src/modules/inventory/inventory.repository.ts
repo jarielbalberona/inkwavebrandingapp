@@ -1,11 +1,19 @@
-import { desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
+  cups,
   inventoryMovements,
+  type Cup,
   type InventoryMovement,
 } from "../../db/schema/index.js"
 import type { AppendInventoryMovementInput } from "./inventory.schemas.js"
+
+export interface InventoryBalanceSummary {
+  cup: Cup
+  onHand: number
+  reserved: number
+}
 
 export class InventoryRepository {
   constructor(private readonly db: DatabaseClient) {}
@@ -27,5 +35,77 @@ export class InventoryRepository {
       .from(inventoryMovements)
       .where(eq(inventoryMovements.cupId, cupId))
       .orderBy(desc(inventoryMovements.createdAt))
+  }
+
+  async listBalances(options: { includeInactive: boolean }): Promise<InventoryBalanceSummary[]> {
+    const rows = await this.db
+      .select({
+        cup: cups,
+        onHand: sql<number>`COALESCE(SUM(
+          CASE
+            WHEN ${inventoryMovements.movementType} IN ('stock_in', 'adjustment_in') THEN ${inventoryMovements.quantity}
+            WHEN ${inventoryMovements.movementType} IN ('consume', 'adjustment_out') THEN -${inventoryMovements.quantity}
+            ELSE 0
+          END
+        ), 0)`,
+        reserved: sql<number>`COALESCE(SUM(
+          CASE
+            WHEN ${inventoryMovements.movementType} = 'reserve' THEN ${inventoryMovements.quantity}
+            WHEN ${inventoryMovements.movementType} IN ('release_reservation', 'consume') THEN -${inventoryMovements.quantity}
+            ELSE 0
+          END
+        ), 0)`,
+      })
+      .from(cups)
+      .leftJoin(inventoryMovements, eq(inventoryMovements.cupId, cups.id))
+      .where(options.includeInactive ? undefined : eq(cups.isActive, true))
+      .groupBy(cups.id)
+      .orderBy(asc(cups.sku))
+
+    return rows.map((row) => ({
+      cup: row.cup,
+      onHand: Number(row.onHand),
+      reserved: Number(row.reserved),
+    }))
+  }
+
+  async getBalanceByCupId(cupId: string): Promise<InventoryBalanceSummary | null> {
+    const rows = await this.db
+      .select({
+        cup: cups,
+        onHand: sql<number>`COALESCE(SUM(
+          CASE
+            WHEN ${inventoryMovements.movementType} IN ('stock_in', 'adjustment_in') THEN ${inventoryMovements.quantity}
+            WHEN ${inventoryMovements.movementType} IN ('consume', 'adjustment_out') THEN -${inventoryMovements.quantity}
+            ELSE 0
+          END
+        ), 0)`,
+        reserved: sql<number>`COALESCE(SUM(
+          CASE
+            WHEN ${inventoryMovements.movementType} = 'reserve' THEN ${inventoryMovements.quantity}
+            WHEN ${inventoryMovements.movementType} IN ('release_reservation', 'consume') THEN -${inventoryMovements.quantity}
+            ELSE 0
+          END
+        ), 0)`,
+      })
+      .from(cups)
+      .leftJoin(
+        inventoryMovements,
+        and(eq(inventoryMovements.cupId, cups.id), eq(cups.id, cupId)),
+      )
+      .where(eq(cups.id, cupId))
+      .groupBy(cups.id)
+
+    const row = rows[0]
+
+    if (!row) {
+      return null
+    }
+
+    return {
+      cup: row.cup,
+      onHand: Number(row.onHand),
+      reserved: Number(row.reserved),
+    }
   }
 }
