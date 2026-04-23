@@ -7,6 +7,7 @@ import { initSentry } from "./instrumentation/sentry.js"
 import { handleAuthRoute } from "./modules/auth/auth.routes.js"
 import { handleCustomersRoute } from "./modules/customers/customers.routes.js"
 import { handleCupsRoute } from "./modules/cups/cups.routes.js"
+import { handleDashboardRoute } from "./modules/dashboard/dashboard.routes.js"
 import { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
 import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
 import { handleReportsRoute } from "./modules/reports/reports.routes.js"
@@ -48,6 +49,10 @@ const server = createServer(async (request, response) => {
     }
 
     if (await handleInventoryRoute(request, response, { env: runtimeEnv })) {
+      return
+    }
+
+    if (await handleDashboardRoute(request, response, { env: runtimeEnv })) {
       return
     }
 
