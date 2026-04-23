@@ -15,4 +15,12 @@ export const appendInventoryMovementSchema = z.object({
   createdByUserId: z.string().uuid().optional(),
 })
 
+export const stockIntakeRequestSchema = z.object({
+  cupId: z.string().uuid(),
+  quantity: z.number().int().positive(),
+  note: z.string().trim().max(500).optional(),
+  reference: z.string().trim().max(160).optional(),
+})
+
 export type AppendInventoryMovementInput = z.infer<typeof appendInventoryMovementSchema>
+export type StockIntakeRequest = z.infer<typeof stockIntakeRequestSchema>

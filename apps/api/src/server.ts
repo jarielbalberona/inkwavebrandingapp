@@ -6,6 +6,7 @@ import { getRequestPath, isPublicRoute } from "./http/routes.js"
 import { initSentry } from "./instrumentation/sentry.js"
 import { handleAuthRoute } from "./modules/auth/auth.routes.js"
 import { handleCupsRoute } from "./modules/cups/cups.routes.js"
+import { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
 
 const env = loadApiEnv()
 
@@ -36,6 +37,10 @@ const server = createServer(async (request, response) => {
     }
 
     if (await handleCupsRoute(request, response, { env: runtimeEnv })) {
+      return
+    }
+
+    if (await handleInventoryRoute(request, response, { env: runtimeEnv })) {
       return
     }
 

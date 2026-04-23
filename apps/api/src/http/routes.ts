@@ -1,6 +1,6 @@
 import type { IncomingMessage } from "node:http"
 
-export type HttpMethod = "GET" | "POST"
+export type HttpMethod = "GET" | "POST" | "PATCH"
 
 export interface RouteDefinition {
   access: "public" | "protected"
@@ -15,6 +15,7 @@ export const routeDefinitions = [
   { access: "protected", method: "GET", path: "/auth/me" },
   { access: "protected", method: "GET", path: "/cups" },
   { access: "protected", method: "POST", path: "/cups" },
+  { access: "protected", method: "POST", path: "/inventory/stock-intake" },
 ] as const satisfies readonly RouteDefinition[]
 
 export function getRequestPath(request: IncomingMessage): string {

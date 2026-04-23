@@ -47,6 +47,7 @@ export {
 } from "./modules/inventory/inventory.rules.js"
 export type { InventoryBalanceDelta, InventoryMovementType } from "./modules/inventory/inventory.rules.js"
 export { InventoryRepository } from "./modules/inventory/inventory.repository.js"
+export { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
 export { InventoryService } from "./modules/inventory/inventory.service.js"
 export { hashPassword, verifyPassword } from "./modules/users/passwords.js"
 export { UsersRepository } from "./modules/users/users.repository.js"

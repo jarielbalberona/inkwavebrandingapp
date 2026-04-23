@@ -1,8 +1,11 @@
+import type { SafeUser } from "../auth/auth.schemas.js"
+import { assertAdmin } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { InventoryRepository } from "./inventory.repository.js"
 import {
   appendInventoryMovementSchema,
   type AppendInventoryMovementInput,
+  type StockIntakeRequest,
 } from "./inventory.schemas.js"
 
 export class InventoryCupNotFoundError extends Error {
@@ -40,5 +43,18 @@ export class InventoryService {
     }
 
     return this.inventoryRepository.appendMovement(parsedInput)
+  }
+
+  async recordStockIntake(input: StockIntakeRequest, user: SafeUser) {
+    assertAdmin(user)
+
+    return this.appendMovement({
+      cupId: input.cupId,
+      movementType: "stock_in",
+      quantity: input.quantity,
+      note: input.note,
+      reference: input.reference,
+      createdByUserId: user.id,
+    })
   }
 }
