@@ -30,6 +30,7 @@ export const routeDefinitions = [
   { access: "protected", method: "PATCH", path: "/orders/:id/cancel" },
   { access: "protected", method: "GET", path: "/reports/inventory-summary" },
   { access: "protected", method: "GET", path: "/reports/low-stock" },
+  { access: "protected", method: "GET", path: "/reports/order-status" },
 ] as const satisfies readonly RouteDefinition[]
 
 export function getRequestPath(request: IncomingMessage): string {

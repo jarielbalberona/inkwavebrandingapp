@@ -24,6 +24,26 @@ export interface InventoryReportDto {
   items: InventoryReportItemDto[]
 }
 
+export const orderReportStatuses = [
+  "pending",
+  "in_progress",
+  "partial_released",
+  "completed",
+  "canceled",
+] as const
+
+export type OrderReportStatus = (typeof orderReportStatuses)[number]
+
+export interface OrderStatusReportItemDto {
+  status: OrderReportStatus
+  count: number
+}
+
+export interface OrderStatusReportDto {
+  statuses: OrderStatusReportItemDto[]
+  total_orders: number
+}
+
 export function toInventoryReportItemDto(
   balance: InventoryBalanceSummary,
 ): InventoryReportItemDto {

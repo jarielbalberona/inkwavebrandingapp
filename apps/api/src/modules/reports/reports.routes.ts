@@ -38,6 +38,13 @@ export async function handleReportsRoute(
     return true
   }
 
+  if (path === "/reports/order-status" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service) => {
+      sendJson(response, 200, { report: await service.getOrderStatusReport() })
+    })
+    return true
+  }
+
   return false
 }
 
@@ -61,7 +68,7 @@ async function withAuthenticatedUser(
 
     await handler(
       new ReportsService(
-        new ReportsRepository(new InventoryRepository(db)),
+        new ReportsRepository(db, new InventoryRepository(db)),
       ),
     )
   } catch (error) {
