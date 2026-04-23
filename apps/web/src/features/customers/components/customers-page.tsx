@@ -231,12 +231,11 @@ export function CustomersPage() {
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextFormField control={form.control} disabled={!isAdmin} label="Customer code" name="customerCode" />
-                <TextFormField control={form.control} disabled={!isAdmin} label="Business or customer name" name="businessName" />
+                <TextFormField control={form.control} disabled={!isAdmin} label="Business name" name="businessName" />
                 <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact person" name="contactPerson" />
                 <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact number" name="contactNumber" />
-                <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Email" name="email" />
               </div>
-
+              <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Email" name="email" />
               <TextAreaFormField control={form.control} disabled={!canEditConfidentialFields} label="Address" name="address" />
               <TextAreaFormField control={form.control} disabled={!canEditConfidentialFields} label="Notes" name="notes" />
 
@@ -300,7 +299,7 @@ function TextFormField({
               onChange={(event) => field.onChange(event.target.value)}
             />
           </FormControl>
-          <FormMessage />
+          
         </FormItem>
       )}
     />
@@ -332,7 +331,7 @@ function TextAreaFormField({
               onChange={(event) => field.onChange(event.target.value)}
             />
           </FormControl>
-          <FormMessage />
+          
         </FormItem>
       )}
     />

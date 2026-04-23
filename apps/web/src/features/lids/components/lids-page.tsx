@@ -378,7 +378,7 @@ function SelectFormField({
               ))}
             </SelectContent>
           </Select>
-          <FormMessage />
+          
         </FormItem>
       )}
     />
@@ -411,7 +411,7 @@ function CurrencyFormField({
               onChange={(value) => field.onChange(value ?? 0)}
             />
           </FormControl>
-          <FormMessage />
+          
         </FormItem>
       )}
     />

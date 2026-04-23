@@ -140,7 +140,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                           onSelect={(customer) => field.onChange(customer.id)}
                         />
                       </FormControl>
-                      <FormMessage />
+                      
                     </FormItem>
                   )}
                 />
@@ -154,7 +154,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                       <FormControl>
                         <Textarea {...field} value={field.value ?? ""} />
                       </FormControl>
-                      <FormMessage />
+                      
                     </FormItem>
                   )}
                 />

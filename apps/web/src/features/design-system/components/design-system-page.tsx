@@ -563,7 +563,7 @@ function DateRangeForm({ today, maxDate }: { today: Date; maxDate: Date }) {
                     />
                   </div>
                 </FormControl>
-                <FormMessage />
+                
               </FormItem>
             )}
           />
@@ -585,7 +585,7 @@ function DateRangeForm({ today, maxDate }: { today: Date; maxDate: Date }) {
                     />
                   </div>
                 </FormControl>
-                <FormMessage />
+                
               </FormItem>
             )}
           />
@@ -789,7 +789,7 @@ function CurrencyFormExample() {
                   maxValue={1_000_000}
                 />
               </FormControl>
-              <FormMessage />
+              
             </FormItem>
           )}
         />
@@ -802,7 +802,7 @@ function CurrencyFormExample() {
               <FormControl>
                 <Input {...field} placeholder="Optional" />
               </FormControl>
-              <FormMessage />
+              
             </FormItem>
           )}
         />
@@ -1108,7 +1108,7 @@ export function DesignSystemPage() {
                         <FormLabel>Project name</FormLabel>
                         <Input {...field} />
                         <FormDescription>Working title your team will recognize.</FormDescription>
-                        <FormMessage />
+                        
                       </FormItem>
                     )}
                   />
@@ -1123,7 +1123,7 @@ export function DesignSystemPage() {
                       <FormItem>
                         <FormLabel>Owner email</FormLabel>
                         <Input {...field} type="email" />
-                        <FormMessage />
+                        
                       </FormItem>
                     )}
                   />
@@ -1160,7 +1160,7 @@ export function DesignSystemPage() {
                       <FormItem>
                         <FormLabel>Summary</FormLabel>
                         <Textarea {...field} className="min-h-24" />
-                        <FormMessage />
+                        
                       </FormItem>
                     )}
                   />

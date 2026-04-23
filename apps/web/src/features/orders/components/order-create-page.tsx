@@ -163,7 +163,7 @@ export function OrderCreatePage() {
                       onSelect={(customer) => field.onChange(customer.id)}
                     />
                   </FormControl>
-                  <FormMessage />
+                  
                 </FormItem>
               )}
             />
@@ -214,7 +214,7 @@ export function OrderCreatePage() {
                                 <SelectItem value="lid">Lid</SelectItem>
                               </SelectContent>
                             </Select>
-                            <FormMessage />
+                            
                           </FormItem>
                         )}
                       />
@@ -251,7 +251,7 @@ export function OrderCreatePage() {
                                 ))}
                               </SelectContent>
                             </Select>
-                            <FormMessage />
+                            
                           </FormItem>
                         )}
                       />
@@ -269,7 +269,7 @@ export function OrderCreatePage() {
                                 onChange={(value) => quantityField.onChange(value ?? 0)}
                               />
                             </FormControl>
-                            <FormMessage />
+                            
                           </FormItem>
                         )}
                       />
@@ -284,7 +284,7 @@ export function OrderCreatePage() {
                           <FormControl>
                             <Input {...notesField} value={notesField.value ?? ""} />
                           </FormControl>
-                          <FormMessage />
+                          
                         </FormItem>
                       )}
                     />
@@ -314,7 +314,7 @@ export function OrderCreatePage() {
                   <FormControl>
                     <Textarea {...field} value={field.value ?? ""} placeholder="Optional order note" />
                   </FormControl>
-                  <FormMessage />
+                  
                 </FormItem>
               )}
             />

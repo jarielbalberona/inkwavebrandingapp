@@ -18,6 +18,7 @@ import {
   FormMessage,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import {
   Table,
   TableBody,
@@ -161,7 +162,7 @@ export function InventoryPage() {
           ) : null}
 
           <div className="grid gap-2">
-            <FormLabel htmlFor="inventory-search">Find tracked items</FormLabel>
+            <Label htmlFor="inventory-search">Find tracked items</Label>
             <Input
               id="inventory-search"
               placeholder="Search cups or lids"
@@ -297,7 +298,7 @@ export function InventoryPage() {
                         onChange={(value) => field.onChange(value ?? 0)}
                       />
                     </FormControl>
-                    <FormMessage />
+                    
                   </FormItem>
                 )}
               />
@@ -311,7 +312,7 @@ export function InventoryPage() {
                     <FormControl>
                       <Input disabled={!isAdmin} {...field} value={field.value ?? ""} />
                     </FormControl>
-                    <FormMessage />
+                    
                   </FormItem>
                 )}
               />
@@ -325,7 +326,7 @@ export function InventoryPage() {
                     <FormControl>
                       <Input disabled={!isAdmin} {...field} value={field.value ?? ""} />
                     </FormControl>
-                    <FormMessage />
+                    
                   </FormItem>
                 )}
               />
