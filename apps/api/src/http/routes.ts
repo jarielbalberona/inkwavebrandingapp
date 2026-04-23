@@ -13,6 +13,8 @@ export const routeDefinitions = [
   { access: "public", method: "POST", path: "/auth/login" },
   { access: "public", method: "POST", path: "/auth/logout" },
   { access: "protected", method: "GET", path: "/auth/me" },
+  { access: "protected", method: "GET", path: "/customers" },
+  { access: "protected", method: "POST", path: "/customers" },
   { access: "protected", method: "GET", path: "/cups" },
   { access: "protected", method: "POST", path: "/cups" },
   { access: "protected", method: "GET", path: "/inventory/balances" },

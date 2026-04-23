@@ -5,6 +5,7 @@ import { sendJson } from "./http/json.js"
 import { getRequestPath, isPublicRoute } from "./http/routes.js"
 import { initSentry } from "./instrumentation/sentry.js"
 import { handleAuthRoute } from "./modules/auth/auth.routes.js"
+import { handleCustomersRoute } from "./modules/customers/customers.routes.js"
 import { handleCupsRoute } from "./modules/cups/cups.routes.js"
 import { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
 
@@ -37,6 +38,10 @@ const server = createServer(async (request, response) => {
     }
 
     if (await handleCupsRoute(request, response, { env: runtimeEnv })) {
+      return
+    }
+
+    if (await handleCustomersRoute(request, response, { env: runtimeEnv })) {
       return
     }
 
