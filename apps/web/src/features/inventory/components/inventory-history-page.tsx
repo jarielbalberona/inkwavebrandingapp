@@ -28,14 +28,16 @@ import {
 } from "@/features/inventory/hooks/use-inventory"
 
 export function InventoryHistoryPage() {
-  const [cupId, setCupId] = useState("")
+  const [itemId, setItemId] = useState("")
+  const [itemType, setItemType] = useState<string>("all")
   const [movementType, setMovementType] = useState<string>("all")
   const query = useMemo(
     () => ({
-      cupId: cupId.trim() || undefined,
+      itemType: itemType === "all" ? undefined : (itemType as "cup" | "lid"),
+      itemId: itemId.trim() || undefined,
       movementType: movementType === "all" ? undefined : movementType,
     }),
-    [cupId, movementType],
+    [itemId, itemType, movementType],
   )
   const movementsQuery = useInventoryMovementsQuery(query)
 
@@ -46,7 +48,7 @@ export function InventoryHistoryPage() {
           <div className="grid gap-1">
             <CardTitle>Inventory Movement History</CardTitle>
             <CardDescription>
-              Inspect the ledger when balances look wrong. Filters currently support cup ID and movement type.
+              Inspect the ledger when balances look wrong. Filters support tracked item type, item ID, and movement type.
             </CardDescription>
           </div>
           <Button asChild type="button" variant="outline">
@@ -54,15 +56,29 @@ export function InventoryHistoryPage() {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_16rem]">
           <div className="grid gap-2">
-            <Label htmlFor="movement-cup-id">Cup ID</Label>
+            <Label htmlFor="movement-item-id">Tracked item ID</Label>
             <Input
-              id="movement-cup-id"
-              placeholder="Filter by cup UUID"
-              value={cupId}
-              onChange={(event) => setCupId(event.target.value)}
+              id="movement-item-id"
+              placeholder="Filter by tracked item UUID"
+              value={itemId}
+              onChange={(event) => setItemId(event.target.value)}
             />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Item type</Label>
+            <Select value={itemType} onValueChange={setItemType}>
+              <SelectTrigger className="w-full rounded-none">
+                <SelectValue placeholder="All item types" />
+              </SelectTrigger>
+              <SelectContent className="rounded-none">
+                <SelectItem value="all">All item types</SelectItem>
+                <SelectItem value="cup">Cup</SelectItem>
+                <SelectItem value="lid">Lid</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid gap-2">
@@ -103,8 +119,9 @@ export function InventoryHistoryPage() {
           <TableHeader>
             <TableRow>
               <TableHead>When</TableHead>
+              <TableHead>Item type</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead>SKU</TableHead>
+              <TableHead>Item</TableHead>
               <TableHead>Quantity</TableHead>
               <TableHead>Reference</TableHead>
               <TableHead>Note</TableHead>
@@ -118,15 +135,24 @@ export function InventoryHistoryPage() {
                   {new Date(movement.created_at).toLocaleString()}
                 </TableCell>
                 <TableCell>
+                  <Badge variant="outline">{movement.item_type}</Badge>
+                </TableCell>
+                <TableCell>
                   <Badge variant={movementVariant(movement.movement_type)}>
                     {movement.movement_type}
                   </Badge>
                 </TableCell>
                 <TableCell>
                   <div className="grid gap-0.5">
-                    <span className="font-medium">{movement.cup.sku}</span>
+                    <span className="font-medium">
+                      {movement.item_type === "cup"
+                        ? movement.cup.sku
+                        : `${movement.lid.diameter} ${movement.lid.shape}`}
+                    </span>
                     <span className="text-xs text-muted-foreground">
-                      {movement.cup.brand} · {movement.cup.size}
+                      {movement.item_type === "cup"
+                        ? `${movement.cup.brand} · ${movement.cup.size}`
+                        : `${movement.lid.type} · ${movement.lid.brand} · ${movement.lid.color}`}
                     </span>
                   </div>
                 </TableCell>

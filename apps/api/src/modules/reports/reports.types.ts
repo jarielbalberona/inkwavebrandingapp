@@ -105,6 +105,10 @@ export interface SalesCostVisibilityReportDto {
 export function toInventoryReportItemDto(
   balance: InventoryBalanceSummary,
 ): InventoryReportItemDto {
+  if (balance.itemType !== "cup") {
+    throw new Error("Inventory reports currently operate on cup balances only")
+  }
+
   const available = calculateAvailable(balance.onHand, balance.reserved)
 
   return {

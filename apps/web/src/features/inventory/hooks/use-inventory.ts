@@ -4,9 +4,11 @@ import {
   createStockIntake,
   listInventoryMovements,
   listInventoryBalances,
+  type InventoryItemType,
   type StockIntakePayload,
 } from "@/features/inventory/api/inventory-client"
 import { cupsQueryKey } from "@/features/cups/hooks/use-cups"
+import { lidsQueryKey } from "@/features/lids/hooks/use-lids"
 
 export const inventoryBalancesQueryKey = ["inventory", "balances"] as const
 export const inventoryMovementsQueryKey = ["inventory", "movements"] as const
@@ -22,12 +24,13 @@ export const inventoryMovementTypeOptions = [
 export function useInventoryBalancesQuery() {
   return useQuery({
     queryKey: inventoryBalancesQueryKey,
-    queryFn: listInventoryBalances,
+    queryFn: () => listInventoryBalances(),
   })
 }
 
 export function useInventoryMovementsQuery(filters: {
-  cupId?: string
+  itemType?: InventoryItemType
+  itemId?: string
   movementType?: string
 }) {
   return useQuery({
@@ -43,6 +46,7 @@ export function useStockIntakeMutation() {
     mutationFn: (payload: StockIntakePayload) => createStockIntake(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cupsQueryKey })
+      await queryClient.invalidateQueries({ queryKey: lidsQueryKey })
       await queryClient.invalidateQueries({ queryKey: inventoryBalancesQueryKey })
       await queryClient.invalidateQueries({ queryKey: inventoryMovementsQueryKey })
     },

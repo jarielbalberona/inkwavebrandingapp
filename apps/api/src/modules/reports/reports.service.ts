@@ -19,10 +19,11 @@ export class ReportsService {
 
   async getInventorySummary(): Promise<InventoryReportDto> {
     const balances = await this.reportsRepository.listInventoryBalances()
+    const cupBalances = balances.filter((balance) => balance.itemType === "cup")
 
     return {
       low_stock_basis: "available",
-      items: balances.map(toInventoryReportItemDto),
+      items: cupBalances.map(toInventoryReportItemDto),
     }
   }
 

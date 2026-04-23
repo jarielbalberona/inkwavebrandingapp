@@ -1,13 +1,23 @@
 import { useMemo, useState } from "react"
 
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Link } from "@tanstack/react-router"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
 import {
   Table,
   TableBody,
@@ -18,95 +28,105 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import type { InventoryBalance } from "@/features/inventory/api/inventory-client"
 import {
   useInventoryBalancesQuery,
   useStockIntakeMutation,
 } from "@/features/inventory/hooks/use-inventory"
 
-const emptyIntakeForm = {
+const stockIntakeFormSchema = z.object({
+  quantity: z.number().int().positive("Quantity must be a positive whole number."),
+  reference: z.string().trim().max(160).optional(),
+  note: z.string().trim().max(500).optional(),
+})
+
+type StockIntakeFormValues = z.infer<typeof stockIntakeFormSchema>
+
+const emptyFormValues: StockIntakeFormValues = {
   quantity: 0,
-  note: "",
   reference: "",
+  note: "",
 }
 
 export function InventoryPage() {
   const currentUser = useCurrentUser()
-  const cupsQuery = useCupsQuery()
   const balancesQuery = useInventoryBalancesQuery()
   const stockIntake = useStockIntakeMutation()
   const [search, setSearch] = useState("")
-  const [selectedCupId, setSelectedCupId] = useState<string | null>(null)
-  const [intakeForm, setIntakeForm] = useState(emptyIntakeForm)
-  const [intakeError, setIntakeError] = useState<string | null>(null)
-  const [intakeSuccess, setIntakeSuccess] = useState<string | null>(null)
-
+  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null)
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const isAdmin = currentUser.data?.role === "admin"
+
+  const form = useForm<StockIntakeFormValues>({
+    resolver: zodResolver(stockIntakeFormSchema),
+    defaultValues: emptyFormValues,
+  })
+
   const filteredBalances = useMemo(
     () => filterBalances(balancesQuery.data, search),
     [balancesQuery.data, search],
   )
-  const selectedCup = useMemo(
+
+  const selectedBalance = useMemo(
     () =>
-      balancesQuery.data?.find((balance) => balance.cup.id === selectedCupId)?.cup ??
-      cupsQuery.data?.find((cup) => cup.id === selectedCupId) ??
-      null,
-    [balancesQuery.data, cupsQuery.data, selectedCupId],
+      balancesQuery.data?.find((balance) => toInventoryItemKey(balance) === selectedItemKey) ?? null,
+    [balancesQuery.data, selectedItemKey],
   )
 
-  const submitIntake = () => {
-    if (!selectedCup) {
-      setIntakeError("Select a cup before recording stock intake.")
-      setIntakeSuccess(null)
+  async function onSubmit(values: StockIntakeFormValues) {
+    if (!selectedBalance) {
+      setSubmitError("Select a tracked item before recording stock intake.")
+      setSubmitSuccess(null)
       return
     }
 
-    if (!selectedCup.is_active) {
-      setIntakeError("Inactive cups cannot receive stock intake.")
-      setIntakeSuccess(null)
+    if (!isInventoryItemActive(selectedBalance)) {
+      setSubmitError("Inactive items cannot receive stock intake.")
+      setSubmitSuccess(null)
       return
     }
 
-    const quantity = intakeForm.quantity
+    setSubmitError(null)
+    setSubmitSuccess(null)
 
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      setIntakeError("Quantity must be a positive whole number.")
-      setIntakeSuccess(null)
-      return
+    try {
+      await stockIntake.mutateAsync(
+        selectedBalance.item_type === "cup"
+          ? {
+              itemType: "cup",
+              cupId: selectedBalance.cup.id,
+              quantity: values.quantity,
+              note: values.note?.trim() || undefined,
+              reference: values.reference?.trim() || undefined,
+            }
+          : {
+              itemType: "lid",
+              lidId: selectedBalance.lid.id,
+              quantity: values.quantity,
+              note: values.note?.trim() || undefined,
+              reference: values.reference?.trim() || undefined,
+            },
+      )
+
+      form.reset(emptyFormValues)
+      setSubmitSuccess(
+        `Recorded ${values.quantity} units as stock_in for ${formatInventoryItemLabel(selectedBalance)}.`,
+      )
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to record stock intake.")
     }
-
-    setIntakeError(null)
-    setIntakeSuccess(null)
-
-    stockIntake.mutate(
-      {
-        cupId: selectedCup.id,
-        quantity,
-        note: intakeForm.note.trim() || undefined,
-        reference: intakeForm.reference.trim() || undefined,
-      },
-      {
-        onError: (error) => setIntakeError(error.message),
-        onSuccess: (movement) => {
-          setIntakeForm(emptyIntakeForm)
-          setIntakeSuccess(
-            `Recorded ${movement.quantity} units as stock_in for ${selectedCup.sku}.`,
-          )
-        },
-      },
-    )
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
       <Card className="rounded-none">
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="grid gap-1">
-              <CardTitle>Stock Intake</CardTitle>
+              <CardTitle>Inventory Balances</CardTitle>
               <CardDescription>
-                Receive stock against an existing SKU and write a real <code>stock_in</code> movement.
+                Cups and lids now share the same movement-ledger model. Stock intake writes a real <code>stock_in</code> movement.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -114,9 +134,14 @@ export function InventoryPage() {
                 <Link to="/inventory-history">View movement history</Link>
               </Button>
               {isAdmin ? (
-                <Button asChild type="button" variant="outline">
-                  <Link to="/cups">Create cup in catalog</Link>
-                </Button>
+                <>
+                  <Button asChild type="button" variant="outline">
+                    <Link to="/cups">Create cup in catalog</Link>
+                  </Button>
+                  <Button asChild type="button" variant="outline">
+                    <Link to="/lids">Create lid in catalog</Link>
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
@@ -124,14 +149,8 @@ export function InventoryPage() {
           {currentUser.data && !isAdmin ? (
             <Alert>
               <AlertDescription>
-                Your account can inspect cups, but stock intake is currently restricted to admins.
+                Your account can inspect stock balances, but stock intake remains admin-only.
               </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {cupsQuery.isError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{cupsQuery.error.message}</AlertDescription>
             </Alert>
           ) : null}
 
@@ -142,10 +161,10 @@ export function InventoryPage() {
           ) : null}
 
           <div className="grid gap-2">
-            <Label htmlFor="inventory-search">Find cup by SKU, type, brand, size, diameter, or color</Label>
+            <FormLabel htmlFor="inventory-search">Find tracked items</FormLabel>
             <Input
               id="inventory-search"
-              placeholder="Search cups"
+              placeholder="Search cups or lids"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -158,18 +177,16 @@ export function InventoryPage() {
 
           {!balancesQuery.isLoading && filteredBalances.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No cups match the current search. Create the SKU first if it does not exist.
+              No tracked items match the current search.
             </p>
           ) : null}
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Diameter</TableHead>
+                <TableHead>Item type</TableHead>
+                <TableHead>Identifier</TableHead>
+                <TableHead>Details</TableHead>
                 <TableHead>On hand</TableHead>
                 <TableHead>Reserved</TableHead>
                 <TableHead>Available</TableHead>
@@ -181,38 +198,38 @@ export function InventoryPage() {
             <TableBody>
               {filteredBalances.map((balance) => (
                 <TableRow
-                  key={balance.cup.id}
+                  key={toInventoryItemKey(balance)}
                   className="cursor-pointer"
-                  data-state={balance.cup.id === selectedCupId ? "selected" : undefined}
+                  data-state={toInventoryItemKey(balance) === selectedItemKey ? "selected" : undefined}
                   onClick={() => {
-                    setSelectedCupId(balance.cup.id)
-                    setIntakeError(null)
-                    setIntakeSuccess(null)
+                    setSelectedItemKey(toInventoryItemKey(balance))
+                    setSubmitError(null)
+                    setSubmitSuccess(null)
                   }}
                 >
-                  <TableCell className="font-medium">{balance.cup.sku}</TableCell>
-                  <TableCell>{balance.cup.type}</TableCell>
-                  <TableCell>{balance.cup.brand}</TableCell>
-                  <TableCell>{balance.cup.size}</TableCell>
-                  <TableCell>{balance.cup.diameter}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{balance.item_type}</Badge>
+                  </TableCell>
+                  <TableCell className="font-medium">{formatInventoryItemPrimaryLabel(balance)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {formatInventoryItemSecondaryLabel(balance)}
+                  </TableCell>
                   <TableCell>{balance.on_hand}</TableCell>
                   <TableCell>{balance.reserved}</TableCell>
                   <TableCell
-                    className={
-                      balance.available < 0 ? "font-semibold text-destructive" : undefined
-                    }
+                    className={balance.available < 0 ? "font-semibold text-destructive" : undefined}
                   >
                     {balance.available}
                   </TableCell>
-                  <TableCell>{balance.cup.min_stock}</TableCell>
                   <TableCell>
-                    <Badge variant={stockStateVariant(balance)}>
-                      {stockStateLabel(balance)}
-                    </Badge>
+                    {balance.item_type === "cup" ? balance.cup.min_stock : "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={balance.cup.is_active ? "default" : "secondary"}>
-                      {balance.cup.is_active ? "Active" : "Inactive"}
+                    <Badge variant={stockStateVariant(balance)}>{stockStateLabel(balance)}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={isInventoryItemActive(balance) ? "default" : "secondary"}>
+                      {isInventoryItemActive(balance) ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -226,88 +243,101 @@ export function InventoryPage() {
         <CardHeader>
           <CardTitle>Receive Stock</CardTitle>
           <CardDescription>
-            {selectedCup
-              ? "Review the selected cup and record a new stock_in movement."
-              : "Select a cup from the list before recording stock intake."}
+            {selectedBalance
+              ? "Review the selected tracked item and record a new stock_in movement."
+              : "Select a tracked item from the list before recording stock intake."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {intakeError ? (
+          {submitError ? (
             <Alert variant="destructive">
-              <AlertDescription>{intakeError}</AlertDescription>
+              <AlertDescription>{submitError}</AlertDescription>
             </Alert>
           ) : null}
 
-          {intakeSuccess ? (
+          {submitSuccess ? (
             <Alert>
-              <AlertDescription>{intakeSuccess}</AlertDescription>
+              <AlertDescription>{submitSuccess}</AlertDescription>
             </Alert>
           ) : null}
 
-          {selectedCup ? (
+          {selectedBalance ? (
             <div className="grid gap-3 border p-4">
               <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium">{selectedCup.sku}</p>
+                <div className="grid gap-1">
+                  <p className="text-sm font-medium">{formatInventoryItemLabel(selectedBalance)}</p>
                   <p className="text-sm text-muted-foreground">
-                    {selectedCup.type} · {selectedCup.brand} · {selectedCup.size} · {selectedCup.diameter}
+                    {formatInventoryItemSecondaryLabel(selectedBalance)}
                   </p>
                 </div>
-                <Badge variant={selectedCup.is_active ? "default" : "secondary"}>
-                  {selectedCup.is_active ? "Active" : "Inactive"}
+                <Badge variant={isInventoryItemActive(selectedBalance) ? "default" : "secondary"}>
+                  {isInventoryItemActive(selectedBalance) ? "Active" : "Inactive"}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground">Color: {selectedCup.color}</p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No cup selected yet. Pick one from the table to continue.
+              No tracked item selected yet. Pick one from the table to continue.
             </p>
           )}
 
-          <div className="grid gap-2">
-            <Label>Quantity</Label>
-            <Input.Number
-              disabled={!isAdmin}
-              min={0}
-              value={intakeForm.quantity}
-              onChange={(value) =>
-                setIntakeForm((current) => ({ ...current, quantity: value ?? 0 }))
-              }
-            />
-          </div>
+          <Form {...form}>
+            <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity</FormLabel>
+                    <FormControl>
+                      <Input.Number
+                        disabled={!isAdmin}
+                        min={0}
+                        value={field.value}
+                        onChange={(value) => field.onChange(value ?? 0)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <div className="grid gap-2">
-            <Label htmlFor="inventory-reference">Reference</Label>
-            <Input
-              id="inventory-reference"
-              disabled={!isAdmin}
-              value={intakeForm.reference}
-              onChange={(event) =>
-                setIntakeForm((current) => ({ ...current, reference: event.target.value }))
-              }
-            />
-          </div>
+              <FormField
+                control={form.control}
+                name="reference"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reference</FormLabel>
+                    <FormControl>
+                      <Input disabled={!isAdmin} {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <div className="grid gap-2">
-            <Label htmlFor="inventory-note">Note</Label>
-            <Input
-              id="inventory-note"
-              disabled={!isAdmin}
-              value={intakeForm.note}
-              onChange={(event) =>
-                setIntakeForm((current) => ({ ...current, note: event.target.value }))
-              }
-            />
-          </div>
+              <FormField
+                control={form.control}
+                name="note"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Note</FormLabel>
+                    <FormControl>
+                      <Input disabled={!isAdmin} {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <Button
-            type="button"
-            onClick={submitIntake}
-            disabled={!isAdmin || !selectedCup || stockIntake.isPending}
-          >
-            {stockIntake.isPending ? "Recording..." : "Record stock intake"}
-          </Button>
+              <Button
+                type="submit"
+                disabled={!isAdmin || !selectedBalance || stockIntake.isPending}
+              >
+                {stockIntake.isPending ? "Recording..." : "Record stock intake"}
+              </Button>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>
@@ -329,18 +359,39 @@ function filterBalances(
   }
 
   return balances.filter((balance) =>
-    [
-      balance.cup.sku,
-      balance.cup.type,
-      balance.cup.brand,
-      balance.cup.size,
-      balance.cup.diameter,
-      balance.cup.color,
-    ]
+    [balance.item_type, formatInventoryItemLabel(balance), formatInventoryItemSecondaryLabel(balance)]
       .join(" ")
       .toLowerCase()
       .includes(normalizedSearch),
   )
+}
+
+function formatInventoryItemLabel(balance: InventoryBalance): string {
+  if (balance.item_type === "cup") {
+    return balance.cup.sku
+  }
+
+  return `${balance.lid.type} ${balance.lid.brand} ${balance.lid.diameter} ${balance.lid.shape} ${balance.lid.color}`
+}
+
+function formatInventoryItemPrimaryLabel(balance: InventoryBalance): string {
+  if (balance.item_type === "cup") {
+    return balance.cup.sku
+  }
+
+  return `${balance.lid.diameter} ${balance.lid.shape}`
+}
+
+function formatInventoryItemSecondaryLabel(balance: InventoryBalance): string {
+  if (balance.item_type === "cup") {
+    return `${balance.cup.type} · ${balance.cup.brand} · ${balance.cup.size} · ${balance.cup.diameter} · ${balance.cup.color}`
+  }
+
+  return `${balance.lid.type} · ${balance.lid.brand} · ${balance.lid.color}`
+}
+
+function isInventoryItemActive(balance: InventoryBalance): boolean {
+  return balance.item_type === "cup" ? balance.cup.is_active : balance.lid.is_active
 }
 
 function stockStateLabel(balance: InventoryBalance): string {
@@ -348,7 +399,7 @@ function stockStateLabel(balance: InventoryBalance): string {
     return "Negative"
   }
 
-  if (balance.available <= balance.cup.min_stock) {
+  if (balance.item_type === "cup" && balance.available <= balance.cup.min_stock) {
     return "Low"
   }
 
@@ -360,9 +411,13 @@ function stockStateVariant(balance: InventoryBalance): "default" | "secondary" |
     return "destructive"
   }
 
-  if (balance.available <= balance.cup.min_stock) {
+  if (balance.item_type === "cup" && balance.available <= balance.cup.min_stock) {
     return "secondary"
   }
 
   return "default"
+}
+
+function toInventoryItemKey(balance: InventoryBalance): string {
+  return balance.item_type === "cup" ? `cup:${balance.cup.id}` : `lid:${balance.lid.id}`
 }

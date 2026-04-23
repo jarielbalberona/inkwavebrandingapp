@@ -1,7 +1,8 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertAdmin } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
-import { InventoryRepository } from "./inventory.repository.js"
+import { LidsRepository } from "../lids/lids.repository.js"
+import { InventoryRepository, type InventoryItemReference } from "./inventory.repository.js"
 import {
   appendInventoryMovementSchema,
   inventoryAdjustmentRequestSchema,
@@ -18,27 +19,27 @@ import {
 import { toInventoryMovementDto } from "./inventory.movement-types.js"
 import { toInventoryBalanceDto } from "./inventory.types.js"
 
-export class InventoryCupNotFoundError extends Error {
+export class InventoryItemNotFoundError extends Error {
   readonly statusCode = 404
 
-  constructor() {
-    super("Cup not found")
+  constructor(itemType: "cup" | "lid") {
+    super(`${capitalizeInventoryItemType(itemType)} not found`)
   }
 }
 
-export class InventoryCupInactiveError extends Error {
+export class InventoryItemInactiveError extends Error {
   readonly statusCode = 409
 
-  constructor() {
-    super("Cannot append inventory movement for an inactive cup")
+  constructor(itemType: "cup" | "lid") {
+    super(`Cannot append inventory movement for an inactive ${itemType}`)
   }
 }
 
-export class InventoryBalanceCupNotFoundError extends Error {
+export class InventoryBalanceItemNotFoundError extends Error {
   readonly statusCode = 404
 
-  constructor() {
-    super("Cup not found")
+  constructor(itemType: "cup" | "lid") {
+    super(`${capitalizeInventoryItemType(itemType)} not found`)
   }
 }
 
@@ -62,19 +63,12 @@ export class InventoryService {
   constructor(
     private readonly inventoryRepository: InventoryRepository,
     private readonly cupsRepository: CupsRepository,
+    private readonly lidsRepository: LidsRepository,
   ) {}
 
   async appendMovement(input: AppendInventoryMovementInput) {
     const parsedInput = appendInventoryMovementSchema.parse(input)
-    const cup = await this.cupsRepository.findById(parsedInput.cupId)
-
-    if (!cup) {
-      throw new InventoryCupNotFoundError()
-    }
-
-    if (!cup.isActive) {
-      throw new InventoryCupInactiveError()
-    }
+    await this.assertTrackedItemIsActive(this.toInventoryItemReference(parsedInput))
 
     return this.inventoryRepository.appendMovement(parsedInput)
   }
@@ -83,7 +77,9 @@ export class InventoryService {
     assertAdmin(user)
 
     return this.appendMovement({
+      itemType: input.itemType,
       cupId: input.cupId,
+      lidId: input.lidId,
       movementType: "stock_in",
       quantity: input.quantity,
       note: input.note,
@@ -96,6 +92,7 @@ export class InventoryService {
     const parsedQuery = inventoryBalanceQuerySchema.parse(query)
     const balances = await this.inventoryRepository.listBalances({
       includeInactive: parsedQuery.include_inactive,
+      itemType: parsedQuery.item_type,
     })
 
     return balances.map((balance) => toInventoryBalanceDto(balance, user))
@@ -105,7 +102,7 @@ export class InventoryService {
     const balance = await this.inventoryRepository.getBalanceByCupId(cupId)
 
     if (!balance) {
-      throw new InventoryBalanceCupNotFoundError()
+      throw new InventoryBalanceItemNotFoundError("cup")
     }
 
     return toInventoryBalanceDto(balance, user)
@@ -122,21 +119,22 @@ export class InventoryService {
     assertAdmin(user)
 
     const parsedInput = inventoryAdjustmentRequestSchema.parse(input)
+    const balance = await this.inventoryRepository.getBalanceByItem(
+      this.toInventoryItemReference(parsedInput),
+    )
 
-    if (parsedInput.movementType === "adjustment_out") {
-      const balance = await this.inventoryRepository.getBalanceByCupId(parsedInput.cupId)
+    if (!balance) {
+      throw new InventoryBalanceItemNotFoundError(parsedInput.itemType)
+    }
 
-      if (!balance) {
-        throw new InventoryBalanceCupNotFoundError()
-      }
-
-      if (balance.onHand < parsedInput.quantity) {
-        throw new InventoryAdjustmentOutInsufficientStockError()
-      }
+    if (parsedInput.movementType === "adjustment_out" && balance.onHand < parsedInput.quantity) {
+      throw new InventoryAdjustmentOutInsufficientStockError()
     }
 
     return this.appendMovement({
+      itemType: parsedInput.itemType,
       cupId: parsedInput.cupId,
+      lidId: parsedInput.lidId,
       movementType: parsedInput.movementType,
       quantity: parsedInput.quantity,
       note: parsedInput.note,
@@ -164,22 +162,27 @@ export class InventoryService {
     input: ReserveOrderItemsInput,
     repository: InventoryRepository,
   ) {
-    const totalsByCupId = new Map<string, number>()
+    const totalsByItemKey = new Map<string, { reference: InventoryItemReference; quantity: number }>()
 
     for (const item of input.items) {
-      totalsByCupId.set(item.cupId, (totalsByCupId.get(item.cupId) ?? 0) + item.quantity)
+      const reference = repository.toBalanceReference(item)
+      const key = toInventoryItemKey(reference)
+      const existing = totalsByItemKey.get(key)
+
+      totalsByItemKey.set(key, {
+        reference,
+        quantity: (existing?.quantity ?? 0) + item.quantity,
+      })
     }
 
-    for (const [cupId, quantity] of totalsByCupId) {
-      const balance = await repository.getBalanceByCupId(cupId)
+    for (const { reference, quantity } of totalsByItemKey.values()) {
+      const balance = await repository.getBalanceByItem(reference)
 
       if (!balance) {
-        throw new InventoryBalanceCupNotFoundError()
+        throw new InventoryBalanceItemNotFoundError(reference.itemType)
       }
 
-      if (!balance.cup.isActive) {
-        throw new InventoryCupInactiveError()
-      }
+      await this.assertTrackedItemIsActive(reference)
 
       if (balance.onHand - balance.reserved < quantity) {
         throw new InventoryReservationInsufficientStockError()
@@ -191,7 +194,9 @@ export class InventoryService {
     for (const item of input.items) {
       movements.push(
         await repository.appendMovement({
+          itemType: item.itemType,
           cupId: item.cupId,
+          lidId: item.lidId,
           movementType: "reserve",
           quantity: item.quantity,
           orderId: input.orderId,
@@ -205,4 +210,56 @@ export class InventoryService {
 
     return movements
   }
+
+  private async assertTrackedItemIsActive(reference: InventoryItemReference): Promise<void> {
+    if (reference.itemType === "cup") {
+      const cup = await this.cupsRepository.findById(reference.cupId)
+
+      if (!cup) {
+        throw new InventoryItemNotFoundError("cup")
+      }
+
+      if (!cup.isActive) {
+        throw new InventoryItemInactiveError("cup")
+      }
+
+      return
+    }
+
+    const lid = await this.lidsRepository.findById(reference.lidId)
+
+    if (!lid) {
+      throw new InventoryItemNotFoundError("lid")
+    }
+
+    if (!lid.isActive) {
+      throw new InventoryItemInactiveError("lid")
+    }
+  }
+
+  private toInventoryItemReference(
+    input: Pick<AppendInventoryMovementInput, "itemType" | "cupId" | "lidId">,
+  ): InventoryItemReference {
+    if (input.itemType === "cup") {
+      return {
+        itemType: "cup",
+        cupId: input.cupId!,
+      }
+    }
+
+    return {
+      itemType: "lid",
+      lidId: input.lidId!,
+    }
+  }
+}
+
+function capitalizeInventoryItemType(itemType: "cup" | "lid"): string {
+  return itemType.charAt(0).toUpperCase() + itemType.slice(1)
+}
+
+function toInventoryItemKey(reference: InventoryItemReference): string {
+  return reference.itemType === "cup"
+    ? `cup:${reference.cupId}`
+    : `lid:${reference.lidId}`
 }

@@ -12,11 +12,12 @@ import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
 import {
-  InventoryBalanceCupNotFoundError,
-  InventoryCupInactiveError,
+  InventoryBalanceItemNotFoundError,
+  InventoryItemInactiveError,
   InventoryReservationInsufficientStockError,
   InventoryService,
 } from "../inventory/inventory.service.js"
+import { LidsRepository } from "../lids/lids.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import {
   createOrderLineItemProgressEventSchema,
@@ -152,6 +153,7 @@ async function withAuthenticatedUser(
           new InventoryService(
             new InventoryRepository(transactionDb),
             new CupsRepository(transactionDb),
+            new LidsRepository(transactionDb),
           ),
       ),
       authContext.user,
@@ -186,8 +188,8 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderPrintedQuantityNotReservedError ||
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||
-    error instanceof InventoryBalanceCupNotFoundError ||
-    error instanceof InventoryCupInactiveError ||
+    error instanceof InventoryBalanceItemNotFoundError ||
+    error instanceof InventoryItemInactiveError ||
     error instanceof InventoryReservationInsufficientStockError
   ) {
     sendJson(response, error.statusCode, { error: error.message })

@@ -233,6 +233,7 @@ export class OrdersService {
           createdByUserId: user.id,
           items: order.items.map((item) => ({
             orderItemId: item.id,
+            itemType: "cup",
             cupId: item.cupId,
             quantity: item.quantity,
           })),
@@ -310,6 +311,7 @@ export class OrdersService {
         }
 
         await inventoryRepository.appendMovement({
+          itemType: "cup",
           cupId: orderItem.cupId,
           movementType: "consume",
           quantity: parsedInput.quantity,
@@ -364,6 +366,7 @@ export class OrdersService {
         }
 
         await inventoryRepository.appendMovement({
+          itemType: "cup",
           cupId: item.cupId,
           movementType: "release_reservation",
           quantity: releaseQuantity,

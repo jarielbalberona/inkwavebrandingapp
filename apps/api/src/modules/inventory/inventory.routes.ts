@@ -12,12 +12,13 @@ import {
 } from "../auth/authorization.js"
 import { AuthService } from "../auth/auth.service.js"
 import { CupsRepository } from "../cups/cups.repository.js"
+import { LidsRepository } from "../lids/lids.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import {
   InventoryAdjustmentOutInsufficientStockError,
-  InventoryCupInactiveError,
-  InventoryBalanceCupNotFoundError,
-  InventoryCupNotFoundError,
+  InventoryBalanceItemNotFoundError,
+  InventoryItemInactiveError,
+  InventoryItemNotFoundError,
   InventoryService,
 } from "./inventory.service.js"
 import { InventoryRepository } from "./inventory.repository.js"
@@ -123,6 +124,7 @@ async function withAuthenticatedUser(
       new InventoryService(
         new InventoryRepository(getDatabaseClient()),
         new CupsRepository(getDatabaseClient()),
+        new LidsRepository(getDatabaseClient()),
       ),
       authContext.user,
     )
@@ -143,9 +145,9 @@ function handleInventoryError(response: ServerResponse, error: unknown) {
   }
 
   if (
-    error instanceof InventoryCupNotFoundError ||
-    error instanceof InventoryCupInactiveError ||
-    error instanceof InventoryBalanceCupNotFoundError ||
+    error instanceof InventoryItemNotFoundError ||
+    error instanceof InventoryItemInactiveError ||
+    error instanceof InventoryBalanceItemNotFoundError ||
     error instanceof InventoryAdjustmentOutInsufficientStockError
   ) {
     sendJson(response, error.statusCode, { error: error.message })
