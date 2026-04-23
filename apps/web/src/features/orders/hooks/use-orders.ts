@@ -4,7 +4,9 @@ import {
   cancelOrder,
   createOrder,
   createProgressEvent,
+  generateOrderInvoice,
   getOrder,
+  getOrderInvoice,
   listOrders,
   listProgressEvents,
   updateOrder,
@@ -16,6 +18,7 @@ import {
 
 export const ordersQueryKey = ["orders"] as const
 export const orderProgressEventsQueryKey = ["orders", "progress-events"] as const
+export const orderInvoicesQueryKey = ["orders", "invoice"] as const
 
 export const orderStatusOptions = [
   "pending",
@@ -106,6 +109,29 @@ export function useCreateProgressEventMutation() {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
       await queryClient.invalidateQueries({
         queryKey: [...orderProgressEventsQueryKey, variables.orderLineItemId],
+      })
+    },
+  })
+}
+
+export function useOrderInvoiceQuery(orderId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: [...orderInvoicesQueryKey, orderId] as const,
+    queryFn: () => getOrderInvoice(orderId ?? ""),
+    enabled: enabled && Boolean(orderId),
+    retry: false,
+  })
+}
+
+export function useGenerateOrderInvoiceMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (orderId: string) => generateOrderInvoice(orderId),
+    onSuccess: async (invoice) => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+      await queryClient.invalidateQueries({
+        queryKey: [...orderInvoicesQueryKey, invoice.order_id],
       })
     },
   })

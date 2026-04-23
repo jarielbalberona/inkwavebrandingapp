@@ -78,12 +78,47 @@ const orderSchema = z.object({
   updated_at: z.string(),
 })
 
+const invoiceItemSchema = z.object({
+  id: z.string().uuid(),
+  order_line_item_id: z.string().uuid(),
+  item_type: z.enum(["cup", "lid"]),
+  description_snapshot: z.string(),
+  quantity: z.number().int().positive(),
+  unit_price: z.string(),
+  line_total: z.string(),
+  created_at: z.string(),
+})
+
+const invoiceSchema = z.object({
+  id: z.string().uuid(),
+  invoice_number: z.string(),
+  order_id: z.string().uuid(),
+  order_number_snapshot: z.string(),
+  customer: z.object({
+    id: z.string().uuid(),
+    customer_code: z.string().nullable(),
+    business_name: z.string(),
+    contact_person: z.string().nullable(),
+    contact_number: z.string().nullable(),
+    email: z.string().nullable(),
+    address: z.string().nullable(),
+  }),
+  subtotal: z.string(),
+  items: z.array(invoiceItemSchema),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+
 const ordersResponseSchema = z.object({
   orders: z.array(orderSchema),
 })
 
 const orderResponseSchema = z.object({
   order: orderSchema,
+})
+
+const invoiceResponseSchema = z.object({
+  invoice: invoiceSchema,
 })
 
 const progressTotalsSchema = z.object({
@@ -124,6 +159,7 @@ const createProgressEventResponseSchema = z.object({
 
 export type OrderStatus = z.infer<typeof orderStatusSchema>
 export type Order = z.infer<typeof orderSchema>
+export type Invoice = z.infer<typeof invoiceSchema>
 export type ProgressStage = z.infer<typeof progressStageSchema>
 export type ProgressTotals = z.infer<typeof progressTotalsSchema>
 export type ProgressEvent = z.infer<typeof progressEventSchema>
@@ -157,6 +193,52 @@ export interface CreateProgressEventPayload {
 export interface UpdateOrderPayload {
   customer_id?: string
   notes?: string | null
+}
+
+export async function getOrderInvoice(orderId: string): Promise<Invoice> {
+  try {
+    const data = await api.get<unknown>(`/orders/${orderId}/invoice`)
+    return invoiceResponseSchema.parse(data).invoice
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("No invoice has been generated for this order yet.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("Only admins can view invoices.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error("Unable to load invoice.")
+    }
+
+    throw error
+  }
+}
+
+export async function generateOrderInvoice(orderId: string): Promise<Invoice> {
+  try {
+    const data = await api.post<unknown, undefined>(`/orders/${orderId}/invoice`)
+    return invoiceResponseSchema.parse(data).invoice
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("Only admins can generate invoices.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Order no longer exists.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 409) {
+      throw new Error(error.message || "Invoice generation is not allowed for this order.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error("Unable to generate invoice.")
+    }
+
+    throw error
+  }
 }
 
 export async function listOrders(filters: { status?: OrderStatus } = {}): Promise<Order[]> {

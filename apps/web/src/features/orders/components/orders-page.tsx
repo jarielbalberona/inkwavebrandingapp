@@ -25,7 +25,9 @@ import {
 } from "@workspace/ui/components/table"
 import { Textarea } from "@workspace/ui/components/textarea"
 
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type {
+  Invoice,
   Order,
   OrderStatus,
   ProgressEvent,
@@ -36,13 +38,16 @@ import {
   progressStageOptions,
   useCancelOrderMutation,
   useCreateProgressEventMutation,
+  useGenerateOrderInvoiceMutation,
   useOrderQuery,
+  useOrderInvoiceQuery,
   useProgressEventsQuery,
   orderStatusOptions,
   useOrdersQuery,
 } from "@/features/orders/hooks/use-orders"
 
 export function OrdersPage() {
+  const currentUser = useCurrentUser()
   const [status, setStatus] = useState<OrderStatus | "all">("all")
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [selectedLineItemId, setSelectedLineItemId] = useState<string | null>(null)
@@ -63,7 +68,10 @@ export function OrdersPage() {
   const ordersQuery = useOrdersQuery(query)
   const selectedOrderQuery = useOrderQuery(selectedOrderId)
   const progressEventsQuery = useProgressEventsQuery(selectedLineItemId)
+  const isAdmin = currentUser.data?.role === "admin"
+  const orderInvoiceQuery = useOrderInvoiceQuery(selectedOrderId, isAdmin)
   const createProgressEventMutation = useCreateProgressEventMutation()
+  const generateOrderInvoiceMutation = useGenerateOrderInvoiceMutation()
   const cancelOrderMutation = useCancelOrderMutation()
   const selectedOrder =
     selectedOrderQuery.data ?? ordersQuery.data?.find((order) => order.id === selectedOrderId) ?? null
@@ -171,6 +179,22 @@ export function OrdersPage() {
       setProgressSuccess(`Canceled ${order.order_number}. Unconsumed reservations were released by the API.`)
     } catch (error) {
       setProgressError(error instanceof Error ? error.message : "Unable to cancel order.")
+    }
+  }
+
+  async function handleGenerateInvoice() {
+    setProgressError(null)
+    setProgressSuccess(null)
+
+    if (!selectedOrder) {
+      return
+    }
+
+    try {
+      const invoice = await generateOrderInvoiceMutation.mutateAsync(selectedOrder.id)
+      setProgressSuccess(`Generated invoice ${invoice.invoice_number}.`)
+    } catch (error) {
+      setProgressError(error instanceof Error ? error.message : "Unable to generate invoice.")
     }
   }
 
@@ -320,6 +344,17 @@ export function OrdersPage() {
                 </div>
               </div>
 
+              {isAdmin ? (
+                <InvoicePanel
+                  invoice={orderInvoiceQuery.data}
+                  invoiceError={orderInvoiceQuery.isError ? orderInvoiceQuery.error.message : null}
+                  isGenerating={generateOrderInvoiceMutation.isPending}
+                  isLoading={orderInvoiceQuery.isLoading}
+                  onGenerate={handleGenerateInvoice}
+                  orderStatus={selectedOrder.status}
+                />
+              ) : null}
+
               <div className="grid gap-2">
                 <Label>Line item</Label>
                 <Select
@@ -453,6 +488,83 @@ export function OrdersPage() {
           )}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function InvoicePanel({
+  invoice,
+  invoiceError,
+  isGenerating,
+  isLoading,
+  onGenerate,
+  orderStatus,
+}: {
+  invoice: Invoice | undefined
+  invoiceError: string | null
+  isGenerating: boolean
+  isLoading: boolean
+  onGenerate: () => Promise<void>
+  orderStatus: OrderStatus
+}) {
+  const hasInvoice = Boolean(invoice)
+  const canGenerate = !hasInvoice && orderStatus === "completed"
+  const resolvedInvoice = invoice ?? null
+
+  return (
+    <div className="grid gap-3 border p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid gap-1">
+          <p className="font-medium">Invoice</p>
+          <p className="text-muted-foreground">
+            Admin-only snapshot generated from completed order line-item prices.
+          </p>
+        </div>
+        {canGenerate ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isGenerating}
+            onClick={() => {
+              void onGenerate()
+            }}
+          >
+            {isGenerating ? "Generating..." : "Generate invoice"}
+          </Button>
+        ) : null}
+      </div>
+
+      {isLoading ? <p className="text-muted-foreground">Loading invoice state...</p> : null}
+
+      {resolvedInvoice ? (
+        <div className="grid gap-2 md:grid-cols-3">
+          <div className="border p-3">
+            <p className="text-xs text-muted-foreground">Invoice number</p>
+            <p className="font-medium">{resolvedInvoice.invoice_number}</p>
+          </div>
+          <div className="border p-3">
+            <p className="text-xs text-muted-foreground">Subtotal</p>
+            <p className="font-medium">{resolvedInvoice.subtotal}</p>
+          </div>
+          <div className="border p-3">
+            <p className="text-xs text-muted-foreground">Generated</p>
+            <p className="font-medium">{new Date(resolvedInvoice.created_at).toLocaleString()}</p>
+          </div>
+        </div>
+      ) : invoiceError ? (
+        <p className="text-muted-foreground">
+          {invoiceError === "No invoice has been generated for this order yet."
+            ? "No invoice generated yet."
+            : invoiceError}
+        </p>
+      ) : (
+        <p className="text-muted-foreground">
+          {orderStatus === "completed"
+            ? "No invoice generated yet."
+            : "Invoice generation is only allowed after the order is completed."}
+        </p>
+      )}
     </div>
   )
 }
