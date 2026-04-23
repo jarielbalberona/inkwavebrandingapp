@@ -29,6 +29,7 @@ const cupSchema = z.object({
 
 const lidSchema = z.object({
   id: z.string().uuid(),
+  sku: z.string(),
   type: z.enum(["paper", "plastic"]),
   brand: z.string(),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),

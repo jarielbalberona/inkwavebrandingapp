@@ -4,6 +4,7 @@ import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/rol
 
 export interface AdminLidDto {
   id: string
+  sku: string
   type: string
   brand: string
   diameter: string
@@ -36,6 +37,7 @@ export function toLidDto(lid: Lid, user: Pick<SafeUser, "role">): LidDto {
 function toAdminLidDto(lid: Lid): AdminLidDto {
   return {
     id: lid.id,
+    sku: lid.sku,
     type: lid.type,
     brand: lid.brand,
     diameter: lid.diameter,

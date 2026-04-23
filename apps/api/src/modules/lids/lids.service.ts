@@ -3,6 +3,7 @@ import { assertAdmin, AuthorizationError } from "../auth/authorization.js"
 import { LidsRepository } from "./lids.repository.js"
 import type { CreateLidInput, LidListQuery, UpdateLidInput } from "./lids.schemas.js"
 import { toLidDto, type LidDto } from "./lids.types.js"
+import { generateLidSku, wouldRegenerateLidSku } from "../../lib/master-data/sku.js"
 
 export class LidNotFoundError extends Error {
   readonly statusCode = 404
@@ -16,7 +17,15 @@ export class DuplicateLidError extends Error {
   readonly statusCode = 409
 
   constructor() {
-    super("An identical lid already exists")
+    super("Lid SKU already exists")
+  }
+}
+
+export class LidIdentityLockedError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("This lid is already used in historical records. Create a new lid instead of changing SKU-driving fields.")
   }
 }
 
@@ -45,7 +54,15 @@ export class LidsService {
     assertAdmin(user)
 
     try {
-      return toLidDto(await this.lidsRepository.create(input), user)
+      const sku = generateLidSku(input)
+
+      return toLidDto(
+        await this.lidsRepository.create({
+          ...input,
+          sku,
+        }),
+        user,
+      )
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new DuplicateLidError()
@@ -59,7 +76,31 @@ export class LidsService {
     assertAdmin(user)
 
     try {
-      const lid = await this.lidsRepository.update(id, input)
+      const existingLid = await this.lidsRepository.findById(id)
+
+      if (!existingLid) {
+        throw new LidNotFoundError()
+      }
+
+      const regeneratesSku = wouldRegenerateLidSku(existingLid, input)
+
+      if (regeneratesSku && (await this.lidsRepository.hasHistoricalUsage(id))) {
+        throw new LidIdentityLockedError()
+      }
+
+      const lid = await this.lidsRepository.update(id, {
+        ...input,
+        ...(regeneratesSku
+          ? {
+              sku: generateLidSku({
+                diameter: input.diameter ?? existingLid.diameter,
+                brand: input.brand ?? existingLid.brand,
+                shape: input.shape ?? existingLid.shape,
+                color: input.color ?? existingLid.color,
+              }),
+            }
+          : undefined),
+      })
 
       if (!lid) {
         throw new LidNotFoundError()
@@ -67,7 +108,11 @@ export class LidsService {
 
       return toLidDto(lid, user)
     } catch (error) {
-      if (error instanceof AuthorizationError || error instanceof LidNotFoundError) {
+      if (
+        error instanceof AuthorizationError ||
+        error instanceof LidIdentityLockedError ||
+        error instanceof LidNotFoundError
+      ) {
         throw error
       }
 

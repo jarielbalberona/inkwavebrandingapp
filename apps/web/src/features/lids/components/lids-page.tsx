@@ -24,7 +24,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import {
@@ -58,6 +57,7 @@ import {
   lidShapes,
   lidTypes,
 } from "@/features/lids/types/lid-contract"
+import { generateLidSkuPreview } from "@/features/lids/types/sku"
 
 const lidFormSchema = z
   .object({
@@ -137,10 +137,24 @@ export function LidsPage() {
   })
 
   const selectedType = useWatch({ control: form.control, name: "type" })
+  const selectedBrand = useWatch({ control: form.control, name: "brand" })
+  const selectedDiameter = useWatch({ control: form.control, name: "diameter" })
+  const selectedShape = useWatch({ control: form.control, name: "shape" })
+  const selectedColor = useWatch({ control: form.control, name: "color" })
   const availableBrands = useMemo(() => getAllowedLidBrands(selectedType), [selectedType])
   const availableDiameters = useMemo(() => getAllowedLidDiameters(selectedType), [selectedType])
   const availableShapes = useMemo(() => getAllowedLidShapes(selectedType), [selectedType])
   const availableColors = useMemo(() => getAllowedLidColors(selectedType), [selectedType])
+  const skuPreview = useMemo(
+    () =>
+      generateLidSkuPreview({
+        diameter: selectedDiameter,
+        brand: selectedBrand,
+        shape: selectedShape,
+        color: selectedColor,
+      }),
+    [selectedDiameter, selectedBrand, selectedShape, selectedColor],
+  )
 
   useEffect(() => {
     if (!dialogOpen) {
@@ -236,6 +250,7 @@ export function LidsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>SKU</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Brand</TableHead>
                 <TableHead>Diameter</TableHead>
@@ -248,6 +263,7 @@ export function LidsPage() {
             <TableBody>
               {lidsQuery.data?.map((lid) => (
                 <TableRow key={lid.id} className="cursor-pointer" onClick={() => openDetailDialog(lid)}>
+                  <TableCell className="font-medium">{lid.sku}</TableCell>
                   <TableCell>{formatLidContractLabel(lid.type)}</TableCell>
                   <TableCell>{formatLidContractLabel(lid.brand)}</TableCell>
                   <TableCell>{lid.diameter}</TableCell>
@@ -298,6 +314,7 @@ export function LidsPage() {
           <Form {...form}>
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
+                <ReadOnlySkuField value={skuPreview} />
                 <SelectFormField control={form.control} disabled={!isAdmin} label="Type" name="type" options={lidTypes} />
                 <SelectFormField control={form.control} disabled={!isAdmin} label="Brand" name="brand" options={availableBrands} />
                 <SelectFormField control={form.control} disabled={!isAdmin} label="Diameter" name="diameter" options={availableDiameters} />
@@ -344,6 +361,20 @@ export function LidsPage() {
   )
 }
 
+function ReadOnlySkuField({ value }: { value: string }) {
+  return (
+    <FormItem>
+      <FormLabel>SKU</FormLabel>
+      <FormControl>
+        <Input disabled readOnly value={value} />
+      </FormControl>
+      <FormDescription>
+        Generated automatically from diameter, brand, shape, and color when required.
+      </FormDescription>
+    </FormItem>
+  )
+}
+
 function SelectFormField({
   control,
   disabled,
@@ -378,7 +409,6 @@ function SelectFormField({
               ))}
             </SelectContent>
           </Select>
-          
         </FormItem>
       )}
     />
@@ -411,7 +441,6 @@ function CurrencyFormField({
               onChange={(value) => field.onChange(value ?? 0)}
             />
           </FormControl>
-          
         </FormItem>
       )}
     />

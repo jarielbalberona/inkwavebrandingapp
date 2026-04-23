@@ -16,7 +16,12 @@ import {
   lidListQuerySchema,
   updateLidSchema,
 } from "./lids.schemas.js"
-import { DuplicateLidError, LidNotFoundError, LidsService } from "./lids.service.js"
+import {
+  DuplicateLidError,
+  LidIdentityLockedError,
+  LidNotFoundError,
+  LidsService,
+} from "./lids.service.js"
 
 interface LidsRouteContext {
   env: ApiEnv & { authSessionSecret: string }
@@ -110,7 +115,11 @@ function handleLidsError(response: ServerResponse, error: unknown) {
     return
   }
 
-  if (error instanceof LidNotFoundError || error instanceof DuplicateLidError) {
+  if (
+    error instanceof LidNotFoundError ||
+    error instanceof DuplicateLidError ||
+    error instanceof LidIdentityLockedError
+  ) {
     sendJson(response, error.statusCode, { error: error.message })
     return
   }

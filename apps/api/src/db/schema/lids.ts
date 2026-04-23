@@ -8,6 +8,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  varchar,
 } from "drizzle-orm/pg-core"
 
 export const lidTypeEnum = pgEnum("lid_type", ["paper", "plastic"])
@@ -31,6 +32,7 @@ export const lids = pgTable(
   "lids",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    sku: varchar("sku", { length: 80 }).notNull(),
     type: lidTypeEnum("type").notNull(),
     brand: lidBrandEnum("brand").notNull(),
     diameter: lidDiameterEnum("diameter").notNull(),
@@ -45,6 +47,7 @@ export const lids = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex("lids_sku_unique_idx").on(sql`lower(${table.sku})`),
     uniqueIndex("lids_contract_identity_unique_idx").on(
       table.type,
       table.brand,
@@ -54,6 +57,9 @@ export const lids = pgTable(
     ),
     check("lids_cost_price_non_negative", sql`${table.costPrice} >= 0`),
     check("lids_default_sell_price_non_negative", sql`${table.defaultSellPrice} >= 0`),
+    check("lids_sku_not_blank", sql`length(trim(${table.sku})) > 0`),
+    check("lids_sku_normalized", sql`${table.sku} = upper(${table.sku})`),
+    check("lids_sku_allowed_characters", sql`${table.sku} ~ '^[A-Z0-9][A-Z0-9_-]{0,79}$'`),
     check(
       "lids_type_brand_contract",
       sql`(

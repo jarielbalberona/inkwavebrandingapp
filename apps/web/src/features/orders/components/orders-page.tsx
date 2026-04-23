@@ -620,7 +620,7 @@ function formatLineItems(order: Order): string {
 }
 
 function formatOrderItemLabel(item: Order["items"][number]): string {
-  return item.item_type === "cup" ? item.cup.sku : `${item.lid.diameter} ${item.lid.shape}`
+  return item.item_type === "cup" ? item.cup.sku : item.lid.sku
 }
 
 function formatOrderItemDetails(item: Order["items"][number]): string {

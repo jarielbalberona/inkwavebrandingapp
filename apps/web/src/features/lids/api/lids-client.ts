@@ -4,6 +4,7 @@ import { ApiClientError, api } from "@/lib/api"
 
 export const lidSchema = z.object({
   id: z.string().uuid(),
+  sku: z.string(),
   type: z.enum(["paper", "plastic"]),
   brand: z.enum(["dabba", "grecoopack", "china_supplier", "other_supplier"]),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
@@ -87,7 +88,12 @@ async function sendLidRequest(
     }
 
     if (error instanceof ApiClientError && error.status === 409) {
-      throw new LidsApiError("An identical lid already exists.", error.status)
+      throw new LidsApiError(
+        error.message.includes("historical records")
+          ? error.message
+          : "Lid SKU already exists for that contract combination.",
+        error.status,
+      )
     }
 
     if (error instanceof ApiClientError) {

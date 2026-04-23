@@ -5,6 +5,14 @@ import { hasLidHistoricalUsage } from "../../lib/master-data/item-history.js"
 import { lids, type Lid } from "../../db/schema/index.js"
 import type { CreateLidInput, UpdateLidInput } from "./lids.schemas.js"
 
+export interface PersistedCreateLidInput extends CreateLidInput {
+  sku: string
+}
+
+export interface PersistedUpdateLidInput extends UpdateLidInput {
+  sku?: string
+}
+
 export class LidsRepository {
   constructor(private readonly db: DatabaseClient) {}
 
@@ -13,7 +21,7 @@ export class LidsRepository {
       .select()
       .from(lids)
       .where(options.includeInactive ? undefined : eq(lids.isActive, true))
-      .orderBy(asc(lids.type), asc(lids.brand), asc(lids.diameter), asc(lids.shape))
+      .orderBy(asc(lids.sku))
   }
 
   async findById(id: string): Promise<Lid | undefined> {
@@ -25,7 +33,7 @@ export class LidsRepository {
     return hasLidHistoricalUsage(this.db, id)
   }
 
-  async create(input: CreateLidInput): Promise<Lid> {
+  async create(input: PersistedCreateLidInput): Promise<Lid> {
     const rows = await this.db.insert(lids).values(input).returning()
     const lid = rows[0]
 
@@ -36,7 +44,7 @@ export class LidsRepository {
     return lid
   }
 
-  async update(id: string, input: UpdateLidInput): Promise<Lid | undefined> {
+  async update(id: string, input: PersistedUpdateLidInput): Promise<Lid | undefined> {
     const rows = await this.db
       .update(lids)
       .set({

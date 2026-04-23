@@ -17,6 +17,7 @@ interface OrderCupDto {
 
 interface OrderLidDto {
   id: string
+  sku: string
   type: string
   brand: string
   diameter: string
@@ -164,6 +165,7 @@ function toCupDto(cup: Cup): OrderCupDto {
 function toLidDto(lid: Lid): OrderLidDto {
   return {
     id: lid.id,
+    sku: lid.sku,
     type: lid.type,
     brand: lid.brand,
     diameter: lid.diameter,
