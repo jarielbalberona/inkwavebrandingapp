@@ -21,6 +21,7 @@ import { UsersRepository } from "../users/users.repository.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
+  orderListQuerySchema,
   updateOrderSchema,
 } from "./orders.schemas.js"
 import { OrdersRepository } from "./orders.repository.js"
@@ -52,11 +53,31 @@ export async function handleOrdersRoute(
 ): Promise<boolean> {
   const path = getRequestPath(request)
 
+  if (path === "/orders" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const query = orderListQuerySchema.parse(
+        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
+      )
+
+      sendJson(response, 200, { orders: await service.list(query, user) })
+    })
+    return true
+  }
+
   if (path === "/orders" && request.method === "POST") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
       const input = createOrderSchema.parse(await readJsonBody(request))
 
       sendJson(response, 201, { order: await service.create(input, user) })
+    })
+    return true
+  }
+
+  const getOrderMatch = path.match(/^\/orders\/([^/]+)$/)
+
+  if (getOrderMatch && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { order: await service.getById(getOrderMatch[1] ?? "", user) })
     })
     return true
   }

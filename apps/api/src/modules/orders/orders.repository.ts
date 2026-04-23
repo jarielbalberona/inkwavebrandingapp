@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm"
+import { asc, desc, eq } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
@@ -71,6 +71,22 @@ export class OrdersRepository {
           },
         },
       },
+    })
+  }
+
+  async listWithRelations(options: { status?: Order["status"] } = {}) {
+    return this.db.query.orders.findMany({
+      where: options.status ? eq(orders.status, options.status) : undefined,
+      with: {
+        customer: true,
+        items: {
+          with: {
+            cup: true,
+          },
+        },
+      },
+      orderBy: [desc(orders.createdAt)],
+      limit: 200,
     })
   }
 

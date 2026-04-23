@@ -9,9 +9,11 @@ import { InventoryService } from "../inventory/inventory.service.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
+  orderListQuerySchema,
   updateOrderSchema,
   type CreateOrderInput,
   type CreateOrderLineItemProgressEventInput,
+  type OrderListQuery,
   type OrderLineItemProgressStage,
   type OrderStatus,
   type UpdateOrderInput,
@@ -143,6 +145,23 @@ export class OrdersService {
     private readonly cupsRepository: CupsRepository,
     private readonly createInventoryService: (db: DatabaseClient) => InventoryService,
   ) {}
+
+  async list(query: OrderListQuery, user: SafeUser): Promise<OrderDto[]> {
+    const parsedQuery = orderListQuerySchema.parse(query)
+    const orders = await this.ordersRepository.listWithRelations(parsedQuery)
+
+    return orders.map((order) => toOrderDto(order, user))
+  }
+
+  async getById(orderId: string, user: SafeUser): Promise<OrderDto> {
+    const order = await this.ordersRepository.findByIdWithRelations(orderId)
+
+    if (!order) {
+      throw new OrderNotFoundError()
+    }
+
+    return toOrderDto(order, user)
+  }
 
   async create(input: CreateOrderInput, user: SafeUser): Promise<OrderDto> {
     const parsedInput = createOrderSchema.parse(input)

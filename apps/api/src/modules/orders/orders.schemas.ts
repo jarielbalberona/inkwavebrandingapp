@@ -67,10 +67,15 @@ export const updateOrderSchema = z
     message: "At least one supported order field is required",
   })
 
+export const orderListQuerySchema = z.object({
+  status: orderStatusSchema.optional(),
+})
+
 export type OrderStatus = z.infer<typeof orderStatusSchema>
 export type OrderLineItemProgressStage = z.infer<typeof orderLineItemProgressStageSchema>
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>
+export type OrderListQuery = z.infer<typeof orderListQuerySchema>
 export type CreateOrderLineItemProgressEventInput = z.infer<
   typeof createOrderLineItemProgressEventSchema
 >
