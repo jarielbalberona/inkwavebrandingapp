@@ -1,9 +1,31 @@
-import { useDeferredValue, useMemo, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useState } from "react"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
@@ -24,7 +46,20 @@ import {
   useUpdateCustomerMutation,
 } from "@/features/customers/hooks/use-customers"
 
-const emptyForm: CustomerPayload = {
+const customerFormSchema = z.object({
+  customerCode: z.string().trim().max(80).optional(),
+  businessName: z.string().trim().min(1).max(160),
+  contactPerson: z.string().trim().max(160).optional(),
+  contactNumber: z.string().trim().max(40).optional(),
+  email: z.union([z.string().trim().email().max(320), z.literal("")]).optional(),
+  address: z.string().trim().max(500).optional(),
+  notes: z.string().trim().max(500).optional(),
+  isActive: z.boolean(),
+})
+
+type CustomerFormValues = z.infer<typeof customerFormSchema>
+
+const emptyFormValues: CustomerFormValues = {
   customerCode: "",
   businessName: "",
   contactPerson: "",
@@ -42,9 +77,9 @@ export function CustomersPage() {
   const customersQuery = useCustomersQuery({ includeInactive: true, search: deferredSearch })
   const createCustomer = useCreateCustomerMutation()
   const updateCustomer = useUpdateCustomerMutation()
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
-  const [form, setForm] = useState<CustomerPayload>(emptyForm)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const selectedCustomer = useMemo(
     () => customersQuery.data?.find((customer) => customer.id === selectedCustomerId) ?? null,
     [customersQuery.data, selectedCustomerId],
@@ -52,49 +87,60 @@ export function CustomersPage() {
   const isAdmin = currentUser.data?.role === "admin"
   const canEditConfidentialFields = isAdmin && (!selectedCustomer || "contact_person" in selectedCustomer)
 
-  const saveCustomer = () => {
-    const validation = validateForm(form)
+  const form = useForm<CustomerFormValues>({
+    resolver: zodResolver(customerFormSchema),
+    defaultValues: emptyFormValues,
+  })
 
-    setFormError(validation)
-
-    if (validation) {
+  useEffect(() => {
+    if (!dialogOpen) {
       return
     }
 
-    const payload = toPayload(form)
+    form.reset(selectedCustomer ? toFormValues(selectedCustomer) : emptyFormValues)
+  }, [dialogOpen, selectedCustomer, form])
 
-    if (selectedCustomer) {
-      updateCustomer.mutate(
-        { id: selectedCustomer.id, payload },
-        {
-          onError: (error) => setFormError(error.message),
-        },
-      )
-      return
+  async function onSubmit(values: CustomerFormValues) {
+    setSubmitError(null)
+
+    const payload = toPayload(values)
+
+    try {
+      if (selectedCustomer) {
+        await updateCustomer.mutateAsync({ id: selectedCustomer.id, payload })
+      } else {
+        await createCustomer.mutateAsync(payload)
+      }
+
+      setDialogOpen(false)
+      setSelectedCustomerId(null)
+      form.reset(emptyFormValues)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to save customer.")
     }
-
-    createCustomer.mutate(payload, {
-      onError: (error) => setFormError(error.message),
-      onSuccess: () => {
-        setForm(emptyForm)
-      },
-    })
   }
 
-  const resetForm = () => {
+  function openCreateDialog() {
     setSelectedCustomerId(null)
-    setForm(emptyForm)
-    setFormError(null)
+    setDialogOpen(true)
+  }
+
+  function openDetailDialog(customer: Customer) {
+    setSelectedCustomerId(customer.id)
+    setDialogOpen(true)
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
+    <div className="grid gap-4">
       <Card className="rounded-none">
-        <CardHeader>
-          <CardTitle>Customer Records</CardTitle>
-          <CardDescription>
-            Maintain first-class customers for order selection. Staff receive operational customer summaries only.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="grid gap-1">
+            <CardTitle>Customer Records</CardTitle>
+            <CardDescription>
+              Maintain first-class customers for order selection. Staff receive operational customer summaries only.
+            </CardDescription>
+          </div>
+          {isAdmin ? <Button onClick={openCreateDialog}>Create Customer</Button> : null}
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
@@ -137,12 +183,7 @@ export function CustomersPage() {
                 <TableRow
                   key={customer.id}
                   className="cursor-pointer"
-                  data-state={customer.id === selectedCustomerId ? "selected" : undefined}
-                  onClick={() => {
-                    setSelectedCustomerId(customer.id)
-                    setForm(toFormState(customer))
-                    setFormError(null)
-                  }}
+                  onClick={() => openDetailDialog(customer)}
                 >
                   <TableCell className="font-medium">{customer.business_name}</TableCell>
                   <TableCell>{customer.customer_code ?? "None"}</TableCell>
@@ -159,175 +200,175 @@ export function CustomersPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-none">
-        <CardHeader>
-          <CardTitle>{selectedCustomer ? "Customer Detail" : "Create Customer"}</CardTitle>
-          <CardDescription>
-            {isAdmin
-              ? "Admins can create and edit customer records."
-              : "Staff can inspect customer records but cannot edit confidential customer data."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          {formError ? (
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) {
+            setSelectedCustomerId(null)
+            form.reset(emptyFormValues)
+            setSubmitError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedCustomer ? "Customer Detail" : "Create Customer"}</DialogTitle>
+            <DialogDescription>
+              {isAdmin
+                ? "Maintain customer records with shared form primitives."
+                : "Staff can inspect customer records but cannot edit confidential customer data."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {submitError ? (
             <Alert variant="destructive">
-              <AlertDescription>{formError}</AlertDescription>
+              <AlertDescription>{submitError}</AlertDescription>
             </Alert>
           ) : null}
 
-          <CustomerField
-            label="Customer code"
-            value={form.customerCode ?? ""}
-            disabled={!isAdmin}
-            onChange={(value) => setForm({ ...form, customerCode: value })}
-          />
-          <CustomerField
-            label="Business or customer name"
-            value={form.businessName}
-            disabled={!isAdmin}
-            onChange={(value) => setForm({ ...form, businessName: value })}
-          />
-          <CustomerField
-            label="Contact person"
-            value={form.contactPerson ?? ""}
-            disabled={!canEditConfidentialFields}
-            onChange={(value) => setForm({ ...form, contactPerson: value })}
-          />
-          <CustomerField
-            label="Contact number"
-            value={form.contactNumber ?? ""}
-            disabled={!canEditConfidentialFields}
-            onChange={(value) => setForm({ ...form, contactNumber: value })}
-          />
-          <CustomerField
-            label="Email"
-            value={form.email ?? ""}
-            disabled={!canEditConfidentialFields}
-            onChange={(value) => setForm({ ...form, email: value })}
-          />
-          <CustomerTextArea
-            label="Address"
-            value={form.address ?? ""}
-            disabled={!canEditConfidentialFields}
-            onChange={(value) => setForm({ ...form, address: value })}
-          />
-          <CustomerTextArea
-            label="Notes"
-            value={form.notes ?? ""}
-            disabled={!canEditConfidentialFields}
-            onChange={(value) => setForm({ ...form, notes: value })}
-          />
-
-          {isAdmin ? (
-            <>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(event) => setForm({ ...form, isActive: event.target.checked })}
-                />
-                Active customer record
-              </label>
-              <div className="flex gap-2">
-                <Button type="button" onClick={saveCustomer} disabled={createCustomer.isPending || updateCustomer.isPending}>
-                  {selectedCustomer ? "Save Changes" : "Create Customer"}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  New
-                </Button>
+          <Form {...form}>
+            <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextFormField control={form.control} disabled={!isAdmin} label="Customer code" name="customerCode" />
+                <TextFormField control={form.control} disabled={!isAdmin} label="Business or customer name" name="businessName" />
+                <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact person" name="contactPerson" />
+                <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact number" name="contactNumber" />
+                <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Email" name="email" />
               </div>
-            </>
-          ) : null}
-        </CardContent>
-      </Card>
+
+              <TextAreaFormField control={form.control} disabled={!canEditConfidentialFields} label="Address" name="address" />
+              <TextAreaFormField control={form.control} disabled={!canEditConfidentialFields} label="Notes" name="notes" />
+
+              <FormField
+                control={form.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-3 rounded-none border p-3">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        disabled={!isAdmin}
+                        onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+                      />
+                    </FormControl>
+                    <div className="grid gap-1">
+                      <FormLabel>Active customer record</FormLabel>
+                      <FormDescription>Inactive customers remain searchable for history but should not be used for new work.</FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter showCloseButton>
+                {isAdmin ? (
+                  <Button type="submit" disabled={createCustomer.isPending || updateCustomer.isPending}>
+                    {selectedCustomer ? "Save Changes" : "Create Customer"}
+                  </Button>
+                ) : null}
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-function CustomerField({
+function TextFormField({
+  control,
   disabled,
   label,
-  onChange,
-  value,
+  name,
 }: {
-  disabled?: boolean
+  control: ReturnType<typeof useForm<CustomerFormValues>>["control"]
+  disabled: boolean
   label: string
-  onChange: (value: string) => void
-  value: string
+  name: keyof CustomerFormValues
 }) {
   return (
-    <div className="grid gap-2">
-      <Label>{label}</Label>
-      <Input value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
-    </div>
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              disabled={disabled}
+              value={typeof field.value === "string" ? field.value : ""}
+              onChange={(event) => field.onChange(event.target.value)}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   )
 }
 
-function CustomerTextArea({
+function TextAreaFormField({
+  control,
   disabled,
   label,
-  onChange,
-  value,
+  name,
 }: {
-  disabled?: boolean
+  control: ReturnType<typeof useForm<CustomerFormValues>>["control"]
+  disabled: boolean
   label: string
-  onChange: (value: string) => void
-  value: string
+  name: "address" | "notes"
 }) {
   return (
-    <div className="grid gap-2">
-      <Label>{label}</Label>
-      <Textarea value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
-    </div>
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Textarea
+              disabled={disabled}
+              value={field.value ?? ""}
+              onChange={(event) => field.onChange(event.target.value)}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   )
 }
 
-function formatContact(customer: Customer): string {
-  return customer.contact_person ?? customer.email ?? customer.contact_number ?? "Restricted"
-}
-
-function toFormState(customer: Customer): CustomerPayload {
+function toFormValues(customer: Customer): CustomerFormValues {
   return {
     customerCode: customer.customer_code ?? "",
     businessName: customer.business_name,
-    contactPerson: customer.contact_person ?? "",
-    contactNumber: customer.contact_number ?? "",
-    email: customer.email ?? "",
-    address: customer.address ?? "",
-    notes: customer.notes ?? "",
+    contactPerson: "contact_person" in customer ? customer.contact_person ?? "" : "",
+    contactNumber: "contact_number" in customer ? customer.contact_number ?? "" : "",
+    email: "email" in customer ? customer.email ?? "" : "",
+    address: "address" in customer ? customer.address ?? "" : "",
+    notes: "notes" in customer ? customer.notes ?? "" : "",
     isActive: customer.is_active,
   }
 }
 
-function toPayload(form: CustomerPayload): CustomerPayload {
+function toPayload(values: CustomerFormValues): CustomerPayload {
   return {
-    customerCode: cleanOptional(form.customerCode),
-    businessName: form.businessName.trim(),
-    contactPerson: cleanOptional(form.contactPerson),
-    contactNumber: cleanOptional(form.contactNumber),
-    email: cleanOptional(form.email),
-    address: cleanOptional(form.address),
-    notes: cleanOptional(form.notes),
-    isActive: form.isActive,
+    customerCode: values.customerCode?.trim() || undefined,
+    businessName: values.businessName.trim(),
+    contactPerson: values.contactPerson?.trim() || undefined,
+    contactNumber: values.contactNumber?.trim() || undefined,
+    email: values.email?.trim() || undefined,
+    address: values.address?.trim() || undefined,
+    notes: values.notes?.trim() || undefined,
+    isActive: values.isActive,
   }
 }
 
-function cleanOptional(value: string | undefined): string | undefined {
-  return value?.trim() || undefined
-}
-
-function validateForm(form: CustomerPayload): string | null {
-  if (!form.businessName.trim()) {
-    return "Business or customer name is required."
+function formatContact(customer: Customer) {
+  if ("contact_person" in customer && customer.contact_person) {
+    return customer.contact_person
   }
 
-  if (form.customerCode && !/^[a-z0-9][a-z0-9_-]{0,79}$/i.test(form.customerCode.trim())) {
-    return "Customer code must use letters, numbers, hyphens, or underscores."
-  }
-
-  if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-    return "Enter a valid email address."
-  }
-
-  return null
+  return "Restricted"
 }

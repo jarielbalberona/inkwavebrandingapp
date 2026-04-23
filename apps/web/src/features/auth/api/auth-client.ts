@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
+import { ApiClientError, api, skipErrorToast } from "@/lib/api"
 
 export const authenticatedUserSchema = z.object({
   id: z.string().uuid(),
@@ -30,49 +30,55 @@ export class AuthApiError extends Error {
 }
 
 export async function fetchCurrentUser(): Promise<AuthenticatedUser | null> {
-  const response = await fetch(`${apiBaseUrl}/auth/me`, {
-    credentials: "include",
-  })
+  try {
+    const response = await api.get<unknown>("/auth/me", {
+      meta: skipErrorToast(),
+    })
 
-  if (response.status === 401) {
-    return null
+    return authResponseSchema.parse(response).user
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 401) {
+      return null
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new AuthApiError("Unable to load current user", error.status)
+    }
+
+    throw error
   }
-
-  if (!response.ok) {
-    throw new AuthApiError("Unable to load current user", response.status)
-  }
-
-  return authResponseSchema.parse(await response.json()).user
 }
 
 export async function login(input: LoginInput): Promise<AuthenticatedUser> {
-  const response = await fetch(`${apiBaseUrl}/auth/login`, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(input),
-  })
+  try {
+    const response = await api.post<unknown, LoginInput>("/auth/login", input, {
+      meta: skipErrorToast(),
+    })
 
-  if (response.status === 401) {
-    throw new AuthApiError("Invalid email or password", response.status)
+    return authResponseSchema.parse(response).user
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 401) {
+      throw new AuthApiError("Invalid email or password", error.status)
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new AuthApiError("Unable to sign in", error.status)
+    }
+
+    throw error
   }
-
-  if (!response.ok) {
-    throw new AuthApiError("Unable to sign in", response.status)
-  }
-
-  return authResponseSchema.parse(await response.json()).user
 }
 
 export async function logout(): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/auth/logout`, {
-    method: "POST",
-    credentials: "include",
-  })
+  try {
+    await api.post("/auth/logout", undefined, {
+      meta: skipErrorToast(),
+    })
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      throw new AuthApiError("Unable to sign out", error.status)
+    }
 
-  if (!response.ok) {
-    throw new AuthApiError("Unable to sign out", response.status)
+    throw error
   }
 }

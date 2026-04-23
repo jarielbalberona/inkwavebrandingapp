@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
+import { ApiClientError, api } from "@/lib/api"
 
 export const cupSchema = z.object({
   id: z.string().uuid(),
@@ -46,50 +46,46 @@ export class CupsApiError extends Error {
 }
 
 export async function listCups(): Promise<Cup[]> {
-  const response = await fetch(`${apiBaseUrl}/cups?include_inactive=true`, {
-    credentials: "include",
-  })
+  try {
+    const response = await api.get<unknown>("/cups?include_inactive=true")
+    return cupsResponseSchema.parse(response).cups
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      throw new CupsApiError("Unable to load cups", error.status)
+    }
 
-  if (!response.ok) {
-    throw new CupsApiError("Unable to load cups", response.status)
+    throw error
   }
-
-  return cupsResponseSchema.parse(await response.json()).cups
 }
 
 export async function createCup(payload: CupPayload): Promise<Cup> {
   const response = await sendCupRequest("/cups", "POST", payload)
-
-  return cupResponseSchema.parse(await response.json()).cup
+  return cupResponseSchema.parse(response).cup
 }
 
 export async function updateCup(id: string, payload: CupPayload): Promise<Cup> {
   const response = await sendCupRequest(`/cups/${id}`, "PATCH", payload)
-
-  return cupResponseSchema.parse(await response.json()).cup
+  return cupResponseSchema.parse(response).cup
 }
 
 async function sendCupRequest(path: string, method: "POST" | "PATCH", payload: CupPayload) {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  })
+  try {
+    return method === "POST"
+      ? await api.post<unknown, typeof payload>(path, payload)
+      : await api.patch<unknown, typeof payload>(path, payload)
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 409) {
+      throw new CupsApiError("SKU already exists. Use a different SKU.", error.status)
+    }
 
-  if (response.status === 409) {
-    throw new CupsApiError("SKU already exists. Use a different SKU.", response.status)
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new CupsApiError("Only admins can change cup catalog records.", error.status)
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new CupsApiError("Unable to save cup", error.status)
+    }
+
+    throw error
   }
-
-  if (response.status === 403) {
-    throw new CupsApiError("Only admins can change cup catalog records.", response.status)
-  }
-
-  if (!response.ok) {
-    throw new CupsApiError("Unable to save cup", response.status)
-  }
-
-  return response
 }

@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
+import { ApiClientError, api } from "@/lib/api"
 
 export const customerSchema = z.object({
   id: z.string().uuid(),
@@ -56,27 +56,29 @@ export async function listCustomers(filters: {
   }
 
   const queryString = searchParams.toString()
-  const response = await fetch(`${apiBaseUrl}/customers${queryString ? `?${queryString}` : ""}`, {
-    credentials: "include",
-  })
+  try {
+    const response = await api.get<unknown>(
+      `/customers${queryString ? `?${queryString}` : ""}`,
+    )
 
-  if (!response.ok) {
-    throw new CustomersApiError("Unable to load customers.", response.status)
+    return customersResponseSchema.parse(response).customers
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      throw new CustomersApiError("Unable to load customers.", error.status)
+    }
+
+    throw error
   }
-
-  return customersResponseSchema.parse(await response.json()).customers
 }
 
 export async function createCustomer(payload: CustomerPayload): Promise<Customer> {
   const response = await sendCustomerRequest("/customers", "POST", payload)
-
-  return customerResponseSchema.parse(await response.json()).customer
+  return customerResponseSchema.parse(response).customer
 }
 
 export async function updateCustomer(id: string, payload: Partial<CustomerPayload>): Promise<Customer> {
   const response = await sendCustomerRequest(`/customers/${id}`, "PATCH", payload)
-
-  return customerResponseSchema.parse(await response.json()).customer
+  return customerResponseSchema.parse(response).customer
 }
 
 async function sendCustomerRequest(
@@ -84,34 +86,34 @@ async function sendCustomerRequest(
   method: "POST" | "PATCH",
   payload: CustomerPayload | Partial<CustomerPayload>,
 ) {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  })
+  try {
+    return method === "POST"
+      ? await api.post<unknown, typeof payload>(path, payload)
+      : await api.patch<unknown, typeof payload>(path, payload)
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 400) {
+      throw new CustomersApiError("Check the customer fields and try again.", error.status)
+    }
 
-  if (response.status === 400) {
-    throw new CustomersApiError("Check the customer fields and try again.", response.status)
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new CustomersApiError("Only admins can change customer records.", error.status)
+    }
+
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new CustomersApiError("Customer no longer exists.", error.status)
+    }
+
+    if (error instanceof ApiClientError && error.status === 409) {
+      throw new CustomersApiError(
+        "Customer code already exists. Use a different code.",
+        error.status,
+      )
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new CustomersApiError("Unable to save customer.", error.status)
+    }
+
+    throw error
   }
-
-  if (response.status === 403) {
-    throw new CustomersApiError("Only admins can change customer records.", response.status)
-  }
-
-  if (response.status === 404) {
-    throw new CustomersApiError("Customer no longer exists.", response.status)
-  }
-
-  if (response.status === 409) {
-    throw new CustomersApiError("Customer code already exists. Use a different code.", response.status)
-  }
-
-  if (!response.ok) {
-    throw new CustomersApiError("Unable to save customer.", response.status)
-  }
-
-  return response
 }

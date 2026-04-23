@@ -1,11 +1,32 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
 import {
   Table,
   TableBody,
@@ -17,14 +38,25 @@ import {
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type { Cup, CupPayload } from "@/features/cups/api/cups-client"
-import {
-  useCreateCupMutation,
-  useCupsQuery,
-  useUpdateCupMutation,
-} from "@/features/cups/hooks/use-cups"
+import { useCreateCupMutation, useCupsQuery, useUpdateCupMutation } from "@/features/cups/hooks/use-cups"
 import { normalizeSku, skuSchema } from "@/features/cups/types/sku"
 
-const emptyForm: CupPayload = {
+const cupFormSchema = z.object({
+  sku: skuSchema,
+  brand: z.string().trim().min(1).max(160),
+  size: z.string().trim().min(1).max(80),
+  dimension: z.string().trim().min(1).max(120),
+  material: z.string().trim().max(80).optional(),
+  color: z.string().trim().max(80).optional(),
+  min_stock: z.number().int().nonnegative(),
+  cost_price: z.number().nonnegative(),
+  default_sell_price: z.number().nonnegative(),
+  is_active: z.boolean(),
+})
+
+type CupFormValues = z.infer<typeof cupFormSchema>
+
+const emptyFormValues: CupFormValues = {
   sku: "",
   brand: "",
   size: "",
@@ -32,8 +64,8 @@ const emptyForm: CupPayload = {
   material: "",
   color: "",
   min_stock: 0,
-  cost_price: "0",
-  default_sell_price: "0",
+  cost_price: 0,
+  default_sell_price: 0,
   is_active: true,
 }
 
@@ -42,57 +74,76 @@ export function CupsPage() {
   const cupsQuery = useCupsQuery()
   const createCup = useCreateCupMutation()
   const updateCup = useUpdateCupMutation()
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCupId, setSelectedCupId] = useState<string | null>(null)
-  const [form, setForm] = useState<CupPayload>(emptyForm)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const isAdmin = currentUser.data?.role === "admin"
   const selectedCup = useMemo(
     () => cupsQuery.data?.find((cup) => cup.id === selectedCupId) ?? null,
     [cupsQuery.data, selectedCupId],
   )
-  const isAdmin = currentUser.data?.role === "admin"
 
-  const saveCup = () => {
-    const validation = validateForm(form)
+  const form = useForm<CupFormValues>({
+    resolver: zodResolver(cupFormSchema),
+    defaultValues: emptyFormValues,
+  })
 
-    setFormError(validation)
-
-    if (validation) {
+  useEffect(() => {
+    if (!dialogOpen) {
       return
     }
 
-    const payload = {
-      ...form,
-      sku: normalizeSku(form.sku),
-      material: form.material || undefined,
-      color: form.color || undefined,
+    form.reset(selectedCup ? toFormValues(selectedCup) : emptyFormValues)
+  }, [dialogOpen, selectedCup, form])
+
+  async function onSubmit(values: CupFormValues) {
+    setSubmitError(null)
+
+    const payload: CupPayload = {
+      ...values,
+      sku: normalizeSku(values.sku),
+      material: values.material?.trim() || undefined,
+      color: values.color?.trim() || undefined,
+      cost_price: values.cost_price.toFixed(2),
+      default_sell_price: values.default_sell_price.toFixed(2),
     }
 
-    if (selectedCup) {
-      updateCup.mutate(
-        { id: selectedCup.id, payload },
-        {
-          onError: (error) => setFormError(error.message),
-        },
-      )
-      return
-    }
+    try {
+      if (selectedCup) {
+        await updateCup.mutateAsync({ id: selectedCup.id, payload })
+      } else {
+        await createCup.mutateAsync(payload)
+      }
 
-    createCup.mutate(payload, {
-      onError: (error) => setFormError(error.message),
-      onSuccess: () => {
-        setForm(emptyForm)
-      },
-    })
+      setDialogOpen(false)
+      setSelectedCupId(null)
+      form.reset(emptyFormValues)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to save cup.")
+    }
+  }
+
+  function openCreateDialog() {
+    setSelectedCupId(null)
+    setDialogOpen(true)
+  }
+
+  function openDetailDialog(cup: Cup) {
+    setSelectedCupId(cup.id)
+    setDialogOpen(true)
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+    <div className="grid gap-4">
       <Card className="rounded-none">
-        <CardHeader>
-          <CardTitle>Cup Catalog</CardTitle>
-          <CardDescription>
-            SKU is the inventory identity. Staff payloads omit cost and sell price fields.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="grid gap-1">
+            <CardTitle>Cup Catalog</CardTitle>
+            <CardDescription>
+              SKU is the inventory identity. Staff payloads omit cost and sell price fields.
+            </CardDescription>
+          </div>
+          {isAdmin ? <Button onClick={openCreateDialog}>Create Cup</Button> : null}
         </CardHeader>
         <CardContent className="grid gap-4">
           {cupsQuery.isError ? (
@@ -126,12 +177,7 @@ export function CupsPage() {
                 <TableRow
                   key={cup.id}
                   className="cursor-pointer"
-                  data-state={cup.id === selectedCupId ? "selected" : undefined}
-                  onClick={() => {
-                    setSelectedCupId(cup.id)
-                    setForm(toFormState(cup))
-                    setFormError(null)
-                  }}
+                  onClick={() => openDetailDialog(cup)}
                 >
                   <TableCell className="font-medium">{cup.sku}</TableCell>
                   <TableCell>{cup.brand}</TableCell>
@@ -153,84 +199,192 @@ export function CupsPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-none">
-        <CardHeader>
-          <CardTitle>{selectedCup ? "Cup Detail" : "Create Cup"}</CardTitle>
-          <CardDescription>
-            {isAdmin
-              ? "Admins can create and edit catalog records."
-              : "Staff can inspect SKU records but cannot edit catalog data."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          {formError ? (
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) {
+            setSelectedCupId(null)
+            form.reset(emptyFormValues)
+            setSubmitError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedCup ? "Cup Detail" : "Create Cup"}</DialogTitle>
+            <DialogDescription>
+              {isAdmin
+                ? "Maintain cup catalog records with shared form primitives."
+                : "Staff can inspect cup records but cannot edit catalog data."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {submitError ? (
             <Alert variant="destructive">
-              <AlertDescription>{formError}</AlertDescription>
+              <AlertDescription>{submitError}</AlertDescription>
             </Alert>
           ) : null}
 
-          <CupField label="SKU" value={form.sku} disabled={!isAdmin} onChange={(value) => setForm({ ...form, sku: value })} />
-          <CupField label="Brand" value={form.brand} disabled={!isAdmin} onChange={(value) => setForm({ ...form, brand: value })} />
-          <CupField label="Size" value={form.size} disabled={!isAdmin} onChange={(value) => setForm({ ...form, size: value })} />
-          <CupField label="Dimension" value={form.dimension} disabled={!isAdmin} onChange={(value) => setForm({ ...form, dimension: value })} />
-          <CupField label="Material" value={form.material ?? ""} disabled={!isAdmin} onChange={(value) => setForm({ ...form, material: value })} />
-          <CupField label="Color" value={form.color ?? ""} disabled={!isAdmin} onChange={(value) => setForm({ ...form, color: value })} />
-          <CupField label="Min stock" type="number" value={String(form.min_stock)} disabled={!isAdmin} onChange={(value) => setForm({ ...form, min_stock: Number(value) })} />
-
-          {isAdmin ? (
-            <>
-              <CupField label="Cost price" value={form.cost_price} onChange={(value) => setForm({ ...form, cost_price: value })} />
-              <CupField label="Default sell price" value={form.default_sell_price} onChange={(value) => setForm({ ...form, default_sell_price: value })} />
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.is_active}
-                  onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
+          <Form {...form}>
+            <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextFormField control={form.control} disabled={!isAdmin} label="SKU" name="sku" />
+                <TextFormField control={form.control} disabled={!isAdmin} label="Brand" name="brand" />
+                <TextFormField control={form.control} disabled={!isAdmin} label="Size" name="size" />
+                <TextFormField control={form.control} disabled={!isAdmin} label="Dimension" name="dimension" />
+                <TextFormField control={form.control} disabled={!isAdmin} label="Material" name="material" />
+                <TextFormField control={form.control} disabled={!isAdmin} label="Color" name="color" />
+                <NumberFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Min stock"
+                  name="min_stock"
                 />
-                Active catalog record
-              </label>
-              <div className="flex gap-2">
-                <Button type="button" onClick={saveCup} disabled={createCup.isPending || updateCup.isPending}>
-                  {selectedCup ? "Save Changes" : "Create Cup"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedCupId(null)
-                    setForm(emptyForm)
-                    setFormError(null)
-                  }}
-                >
-                  New
-                </Button>
+                <CurrencyFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Cost price"
+                  name="cost_price"
+                />
+                <CurrencyFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Default sell price"
+                  name="default_sell_price"
+                />
               </div>
-            </>
-          ) : null}
-        </CardContent>
-      </Card>
+
+              <FormField
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-3 rounded-none border p-3">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        disabled={!isAdmin}
+                        onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+                      />
+                    </FormControl>
+                    <div className="grid gap-1">
+                      <FormLabel>Active catalog record</FormLabel>
+                      <FormDescription>Inactive cups remain visible but should not be used for new operational work.</FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter showCloseButton>
+                {isAdmin ? (
+                  <Button type="submit" disabled={createCup.isPending || updateCup.isPending}>
+                    {selectedCup ? "Save Changes" : "Create Cup"}
+                  </Button>
+                ) : null}
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-function CupField({
+function TextFormField({
+  control,
   disabled,
   label,
-  onChange,
-  type = "text",
-  value,
+  name,
 }: {
-  disabled?: boolean
+  control: ReturnType<typeof useForm<CupFormValues>>["control"]
+  disabled: boolean
   label: string
-  onChange: (value: string) => void
-  type?: string
-  value: string
+  name: keyof CupFormValues
 }) {
   return (
-    <div className="grid gap-2">
-      <Label>{label}</Label>
-      <Input type={type} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
-    </div>
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              disabled={disabled}
+              value={typeof field.value === "string" ? field.value : ""}
+              onChange={(event) => field.onChange(event.target.value)}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+}
+
+function NumberFormField({
+  control,
+  disabled,
+  label,
+  name,
+}: {
+  control: ReturnType<typeof useForm<CupFormValues>>["control"]
+  disabled: boolean
+  label: string
+  name: "min_stock"
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input.Number
+              disabled={disabled}
+              min={0}
+              value={field.value}
+              onChange={(value) => field.onChange(value ?? 0)}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+}
+
+function CurrencyFormField({
+  control,
+  disabled,
+  label,
+  name,
+}: {
+  control: ReturnType<typeof useForm<CupFormValues>>["control"]
+  disabled: boolean
+  label: string
+  name: "cost_price" | "default_sell_price"
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input.Currency
+              disabled={disabled}
+              min={0}
+              value={field.value}
+              onChange={(value) => field.onChange(value ?? 0)}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   )
 }
 
@@ -238,7 +392,7 @@ function hasPricing(cups: Cup[] | undefined): boolean {
   return Boolean(cups?.some((cup) => "default_sell_price" in cup))
 }
 
-function toFormState(cup: Cup): CupPayload {
+function toFormValues(cup: Cup): CupFormValues {
   return {
     sku: cup.sku,
     brand: cup.brand,
@@ -247,28 +401,8 @@ function toFormState(cup: Cup): CupPayload {
     material: cup.material ?? "",
     color: cup.color ?? "",
     min_stock: cup.min_stock,
-    cost_price: cup.cost_price ?? "0",
-    default_sell_price: cup.default_sell_price ?? "0",
+    cost_price: Number(cup.cost_price ?? 0),
+    default_sell_price: Number(cup.default_sell_price ?? 0),
     is_active: cup.is_active,
   }
-}
-
-function validateForm(form: CupPayload): string | null {
-  if (!skuSchema.safeParse(form.sku).success) {
-    return "Enter a valid SKU. Use letters, numbers, hyphens, or underscores."
-  }
-
-  if (!form.brand.trim() || !form.size.trim() || !form.dimension.trim()) {
-    return "Brand, size, and dimension are required."
-  }
-
-  if (form.min_stock < 0 || !Number.isInteger(form.min_stock)) {
-    return "Minimum stock must be a non-negative whole number."
-  }
-
-  if (!/^\d+(\.\d{1,2})?$/.test(form.cost_price) || !/^\d+(\.\d{1,2})?$/.test(form.default_sell_price)) {
-    return "Prices must be non-negative money values with up to 2 decimals."
-  }
-
-  return null
 }
