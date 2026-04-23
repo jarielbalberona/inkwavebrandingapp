@@ -7,10 +7,12 @@ import {
   inventoryAdjustmentRequestSchema,
   inventoryBalanceQuerySchema,
   inventoryMovementsQuerySchema,
+  reserveOrderItemsSchema,
   type AppendInventoryMovementInput,
   type InventoryAdjustmentRequest,
   type InventoryBalanceQuery,
   type InventoryMovementsQuery,
+  type ReserveOrderItemsInput,
   type StockIntakeRequest,
 } from "./inventory.schemas.js"
 import { toInventoryMovementDto } from "./inventory.movement-types.js"
@@ -45,6 +47,14 @@ export class InventoryAdjustmentOutInsufficientStockError extends Error {
 
   constructor() {
     super("Adjustment out exceeds current on-hand stock")
+  }
+}
+
+export class InventoryReservationInsufficientStockError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Insufficient available stock for reservation")
   }
 }
 
@@ -132,6 +142,53 @@ export class InventoryService {
       note: parsedInput.note,
       reference: parsedInput.reference,
       createdByUserId: user.id,
+    })
+  }
+
+  async reserveOrderItems(input: ReserveOrderItemsInput) {
+    const parsedInput = reserveOrderItemsSchema.parse(input)
+
+    return this.inventoryRepository.transaction(async (repository) => {
+      const totalsByCupId = new Map<string, number>()
+
+      for (const item of parsedInput.items) {
+        totalsByCupId.set(item.cupId, (totalsByCupId.get(item.cupId) ?? 0) + item.quantity)
+      }
+
+      for (const [cupId, quantity] of totalsByCupId) {
+        const balance = await repository.getBalanceByCupId(cupId)
+
+        if (!balance) {
+          throw new InventoryBalanceCupNotFoundError()
+        }
+
+        if (!balance.cup.isActive) {
+          throw new InventoryCupInactiveError()
+        }
+
+        if (balance.onHand - balance.reserved < quantity) {
+          throw new InventoryReservationInsufficientStockError()
+        }
+      }
+
+      const movements = []
+
+      for (const item of parsedInput.items) {
+        movements.push(
+          await repository.appendMovement({
+            cupId: item.cupId,
+            movementType: "reserve",
+            quantity: item.quantity,
+            orderId: parsedInput.orderId,
+            orderItemId: item.orderItemId,
+            note: "Reserved for pending order",
+            reference: parsedInput.orderId,
+            createdByUserId: parsedInput.createdByUserId,
+          }),
+        )
+      }
+
+      return movements
     })
   }
 }

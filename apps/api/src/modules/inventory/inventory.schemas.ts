@@ -44,8 +44,21 @@ export const inventoryAdjustmentRequestSchema = z.object({
   reference: z.string().trim().max(160).optional(),
 })
 
+export const reserveOrderItemsSchema = z.object({
+  orderId: z.string().uuid(),
+  createdByUserId: z.string().uuid().optional(),
+  items: z.array(
+    z.object({
+      orderItemId: z.string().uuid(),
+      cupId: z.string().uuid(),
+      quantity: z.number().int().positive(),
+    }),
+  ).min(1),
+})
+
 export type AppendInventoryMovementInput = z.infer<typeof appendInventoryMovementSchema>
 export type StockIntakeRequest = z.infer<typeof stockIntakeRequestSchema>
 export type InventoryBalanceQuery = z.infer<typeof inventoryBalanceQuerySchema>
 export type InventoryMovementsQuery = z.infer<typeof inventoryMovementsQuerySchema>
 export type InventoryAdjustmentRequest = z.infer<typeof inventoryAdjustmentRequestSchema>
+export type ReserveOrderItemsInput = z.infer<typeof reserveOrderItemsSchema>

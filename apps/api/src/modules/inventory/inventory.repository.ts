@@ -27,6 +27,10 @@ export interface InventoryMovementWithRelations extends InventoryMovement {
 export class InventoryRepository {
   constructor(private readonly db: DatabaseClient) {}
 
+  async transaction<T>(handler: (repository: InventoryRepository) => Promise<T>): Promise<T> {
+    return this.db.transaction((tx) => handler(new InventoryRepository(tx as DatabaseClient)))
+  }
+
   async appendMovement(input: AppendInventoryMovementInput): Promise<InventoryMovement> {
     const rows = await this.db.insert(inventoryMovements).values(input).returning()
     const movement = rows[0]
