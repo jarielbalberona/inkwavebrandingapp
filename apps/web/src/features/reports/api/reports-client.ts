@@ -31,8 +31,32 @@ const inventoryReportResponseSchema = z.object({
   report: inventoryReportSchema,
 })
 
+const orderStatusSchema = z.enum([
+  "pending",
+  "in_progress",
+  "partial_released",
+  "completed",
+  "canceled",
+])
+
+const orderStatusReportItemSchema = z.object({
+  status: orderStatusSchema,
+  count: z.number(),
+})
+
+const orderStatusReportSchema = z.object({
+  statuses: z.array(orderStatusReportItemSchema),
+  total_orders: z.number(),
+})
+
+const orderStatusReportResponseSchema = z.object({
+  report: orderStatusReportSchema,
+})
+
 export type InventoryReportItem = z.infer<typeof inventoryReportItemSchema>
 export type InventoryReport = z.infer<typeof inventoryReportSchema>
+export type OrderStatusReport = z.infer<typeof orderStatusReportSchema>
+export type OrderStatusReportItem = z.infer<typeof orderStatusReportItemSchema>
 
 export class ReportsApiError extends Error {
   readonly status: number
@@ -65,4 +89,16 @@ export async function getLowStockReport(): Promise<InventoryReport> {
   }
 
   return inventoryReportResponseSchema.parse(await response.json()).report
+}
+
+export async function getOrderStatusReport(): Promise<OrderStatusReport> {
+  const response = await fetch(`${apiBaseUrl}/reports/order-status`, {
+    credentials: "include",
+  })
+
+  if (!response.ok) {
+    throw new ReportsApiError("Unable to load order status report.", response.status)
+  }
+
+  return orderStatusReportResponseSchema.parse(await response.json()).report
 }
