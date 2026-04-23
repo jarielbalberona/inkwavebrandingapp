@@ -84,6 +84,42 @@ pnpm --filter web typecheck
 - Drizzle is the forward migration owner; do not add a second migration tool without a deliberate ticket.
 - Use the API package Drizzle scripts; do not hand-run untracked schema changes.
 
+## Local PostgreSQL with Docker Compose
+
+The app services still run on the host through `pnpm` + Turbo. Docker Compose is only for local PostgreSQL.
+
+Files:
+
+- `docker-compose.dev.yml` starts a local PostgreSQL container
+- `apps/api/.env.example` includes a copy-paste local `DATABASE_URL`
+
+This machine already has `5432` occupied, so the local dev database is exposed on `5433`.
+
+Use this local API database config:
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/ink_wave_branding_app
+DATABASE_SSL_MODE=disable
+```
+
+Commands:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml down
+docker compose -f docker-compose.dev.yml down -v
+```
+
+- `up -d` starts PostgreSQL in the background
+- `down` stops and removes the container but keeps the named volume
+- `down -v` wipes the local database volume and resets all local data
+
+After the container is healthy, run API migrations from the host:
+
+```bash
+pnpm --filter @workspace/api db:migrate
+```
+
 ## API runtime foundations
 
 - `apps/api/src/config/env.ts` is the central Zod-backed env contract.

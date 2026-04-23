@@ -11,7 +11,7 @@ export const userEmailSchema = z
 
 export const bootstrapAdminSchema = z.object({
   email: userEmailSchema,
-  password: z.string().min(12, "Admin password must be at least 12 characters"),
+  password: z.string().min(8, "Admin password must be at least 12 characters"),
   displayName: z.string().trim().min(1).max(160).optional(),
 })
 

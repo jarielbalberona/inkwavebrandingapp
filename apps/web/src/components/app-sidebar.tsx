@@ -2,7 +2,6 @@ import {
   BookOpenTextIcon,
   BoxIcon,
   LayoutDashboardIcon,
-  LogInIcon,
   PackageSearchIcon,
   ShoppingCartIcon,
 } from "lucide-react"
@@ -19,7 +18,6 @@ import {
 } from "@workspace/ui/components/sidebar"
 
 import { NavMain } from "@/components/nav-main"
-import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import type { AuthenticatedUser } from "@/features/auth/api/auth-client"
 
@@ -29,10 +27,6 @@ const operationsItems = [
   { title: "Inventory", to: "/inventory", icon: PackageSearchIcon },
   { title: "Orders", to: "/orders", icon: ShoppingCartIcon },
   { title: "Reports", to: "/reports", icon: BookOpenTextIcon },
-] as const
-
-const supportItems = [
-  { title: "Login", to: "/login", icon: LogInIcon },
 ] as const
 
 export function AppSidebar({ user }: { user: AuthenticatedUser }) {
@@ -49,7 +43,7 @@ export function AppSidebar({ user }: { user: AuthenticatedUser }) {
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">Ink Wave Branding</span>
-                <span className="truncate text-xs">Cup operations</span>
+                <span className="truncate text-xs">Production Internal</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -57,7 +51,6 @@ export function AppSidebar({ user }: { user: AuthenticatedUser }) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain label="Operations" items={operationsItems} />
-        <NavSecondary items={supportItems} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser

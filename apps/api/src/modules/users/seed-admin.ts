@@ -1,9 +1,11 @@
+import { loadApiEnv } from "../../config/env.js"
 import { getDatabaseClient } from "../../db/client.js"
 import { hashPassword } from "./passwords.js"
 import { bootstrapAdminSchema } from "./users.schemas.js"
 import { UsersRepository } from "./users.repository.js"
 
 function readSeedInput() {
+  loadApiEnv()
   const result = bootstrapAdminSchema.safeParse({
     email: process.env.ADMIN_EMAIL,
     password: process.env.ADMIN_PASSWORD,

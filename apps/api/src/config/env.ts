@@ -1,4 +1,18 @@
+import { config as loadDotenvFile } from "dotenv"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { z } from "zod"
+
+let dotenvLoaded = false
+
+function ensureApiDotenv(): void {
+  if (dotenvLoaded) {
+    return
+  }
+  dotenvLoaded = true
+  const envPath = join(dirname(fileURLToPath(import.meta.url)), "../../.env")
+  loadDotenvFile({ path: envPath })
+}
 
 const optionalNonEmptyString = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
@@ -72,6 +86,7 @@ export function parseApiEnv(input: unknown): ApiEnv {
 }
 
 export function loadApiEnv(): ApiEnv {
+  ensureApiDotenv()
   return parseApiEnv(process.env)
 }
 

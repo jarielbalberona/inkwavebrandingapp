@@ -17,7 +17,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("")
 
   if (currentUser.data) {
-    return <Navigate to="/dashboard" />
+    return <Navigate to="/" />
   }
 
   return (
@@ -38,7 +38,7 @@ export function LoginPage() {
                 { email, password },
                 {
                   onSuccess: () => {
-                    void navigate({ to: "/dashboard" })
+                    void navigate({ to: "/" })
                   },
                 },
               )

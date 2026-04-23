@@ -1,7 +1,25 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { Navigate, createFileRoute } from "@tanstack/react-router"
 
-import { HomePage } from "@/features/dashboard/components/home-page"
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 
 export const Route = createFileRoute("/")({
-  component: HomePage,
+  component: IndexPage,
 })
+
+function IndexPage() {
+  const currentUser = useCurrentUser()
+
+  if (currentUser.isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4 text-sm text-muted-foreground">
+        Checking session...
+      </main>
+    )
+  }
+
+  if (!currentUser.data) {
+    return <Navigate to="/login" />
+  }
+
+  return <Navigate to="/dashboard" />
+}
