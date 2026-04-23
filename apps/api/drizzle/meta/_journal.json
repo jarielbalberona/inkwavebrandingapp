@@ -57,6 +57,13 @@
       "when": 1776959980553,
       "tag": "0007_lazy_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776967693644,
+      "tag": "0008_mushy_blizzard",
+      "breakpoints": true
     }
   ]
 }

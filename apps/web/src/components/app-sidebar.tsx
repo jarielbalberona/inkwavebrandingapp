@@ -1,6 +1,7 @@
 import {
   BookOpenTextIcon,
   BoxIcon,
+  Disc3Icon,
   LayoutDashboardIcon,
   PackageSearchIcon,
   ShoppingCartIcon,
@@ -25,6 +26,7 @@ import type { AuthenticatedUser } from "@/features/auth/api/auth-client"
 const operationsItems = [
   { title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon },
   { title: "Cups", to: "/cups", icon: BoxIcon },
+  { title: "Lids", to: "/lids", icon: Disc3Icon },
   { title: "Customers", to: "/customers", icon: UsersRoundIcon },
   { title: "Inventory", to: "/inventory", icon: PackageSearchIcon },
   { title: "Orders", to: "/orders", icon: ShoppingCartIcon },

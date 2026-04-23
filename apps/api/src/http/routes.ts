@@ -17,6 +17,8 @@ export const routeDefinitions = [
   { access: "protected", method: "POST", path: "/customers" },
   { access: "protected", method: "GET", path: "/cups" },
   { access: "protected", method: "POST", path: "/cups" },
+  { access: "protected", method: "GET", path: "/lids" },
+  { access: "protected", method: "POST", path: "/lids" },
   { access: "protected", method: "GET", path: "/inventory/balances" },
   { access: "protected", method: "GET", path: "/inventory/movements" },
   { access: "protected", method: "POST", path: "/inventory/adjustments" },
