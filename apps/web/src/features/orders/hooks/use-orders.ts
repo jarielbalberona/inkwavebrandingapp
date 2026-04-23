@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
+  cancelOrder,
   createOrder,
   createProgressEvent,
   getOrder,
@@ -52,6 +53,18 @@ export function useCreateOrderMutation() {
     mutationFn: (payload: CreateOrderPayload) => createOrder(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+    },
+  })
+}
+
+export function useCancelOrderMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => cancelOrder(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+      await queryClient.invalidateQueries({ queryKey: orderProgressEventsQueryKey })
     },
   })
 }

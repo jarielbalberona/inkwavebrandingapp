@@ -195,6 +195,27 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
   return orderResponseSchema.parse(await response.json()).order
 }
 
+export async function cancelOrder(id: string): Promise<Order> {
+  const response = await fetch(`${apiBaseUrl}/orders/${id}/cancel`, {
+    method: "PATCH",
+    credentials: "include",
+  })
+
+  if (response.status === 404) {
+    throw new OrdersApiError("Order no longer exists.", response.status)
+  }
+
+  if (response.status === 409) {
+    throw new OrdersApiError("This order cannot be canceled in its current state.", response.status)
+  }
+
+  if (!response.ok) {
+    throw new OrdersApiError("Unable to cancel order.", response.status)
+  }
+
+  return orderResponseSchema.parse(await response.json()).order
+}
+
 export async function listProgressEvents(orderLineItemId: string): Promise<{
   events: ProgressEvent[]
   totals: ProgressTotals

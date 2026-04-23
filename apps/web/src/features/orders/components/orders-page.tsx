@@ -36,6 +36,7 @@ import type {
 } from "@/features/orders/api/orders-client"
 import {
   progressStageOptions,
+  useCancelOrderMutation,
   useCreateProgressEventMutation,
   useCreateOrderMutation,
   useOrderQuery,
@@ -87,6 +88,7 @@ export function OrdersPage() {
   const cupsQuery = useCupsQuery()
   const createOrderMutation = useCreateOrderMutation()
   const createProgressEventMutation = useCreateProgressEventMutation()
+  const cancelOrderMutation = useCancelOrderMutation()
   const activeCups = useMemo(
     () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
     [cupsQuery.data],
@@ -204,6 +206,27 @@ export function OrdersPage() {
       setProgressSuccess(`Recorded ${formatStatus(result.event.stage)} x ${result.event.quantity}.`)
     } catch (error) {
       setProgressError(error instanceof Error ? error.message : "Unable to record progress.")
+    }
+  }
+
+  async function handleCancelSelectedOrder() {
+    setProgressError(null)
+    setProgressSuccess(null)
+
+    if (!selectedOrder) {
+      return
+    }
+
+    if (!window.confirm(`Cancel order ${selectedOrder.order_number}? Unconsumed reservations will be released.`)) {
+      return
+    }
+
+    try {
+      const order = await cancelOrderMutation.mutateAsync(selectedOrder.id)
+
+      setProgressSuccess(`Canceled ${order.order_number}. Unconsumed reservations were released by the API.`)
+    } catch (error) {
+      setProgressError(error instanceof Error ? error.message : "Unable to cancel order.")
     }
   }
 
@@ -447,10 +470,27 @@ export function OrdersPage() {
             {selectedOrder ? (
               <>
                 <div className="grid gap-1 text-sm">
-                  <p className="font-medium">{selectedOrder.order_number}</p>
-                  <p className="text-muted-foreground">
-                    {selectedOrder.customer.business_name} · {formatStatus(selectedOrder.status)}
-                  </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{selectedOrder.order_number}</p>
+                      <p className="text-muted-foreground">
+                        {selectedOrder.customer.business_name} · {formatStatus(selectedOrder.status)}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={
+                        cancelOrderMutation.isPending ||
+                        selectedOrder.status === "canceled" ||
+                        selectedOrder.status === "completed"
+                      }
+                      onClick={handleCancelSelectedOrder}
+                    >
+                      {cancelOrderMutation.isPending ? "Canceling..." : "Cancel"}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid gap-2">
