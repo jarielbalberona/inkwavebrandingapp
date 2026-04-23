@@ -18,6 +18,7 @@ import { Route as AppInventoryHistoryRouteImport } from "./pages/_app.inventory-
 import { Route as AppInventoryRouteImport } from "./pages/_app.inventory"
 import { Route as AppDesignSystemRouteImport } from "./pages/_app.design-system"
 import { Route as AppDashboardRouteImport } from "./pages/_app.dashboard"
+import { Route as AppCustomersRouteImport } from "./pages/_app.customers"
 import { Route as AppCupsRouteImport } from "./pages/_app.cups"
 
 const LoginRoute = LoginRouteImport.update({
@@ -64,6 +65,11 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: "/dashboard",
   getParentRoute: () => AppRoute,
 } as any)
+const AppCustomersRoute = AppCustomersRouteImport.update({
+  id: "/customers",
+  path: "/customers",
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCupsRoute = AppCupsRouteImport.update({
   id: "/cups",
   path: "/cups",
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
   "/login": typeof LoginRoute
   "/cups": typeof AppCupsRoute
+  "/customers": typeof AppCustomersRoute
   "/dashboard": typeof AppDashboardRoute
   "/design-system": typeof AppDesignSystemRoute
   "/inventory": typeof AppInventoryRoute
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   "/": typeof IndexRoute
   "/login": typeof LoginRoute
   "/cups": typeof AppCupsRoute
+  "/customers": typeof AppCustomersRoute
   "/dashboard": typeof AppDashboardRoute
   "/design-system": typeof AppDesignSystemRoute
   "/inventory": typeof AppInventoryRoute
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   "/_app": typeof AppRouteWithChildren
   "/login": typeof LoginRoute
   "/_app/cups": typeof AppCupsRoute
+  "/_app/customers": typeof AppCustomersRoute
   "/_app/dashboard": typeof AppDashboardRoute
   "/_app/design-system": typeof AppDesignSystemRoute
   "/_app/inventory": typeof AppInventoryRoute
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | "/"
     | "/login"
     | "/cups"
+    | "/customers"
     | "/dashboard"
     | "/design-system"
     | "/inventory"
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | "/"
     | "/login"
     | "/cups"
+    | "/customers"
     | "/dashboard"
     | "/design-system"
     | "/inventory"
@@ -134,6 +145,7 @@ export interface FileRouteTypes {
     | "/_app"
     | "/login"
     | "/_app/cups"
+    | "/_app/customers"
     | "/_app/dashboard"
     | "/_app/design-system"
     | "/_app/inventory"
@@ -213,6 +225,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    "/_app/customers": {
+      id: "/_app/customers"
+      path: "/customers"
+      fullPath: "/customers"
+      preLoaderRoute: typeof AppCustomersRouteImport
+      parentRoute: typeof AppRoute
+    }
     "/_app/cups": {
       id: "/_app/cups"
       path: "/cups"
@@ -225,6 +244,7 @@ declare module "@tanstack/react-router" {
 
 interface AppRouteChildren {
   AppCupsRoute: typeof AppCupsRoute
+  AppCustomersRoute: typeof AppCustomersRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDesignSystemRoute: typeof AppDesignSystemRoute
   AppInventoryRoute: typeof AppInventoryRoute
@@ -235,6 +255,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppCupsRoute: AppCupsRoute,
+  AppCustomersRoute: AppCustomersRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDesignSystemRoute: AppDesignSystemRoute,
   AppInventoryRoute: AppInventoryRoute,

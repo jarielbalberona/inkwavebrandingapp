@@ -4,6 +4,7 @@ import {
   LayoutDashboardIcon,
   PackageSearchIcon,
   ShoppingCartIcon,
+  UsersRoundIcon,
 } from "lucide-react"
 
 import {
@@ -24,6 +25,7 @@ import type { AuthenticatedUser } from "@/features/auth/api/auth-client"
 const operationsItems = [
   { title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon },
   { title: "Cups", to: "/cups", icon: BoxIcon },
+  { title: "Customers", to: "/customers", icon: UsersRoundIcon },
   { title: "Inventory", to: "/inventory", icon: PackageSearchIcon },
   { title: "Orders", to: "/orders", icon: ShoppingCartIcon },
   { title: "Reports", to: "/reports", icon: BookOpenTextIcon },
