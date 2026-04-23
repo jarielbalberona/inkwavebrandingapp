@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { skuSchema } from "./sku.js"
+
 const requiredText = (max: number) => z.string().trim().min(1).max(max)
 const optionalText = (max: number) =>
   z
@@ -15,7 +17,7 @@ export const cupMoneySchema = z
   .regex(/^\d+(\.\d{1,2})?$/, "Must be a non-negative money amount with up to 2 decimals")
 
 export const createCupSchema = z.object({
-  sku: requiredText(80),
+  sku: skuSchema,
   brand: requiredText(160),
   size: requiredText(80),
   dimension: requiredText(120),

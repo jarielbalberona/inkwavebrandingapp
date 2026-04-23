@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm"
 import type { DatabaseClient } from "../../db/client.js"
 import { cups, type Cup } from "../../db/schema/index.js"
 import type { CreateCupInput, UpdateCupInput } from "./cups.schemas.js"
+import { normalizeSku } from "./sku.js"
 
 export class CupsRepository {
   constructor(private readonly db: DatabaseClient) {}
@@ -16,7 +17,7 @@ export class CupsRepository {
   }
 
   async listBySkuSearch(search: string, options: { includeInactive?: boolean } = {}): Promise<Cup[]> {
-    const normalizedSearch = `%${search}%`
+    const normalizedSearch = `%${normalizeSku(search)}%`
 
     if (options.includeInactive) {
       return this.db
@@ -40,7 +41,7 @@ export class CupsRepository {
   }
 
   async findBySku(sku: string): Promise<Cup | undefined> {
-    const rows = await this.db.select().from(cups).where(eq(cups.sku, sku)).limit(1)
+    const rows = await this.db.select().from(cups).where(eq(cups.sku, normalizeSku(sku))).limit(1)
 
     return rows[0]
   }
