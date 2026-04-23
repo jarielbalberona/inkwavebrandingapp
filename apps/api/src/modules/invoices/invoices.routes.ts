@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { ZodError } from "zod"
+import { renderInvoicePdf, type InvoicePdfData } from "@workspace/pdfs/server"
 
 import type { ApiEnv } from "../../config/env.js"
 import { getDatabaseClient } from "../../db/client.js"
@@ -51,6 +52,23 @@ export async function handleInvoicesRoute(
   if (invoiceMatch && request.method === "GET") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
       sendJson(response, 200, { invoice: await service.getById(invoiceMatch[1] ?? "", user) })
+    })
+    return true
+  }
+
+  const invoicePdfMatch = path.match(/^\/invoices\/([^/]+)\/pdf$/)
+
+  if (invoicePdfMatch && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const invoice = await service.getById(invoicePdfMatch[1] ?? "", user)
+      const pdfBuffer = await renderInvoicePdf(toInvoicePdfData(invoice))
+
+      response.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Length": pdfBuffer.byteLength,
+        "Content-Disposition": `inline; filename="${invoice.invoice_number}.pdf"`,
+      })
+      response.end(pdfBuffer)
     })
     return true
   }
@@ -109,4 +127,15 @@ function handleInvoicesError(response: ServerResponse, error: unknown) {
   }
 
   throw error
+}
+
+function toInvoicePdfData(invoice: Awaited<ReturnType<InvoicesService["getById"]>>): InvoicePdfData {
+  return {
+    invoice_number: invoice.invoice_number,
+    order_number_snapshot: invoice.order_number_snapshot,
+    subtotal: invoice.subtotal,
+    created_at: invoice.created_at,
+    customer: invoice.customer,
+    items: invoice.items,
+  }
 }

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@sentry/node": "^10.49.0",
+    "@workspace/pdfs": "workspace:*",
     "argon2": "^0.44.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",

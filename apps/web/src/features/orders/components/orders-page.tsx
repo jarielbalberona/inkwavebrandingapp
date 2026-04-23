@@ -45,6 +45,7 @@ import {
   orderStatusOptions,
   useOrdersQuery,
 } from "@/features/orders/hooks/use-orders"
+import { apiBaseUrl } from "@/lib/api"
 
 export function OrdersPage() {
   const currentUser = useCurrentUser()
@@ -552,6 +553,20 @@ function InvoicePanel({
             <p className="font-medium">{new Date(resolvedInvoice.created_at).toLocaleString()}</p>
           </div>
         </div>
+      ) : null}
+
+      {resolvedInvoice ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="justify-self-start"
+          onClick={() => {
+            window.open(`${apiBaseUrl}/invoices/${resolvedInvoice.id}/pdf`, "_blank", "noopener,noreferrer")
+          }}
+        >
+          Open PDF
+        </Button>
       ) : invoiceError ? (
         <p className="text-muted-foreground">
           {invoiceError === "No invoice has been generated for this order yet."
