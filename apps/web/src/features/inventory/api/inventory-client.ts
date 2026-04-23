@@ -26,7 +26,35 @@ const stockIntakeResponseSchema = z.object({
   movement: inventoryMovementSchema,
 })
 
+const balanceCupSchema = z.object({
+  id: z.string().uuid(),
+  sku: z.string(),
+  brand: z.string(),
+  size: z.string(),
+  dimension: z.string(),
+  material: z.string().nullable(),
+  color: z.string().nullable(),
+  min_stock: z.number(),
+  is_active: z.boolean(),
+  cost_price: z.string().optional(),
+  default_sell_price: z.string().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+
+const inventoryBalanceSchema = z.object({
+  cup: balanceCupSchema,
+  on_hand: z.number(),
+  reserved: z.number(),
+  available: z.number(),
+})
+
+const inventoryBalancesResponseSchema = z.object({
+  balances: z.array(inventoryBalanceSchema),
+})
+
 export type InventoryMovement = z.infer<typeof inventoryMovementSchema>
+export type InventoryBalance = z.infer<typeof inventoryBalanceSchema>
 
 export interface StockIntakePayload {
   cupId: string
@@ -42,6 +70,18 @@ export class InventoryApiError extends Error {
     super(message)
     this.status = status
   }
+}
+
+export async function listInventoryBalances(): Promise<InventoryBalance[]> {
+  const response = await fetch(`${apiBaseUrl}/inventory/balances`, {
+    credentials: "include",
+  })
+
+  if (!response.ok) {
+    throw new InventoryApiError("Unable to load inventory balances.", response.status)
+  }
+
+  return inventoryBalancesResponseSchema.parse(await response.json()).balances
 }
 
 export async function createStockIntake(payload: StockIntakePayload): Promise<InventoryMovement> {

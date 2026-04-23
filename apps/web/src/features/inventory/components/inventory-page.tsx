@@ -24,13 +24,17 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import type { Cup, CupPayload } from "@/features/cups/api/cups-client"
+import type { CupPayload } from "@/features/cups/api/cups-client"
 import {
   useCreateCupMutation,
   useCupsQuery,
 } from "@/features/cups/hooks/use-cups"
 import { normalizeSku, skuSchema } from "@/features/cups/types/sku"
-import { useStockIntakeMutation } from "@/features/inventory/hooks/use-inventory"
+import type { InventoryBalance } from "@/features/inventory/api/inventory-client"
+import {
+  useInventoryBalancesQuery,
+  useStockIntakeMutation,
+} from "@/features/inventory/hooks/use-inventory"
 
 const emptyCupForm: CupPayload = {
   sku: "",
@@ -54,6 +58,7 @@ const emptyIntakeForm = {
 export function InventoryPage() {
   const currentUser = useCurrentUser()
   const cupsQuery = useCupsQuery()
+  const balancesQuery = useInventoryBalancesQuery()
   const createCup = useCreateCupMutation()
   const stockIntake = useStockIntakeMutation()
   const [search, setSearch] = useState("")
@@ -66,10 +71,16 @@ export function InventoryPage() {
   const [createError, setCreateError] = useState<string | null>(null)
 
   const isAdmin = currentUser.data?.role === "admin"
-  const filteredCups = useMemo(() => filterCups(cupsQuery.data, search), [cupsQuery.data, search])
+  const filteredBalances = useMemo(
+    () => filterBalances(balancesQuery.data, search),
+    [balancesQuery.data, search],
+  )
   const selectedCup = useMemo(
-    () => cupsQuery.data?.find((cup) => cup.id === selectedCupId) ?? null,
-    [cupsQuery.data, selectedCupId],
+    () =>
+      balancesQuery.data?.find((balance) => balance.cup.id === selectedCupId)?.cup ??
+      cupsQuery.data?.find((cup) => cup.id === selectedCupId) ??
+      null,
+    [balancesQuery.data, cupsQuery.data, selectedCupId],
   )
 
   const submitIntake = () => {
@@ -216,9 +227,15 @@ export function InventoryPage() {
             </Alert>
           ) : null}
 
-          {cupsQuery.isError ? (
+            {cupsQuery.isError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{cupsQuery.error.message}</AlertDescription>
+              </Alert>
+            ) : null}
+
+          {balancesQuery.isError ? (
             <Alert variant="destructive">
-              <AlertDescription>{cupsQuery.error.message}</AlertDescription>
+              <AlertDescription>{balancesQuery.error.message}</AlertDescription>
             </Alert>
           ) : null}
 
@@ -233,11 +250,11 @@ export function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {cupsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading cups for stock intake...</p>
+          {balancesQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading live inventory balances...</p>
           ) : null}
 
-          {!cupsQuery.isLoading && filteredCups.length === 0 ? (
+          {!balancesQuery.isLoading && filteredBalances.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No cups match the current search. Create the SKU first if it does not exist.
             </p>
@@ -250,28 +267,48 @@ export function InventoryPage() {
                 <TableHead>Brand</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Dimension</TableHead>
+                <TableHead>On hand</TableHead>
+                <TableHead>Reserved</TableHead>
+                <TableHead>Available</TableHead>
+                <TableHead>Min stock</TableHead>
+                <TableHead>Risk</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCups.map((cup) => (
+              {filteredBalances.map((balance) => (
                 <TableRow
-                  key={cup.id}
+                  key={balance.cup.id}
                   className="cursor-pointer"
-                  data-state={cup.id === selectedCupId ? "selected" : undefined}
+                  data-state={balance.cup.id === selectedCupId ? "selected" : undefined}
                   onClick={() => {
-                    setSelectedCupId(cup.id)
+                    setSelectedCupId(balance.cup.id)
                     setIntakeError(null)
                     setIntakeSuccess(null)
                   }}
                 >
-                  <TableCell className="font-medium">{cup.sku}</TableCell>
-                  <TableCell>{cup.brand}</TableCell>
-                  <TableCell>{cup.size}</TableCell>
-                  <TableCell>{cup.dimension}</TableCell>
+                  <TableCell className="font-medium">{balance.cup.sku}</TableCell>
+                  <TableCell>{balance.cup.brand}</TableCell>
+                  <TableCell>{balance.cup.size}</TableCell>
+                  <TableCell>{balance.cup.dimension}</TableCell>
+                  <TableCell>{balance.on_hand}</TableCell>
+                  <TableCell>{balance.reserved}</TableCell>
+                  <TableCell
+                    className={
+                      balance.available < 0 ? "font-semibold text-destructive" : undefined
+                    }
+                  >
+                    {balance.available}
+                  </TableCell>
+                  <TableCell>{balance.cup.min_stock}</TableCell>
                   <TableCell>
-                    <Badge variant={cup.is_active ? "default" : "secondary"}>
-                      {cup.is_active ? "Active" : "Inactive"}
+                    <Badge variant={stockStateVariant(balance)}>
+                      {stockStateLabel(balance)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={balance.cup.is_active ? "default" : "secondary"}>
+                      {balance.cup.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -380,23 +417,57 @@ function CupField({
   )
 }
 
-function filterCups(cups: Cup[] | undefined, search: string): Cup[] {
-  if (!cups) {
+function filterBalances(
+  balances: InventoryBalance[] | undefined,
+  search: string,
+): InventoryBalance[] {
+  if (!balances) {
     return []
   }
 
   const normalizedSearch = search.trim().toLowerCase()
 
   if (!normalizedSearch) {
-    return cups
+    return balances
   }
 
-  return cups.filter((cup) =>
-    [cup.sku, cup.brand, cup.size, cup.dimension, cup.material ?? "", cup.color ?? ""]
+  return balances.filter((balance) =>
+    [
+      balance.cup.sku,
+      balance.cup.brand,
+      balance.cup.size,
+      balance.cup.dimension,
+      balance.cup.material ?? "",
+      balance.cup.color ?? "",
+    ]
       .join(" ")
       .toLowerCase()
       .includes(normalizedSearch),
   )
+}
+
+function stockStateLabel(balance: InventoryBalance): string {
+  if (balance.available < 0) {
+    return "Negative"
+  }
+
+  if (balance.available <= balance.cup.min_stock) {
+    return "Low"
+  }
+
+  return "Healthy"
+}
+
+function stockStateVariant(balance: InventoryBalance): "default" | "secondary" | "destructive" {
+  if (balance.available < 0) {
+    return "destructive"
+  }
+
+  if (balance.available <= balance.cup.min_stock) {
+    return "secondary"
+  }
+
+  return "default"
 }
 
 function validateCupForm(form: CupPayload): string | null {
