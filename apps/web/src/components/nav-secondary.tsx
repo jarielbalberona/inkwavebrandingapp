@@ -18,7 +18,7 @@ export function NavSecondary({
   items,
   ...props
 }: {
-  items: NavItem[]
+  items: readonly NavItem[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,

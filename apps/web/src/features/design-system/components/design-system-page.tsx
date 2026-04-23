@@ -147,6 +147,7 @@ import {
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import { displayAmount } from "@workspace/ui/lib/number";
+import { getTailwindDefaultSwatch } from "@workspace/ui/lib/tailwind-swatch-color";
 import { cn } from "@workspace/ui/lib/utils";
 
 const trafficData = [
@@ -402,8 +403,16 @@ function ColorHueScaleRow({
             <div key={step} className="flex min-w-0 flex-col items-center gap-1">
               <div
                 className="aspect-square w-full max-h-11 rounded-md border border-black/10 sm:max-h-12 dark:border-white/15"
-                style={{ backgroundColor: `var(--color-${name}-${step})` }}
-                title={`--color-${name}-${step}`}
+                style={{
+                  backgroundColor:
+                    getTailwindDefaultSwatch(name, step) ??
+                    `var(--color-${name}-${step})`,
+                }}
+                title={
+                  getTailwindDefaultSwatch(name, step)
+                    ? `${name}-${step}`
+                    : `var(--color-${name}-${step})`
+                }
               />
               <span className="text-muted-foreground text-[9px] tabular-nums sm:text-[10px]">
                 {step}

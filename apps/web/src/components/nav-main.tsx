@@ -20,7 +20,7 @@ export function NavMain({
   items,
 }: {
   label: string
-  items: NavItem[]
+  items: readonly NavItem[]
 }) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
