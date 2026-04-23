@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import { loadApiEnv } from "./config/env.js"
 import { sendJson } from "./http/json.js"
+import { getRequestPath, isPublicRoute } from "./http/routes.js"
 import { initSentry } from "./instrumentation/sentry.js"
 import { handleAuthRoute } from "./modules/auth/auth.routes.js"
 
@@ -21,6 +22,7 @@ initSentry()
 const server = createServer(async (request, response) => {
   try {
     applyCors(request, response)
+    const path = getRequestPath(request)
 
     if (request.method === "OPTIONS") {
       response.writeHead(204)
@@ -32,7 +34,7 @@ const server = createServer(async (request, response) => {
       return
     }
 
-    if (request.method === "GET" && request.url === "/health") {
+    if (isPublicRoute(request.method, path) && request.method === "GET" && path === "/health") {
       sendJson(response, 200, { ok: true })
       return
     }

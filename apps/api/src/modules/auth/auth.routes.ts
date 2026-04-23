@@ -3,14 +3,15 @@ import { ZodError } from "zod"
 
 import type { ApiEnv } from "../../config/env.js"
 import { getDatabaseClient } from "../../db/client.js"
-import { parseCookies, serializeCookie } from "../../http/cookies.js"
+import { serializeCookie } from "../../http/cookies.js"
 import { readJsonBody, sendJson } from "../../http/json.js"
+import { getRequestPath } from "../../http/routes.js"
 import { UsersRepository } from "../users/users.repository.js"
+import { AUTH_SESSION_COOKIE } from "./auth.constants.js"
+import { requireAuthenticatedRequest } from "./auth.middleware.js"
 import { AuthService, AuthenticationError } from "./auth.service.js"
 import { loginRequestSchema } from "./auth.schemas.js"
-import { createSessionToken, verifySessionToken } from "./sessions.js"
-
-export const AUTH_SESSION_COOKIE = "iw_session"
+import { createSessionToken } from "./sessions.js"
 
 interface AuthRouteContext {
   env: ApiEnv & { authSessionSecret: string }
@@ -21,7 +22,7 @@ export async function handleAuthRoute(
   response: ServerResponse,
   context: AuthRouteContext,
 ): Promise<boolean> {
-  const path = new URL(request.url ?? "/", "http://localhost").pathname
+  const path = getRequestPath(request)
 
   if (path === "/auth/login" && request.method === "POST") {
     await handleLogin(request, response, context)
@@ -93,32 +94,16 @@ async function handleMe(
   response: ServerResponse,
   context: AuthRouteContext,
 ) {
-  const token = parseCookies(request.headers.cookie).get(AUTH_SESSION_COOKIE)
-  const userId = token
-    ? verifySessionToken(token, { secret: context.env.authSessionSecret })
-    : null
+  const authContext = await requireAuthenticatedRequest(request, response, {
+    createAuthService,
+    env: context.env,
+  })
 
-  if (!userId) {
-    sendJson(response, 401, { error: "Unauthenticated" })
+  if (!authContext) {
     return
   }
 
-  const user = await createAuthService().getCurrentUser(userId)
-
-  if (!user) {
-    sendJson(response, 401, { error: "Unauthenticated" }, {
-      "Set-Cookie": serializeCookie(AUTH_SESSION_COOKIE, "", {
-        httpOnly: true,
-        maxAgeSeconds: 0,
-        path: "/",
-        sameSite: "Lax",
-        secure: context.env.nodeEnv === "production",
-      }),
-    })
-    return
-  }
-
-  sendJson(response, 200, { user })
+  sendJson(response, 200, { user: authContext.user })
 }
 
 function createSessionCookie(token: string, context: AuthRouteContext): string {
