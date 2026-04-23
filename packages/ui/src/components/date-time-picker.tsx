@@ -81,21 +81,19 @@ function DateTimePicker({
 
   return (
     <Popover modal open={open} onOpenChange={(nextOpen) => !disabled && setOpen(nextOpen)}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="outline"
-            data-empty={!value}
-            className="data-[empty=true]:text-muted-foreground w-full justify-between text-left font-normal"
-          >
-            <span className="flex items-center gap-2">
-              <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
-              {value ? format(value, "PPP p") : <span>{placeholder ?? "Pick a date and time"}</span>}
-            </span>
-            <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        }
-      />
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          data-empty={!value}
+          className="data-[empty=true]:text-muted-foreground w-full justify-between text-left font-normal"
+        >
+          <span className="flex items-center gap-2">
+            <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
+            {value ? format(value, "PPP p") : <span>{placeholder ?? "Pick a date and time"}</span>}
+          </span>
+          <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
       <PopoverContent className="z-50 w-auto border-none p-0" align="start" side="bottom">
         <div className="rounded-lg border bg-background p-3 shadow-sm">
           <Calendar mode="single" selected={value} onSelect={handleDateSelect} disabled={disabledDays} />

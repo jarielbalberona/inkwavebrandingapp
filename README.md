@@ -41,6 +41,13 @@ pnpm --filter @workspace/ui lint
 pnpm --filter web typecheck
 ```
 
+## Deployment
+
+- Initial Render contract lives in `render.yaml`.
+- Deployment/env details live in `docs/deployment/environment.md`.
+- The current Render web service is buildable as a static site.
+- The API Render service is intentionally a documented skeleton until the API has an HTTP server, start command, and health route.
+
 ## Conventions
 
 - Root scripts are orchestrated through Turbo.

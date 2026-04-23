@@ -27,18 +27,16 @@ function DatePicker({
 
   return (
     <Popover modal open={open} onOpenChange={(open) => !disabled && setOpen(open)}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant={"outline"}
-            data-empty={!value}
-            className="data-[empty=true]:text-muted-foreground w-[212px] justify-between text-left font-normal"
-          >
-            {value ? format(value, "PPP") : <span>{placeholder ?? "Pick a date"}</span>}
-            <ChevronDownIcon data-icon="inline-end" />
-          </Button>
-        }
-      />
+      <PopoverTrigger asChild>
+        <Button
+          variant={"outline"}
+          data-empty={!value}
+          className="data-[empty=true]:text-muted-foreground w-[212px] justify-between text-left font-normal"
+        >
+          {value ? format(value, "PPP") : <span>{placeholder ?? "Pick a date"}</span>}
+          <ChevronDownIcon data-icon="inline-end" />
+        </Button>
+      </PopoverTrigger>
       <PopoverContent className="w-auto p-0 z-50 border-none" align="start" side="bottom">
         <Calendar
           mode="single"

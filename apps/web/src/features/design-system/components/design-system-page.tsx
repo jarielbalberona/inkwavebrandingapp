@@ -1073,11 +1073,6 @@ export function DesignSystemPage() {
               <div className="space-y-3">
                 <Select
                   defaultValue="billing"
-                  items={[
-                    { value: "billing", label: "Billing" },
-                    { value: "product", label: "Product" },
-                    { value: "support", label: "Support" },
-                  ]}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Topic" />
@@ -1141,11 +1136,6 @@ export function DesignSystemPage() {
                         <Select
                           value={field.value}
                           onValueChange={field.onChange}
-                          items={[
-                            { value: "internal", label: "Internal" },
-                            { value: "client", label: "Client preview" },
-                            { value: "public", label: "Public" },
-                          ]}
                         >
                           <SelectTrigger className="w-full">
                             <SelectValue />
@@ -1232,7 +1222,9 @@ export function DesignSystemPage() {
                         </div>
                       </div>
                       <DialogFooter className="gap-2">
-                        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                        <DialogClose asChild>
+                          <Button variant="outline">Cancel</Button>
+                        </DialogClose>
                         <Button>Publish</Button>
                       </DialogFooter>
                     </DialogContent>
@@ -1708,11 +1700,6 @@ export function DesignSystemPage() {
                     <Input defaultValue={email} />
                     <Select
                       defaultValue={role}
-                      items={[
-                        { value: "editor", label: "Editor" },
-                        { value: "viewer", label: "Viewer" },
-                        { value: "billing", label: "Billing" },
-                      ]}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -1809,10 +1796,6 @@ export function DesignSystemPage() {
                   <SectionLabel>Public email</SectionLabel>
                   <Select
                     defaultValue="email"
-                    items={[
-                      { value: "email", label: "hello@dumadine.com" },
-                      { value: "hidden", label: "Hidden" },
-                    ]}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue />
