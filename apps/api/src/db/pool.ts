@@ -1,9 +1,9 @@
 import { Pool, type PoolConfig } from "pg"
 
-import { loadApiEnv } from "../config/env.js"
+import { loadDatabaseEnv } from "../config/env.js"
 
 function buildPoolConfig(): PoolConfig {
-  const env = loadApiEnv()
+  const env = loadDatabaseEnv()
 
   return {
     connectionString: env.databaseUrl,

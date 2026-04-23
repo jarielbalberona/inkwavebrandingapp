@@ -34,8 +34,9 @@ Package-level examples:
 ```bash
 pnpm --filter @workspace/api typecheck
 pnpm --filter @workspace/api db:check
-pnpm --filter @workspace/api migrate:create init_schema
-pnpm --filter @workspace/api migrate:up
+pnpm --filter @workspace/api db:generate
+pnpm --filter @workspace/api db:migrate
+pnpm --filter @workspace/api db:drizzle-check
 pnpm --filter @workspace/ui lint
 pnpm --filter web typecheck
 ```
@@ -67,10 +68,19 @@ pnpm --filter web typecheck
 ## Database setup baseline
 
 - The app targets PostgreSQL only.
+- `apps/api` uses Drizzle ORM on top of the existing `pg` pool.
 - `apps/api/.env.example` documents the required DB env variables.
 - `DATABASE_URL` must point to the Ink Wave app database, not another schema/application on the shared Render instance.
-- Checked-in migrations live under `apps/api/migrations`.
-- Use the API package migration scripts; do not hand-run untracked schema changes.
+- Drizzle schema exports start in `apps/api/src/db/schema`.
+- Drizzle migration output is `apps/api/drizzle`.
+- Drizzle is the forward migration owner; do not add a second migration tool without a deliberate ticket.
+- Use the API package Drizzle scripts; do not hand-run untracked schema changes.
+
+## API runtime foundations
+
+- `apps/api/src/config/env.ts` is the central Zod-backed env contract.
+- Sentry is configured through `SENTRY_DSN` and stays disabled when no DSN is set.
+- `OPENAI_API_KEY` is optional scaffolding for future API work only; the app does not call OpenAI APIs yet.
 
 ## Shared UI usage
 
