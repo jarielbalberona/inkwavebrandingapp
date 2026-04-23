@@ -1,5 +1,8 @@
 import { ReportsRepository } from "./reports.repository.js"
 import type { CupUsageReportQuery } from "./reports.schemas.js"
+import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
+import type { SafeUser } from "../auth/auth.schemas.js"
+import { assertCanViewConfidentialFields } from "../auth/authorization.js"
 import {
   orderReportStatuses,
   toCupUsageReportDto,
@@ -7,6 +10,8 @@ import {
   type InventoryReportDto,
   type CupUsageReportDto,
   type OrderStatusReportDto,
+  type SalesCostVisibilityReportDto,
+  toSalesCostVisibilityReportDto,
 } from "./reports.types.js"
 
 export class ReportsService {
@@ -52,6 +57,26 @@ export class ReportsService {
       rows.map((row) => ({
         cup: row.cup,
         consumed_quantity: row.consumedQuantity,
+      })),
+    )
+  }
+
+  async getSalesCostVisibilityReport(
+    query: SalesCostVisibilityReportQuery,
+    user: SafeUser,
+  ): Promise<SalesCostVisibilityReportDto> {
+    assertCanViewConfidentialFields(user)
+
+    const rows = await this.reportsRepository.listSalesCostVisibility(query)
+
+    return toSalesCostVisibilityReportDto(
+      query,
+      rows.map((row) => ({
+        cup: row.cup,
+        released_quantity: row.releasedQuantity,
+        sell_total: row.sellTotal,
+        cost_total: row.costTotal,
+        gross_profit: row.grossProfit,
       })),
     )
   }

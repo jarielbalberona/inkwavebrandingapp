@@ -1,6 +1,7 @@
 import type { InventoryBalanceSummary } from "../inventory/inventory.repository.js"
 import { calculateAvailable } from "../inventory/inventory.rules.js"
 import type { CupUsageReportQuery } from "./reports.schemas.js"
+import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
 
 export interface InventoryReportItemDto {
   cup: {
@@ -68,6 +69,39 @@ export interface CupUsageReportDto {
   total_consumed_quantity: number
 }
 
+export interface SalesCostVisibilityReportItemDto {
+  cup: {
+    id: string
+    sku: string
+    brand: string
+    size: string
+    dimension: string
+    material: string | null
+    color: string | null
+    is_active: boolean
+  }
+  released_quantity: number
+  sell_total: string
+  cost_total: string
+  gross_profit: string
+}
+
+export interface SalesCostVisibilityReportDto {
+  quantity_basis: "released"
+  date_basis: "event_date"
+  filters: {
+    start_date: string | null
+    end_date: string | null
+  }
+  items: SalesCostVisibilityReportItemDto[]
+  totals: {
+    released_quantity: number
+    sell_total: string
+    cost_total: string
+    gross_profit: string
+  }
+}
+
 export function toInventoryReportItemDto(
   balance: InventoryBalanceSummary,
 ): InventoryReportItemDto {
@@ -104,4 +138,39 @@ export function toCupUsageReportDto(
     items,
     total_consumed_quantity: items.reduce((total, item) => total + item.consumed_quantity, 0),
   }
+}
+
+export function toSalesCostVisibilityReportDto(
+  query: SalesCostVisibilityReportQuery,
+  items: SalesCostVisibilityReportItemDto[],
+): SalesCostVisibilityReportDto {
+  const totals = items.reduce(
+    (accumulator, item) => ({
+      released_quantity: accumulator.released_quantity + item.released_quantity,
+      sell_total: addMoneyStrings(accumulator.sell_total, item.sell_total),
+      cost_total: addMoneyStrings(accumulator.cost_total, item.cost_total),
+      gross_profit: addMoneyStrings(accumulator.gross_profit, item.gross_profit),
+    }),
+    {
+      released_quantity: 0,
+      sell_total: "0.00",
+      cost_total: "0.00",
+      gross_profit: "0.00",
+    },
+  )
+
+  return {
+    quantity_basis: "released",
+    date_basis: "event_date",
+    filters: {
+      start_date: query.start_date?.toISOString() ?? null,
+      end_date: query.end_date?.toISOString() ?? null,
+    },
+    items,
+    totals,
+  }
+}
+
+function addMoneyStrings(left: string, right: string): string {
+  return (Number(left) + Number(right)).toFixed(2)
 }
