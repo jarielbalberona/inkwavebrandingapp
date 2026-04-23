@@ -27,6 +27,13 @@ export {
   sendForbidden,
 } from "./modules/auth/authorization.js"
 export type { ConfidentialFieldCategory } from "./modules/auth/authorization.js"
+export {
+  assertNoStaffRestrictedKeys,
+  findStaffRestrictedKeys,
+  shapeRoleAwareResponse,
+  staffRestrictedResponseKeys,
+} from "./modules/auth/role-safe-response.js"
+export type { StaffRestrictedResponseKey } from "./modules/auth/role-safe-response.js"
 export { AuthService, AuthenticationError } from "./modules/auth/auth.service.js"
 export { createSessionToken, verifySessionToken } from "./modules/auth/sessions.js"
 export { hashPassword, verifyPassword } from "./modules/users/passwords.js"
