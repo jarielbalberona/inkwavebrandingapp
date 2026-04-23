@@ -623,8 +623,8 @@ export function OrdersPage() {
                         <div>
                           <p className="font-medium">{selectedLineItem.cup.sku}</p>
                           <p className="text-muted-foreground">
-                            {selectedLineItem.cup.brand} · {selectedLineItem.cup.size} ·{" "}
-                            {selectedLineItem.cup.dimension}
+                            {selectedLineItem.cup.type} · {selectedLineItem.cup.brand} ·{" "}
+                            {selectedLineItem.cup.size} · {selectedLineItem.cup.diameter}
                           </p>
                         </div>
                         <Badge variant="secondary">
@@ -780,7 +780,7 @@ function updateLineItem(
 }
 
 function formatCupOption(cup: Cup): string {
-  return `${cup.sku} · ${cup.brand} · ${cup.size} · ${cup.dimension}`
+  return `${cup.sku} · ${cup.type} · ${cup.brand} · ${cup.size} · ${cup.diameter}`
 }
 
 function ProgressTotalsGrid({ totals }: { totals: ProgressTotals }) {

@@ -4,6 +4,7 @@ import {
   check,
   integer,
   numeric,
+  pgEnum,
   pgTable,
   timestamp,
   uniqueIndex,
@@ -11,16 +12,27 @@ import {
   varchar,
 } from "drizzle-orm/pg-core"
 
+export const cupTypeEnum = pgEnum("cup_type", ["paper", "plastic"])
+export const cupBrandEnum = pgEnum("cup_brand", [
+  "dabba",
+  "grecoopack",
+  "china_supplier",
+  "other_supplier",
+])
+export const cupDiameterEnum = pgEnum("cup_diameter", ["80mm", "90mm", "95mm", "98mm"])
+export const cupSizeEnum = pgEnum("cup_size", ["6.5oz", "8oz", "12oz", "16oz", "20oz", "22oz"])
+export const cupColorEnum = pgEnum("cup_color", ["transparent", "black", "white", "kraft"])
+
 export const cups = pgTable(
   "cups",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     sku: varchar("sku", { length: 80 }).notNull(),
-    brand: varchar("brand", { length: 160 }).notNull(),
-    size: varchar("size", { length: 80 }).notNull(),
-    dimension: varchar("dimension", { length: 120 }).notNull(),
-    material: varchar("material", { length: 80 }),
-    color: varchar("color", { length: 80 }),
+    type: cupTypeEnum("type").notNull(),
+    brand: cupBrandEnum("brand").notNull(),
+    diameter: cupDiameterEnum("diameter").notNull(),
+    size: cupSizeEnum("size").notNull(),
+    color: cupColorEnum("color").notNull(),
     minStock: integer("min_stock").notNull().default(0),
     costPrice: numeric("cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
     defaultSellPrice: numeric("default_sell_price", { precision: 12, scale: 2 })
@@ -38,9 +50,48 @@ export const cups = pgTable(
     check("cups_sku_not_blank", sql`length(trim(${table.sku})) > 0`),
     check("cups_sku_normalized", sql`${table.sku} = upper(${table.sku})`),
     check("cups_sku_allowed_characters", sql`${table.sku} ~ '^[A-Z0-9][A-Z0-9_-]{0,79}$'`),
-    check("cups_brand_not_blank", sql`length(trim(${table.brand})) > 0`),
-    check("cups_size_not_blank", sql`length(trim(${table.size})) > 0`),
-    check("cups_dimension_not_blank", sql`length(trim(${table.dimension})) > 0`),
+    check(
+      "cups_type_brand_contract",
+      sql`(
+        (${table.type} = 'paper' AND ${table.brand} = 'other_supplier')
+        OR
+        (${table.type} = 'plastic')
+      )`,
+    ),
+    check(
+      "cups_type_diameter_contract",
+      sql`(
+        (${table.type} = 'paper' AND ${table.diameter} IN ('80mm', '90mm'))
+        OR
+        (${table.type} = 'plastic' AND ${table.diameter} IN ('95mm', '98mm'))
+      )`,
+    ),
+    check(
+      "cups_type_size_contract",
+      sql`(
+        (${table.type} = 'paper' AND ${table.size} IN ('6.5oz', '8oz', '12oz', '16oz'))
+        OR
+        (${table.type} = 'plastic' AND ${table.size} IN ('12oz', '16oz', '20oz', '22oz'))
+      )`,
+    ),
+    check(
+      "cups_type_color_contract",
+      sql`(
+        (${table.type} = 'paper' AND ${table.color} IN ('white', 'black', 'kraft'))
+        OR
+        (
+          ${table.type} = 'plastic'
+          AND ${table.brand} IN ('dabba', 'grecoopack')
+          AND ${table.color} = 'transparent'
+        )
+        OR
+        (
+          ${table.type} = 'plastic'
+          AND ${table.brand} IN ('china_supplier', 'other_supplier')
+          AND ${table.color} IN ('transparent', 'black')
+        )
+      )`,
+    ),
   ],
 )
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
@@ -28,6 +28,13 @@ import {
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
+import {
   Table,
   TableBody,
   TableCell,
@@ -39,30 +46,76 @@ import {
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type { Cup, CupPayload } from "@/features/cups/api/cups-client"
 import { useCreateCupMutation, useCupsQuery, useUpdateCupMutation } from "@/features/cups/hooks/use-cups"
+import {
+  cupBrands,
+  cupColors,
+  cupDiameters,
+  cupSizes,
+  cupTypes,
+  formatCupContractLabel,
+  getAllowedCupBrands,
+  getAllowedCupColors,
+  getAllowedCupDiameters,
+  getAllowedCupSizes,
+} from "@/features/cups/types/cup-contract"
 import { normalizeSku, skuSchema } from "@/features/cups/types/sku"
 
-const cupFormSchema = z.object({
-  sku: skuSchema,
-  brand: z.string().trim().min(1).max(160),
-  size: z.string().trim().min(1).max(80),
-  dimension: z.string().trim().min(1).max(120),
-  material: z.string().trim().max(80).optional(),
-  color: z.string().trim().max(80).optional(),
-  min_stock: z.number().int().nonnegative(),
-  cost_price: z.number().nonnegative(),
-  default_sell_price: z.number().nonnegative(),
-  is_active: z.boolean(),
-})
+const cupFormSchema = z
+  .object({
+    sku: skuSchema,
+    type: z.enum(cupTypes),
+    brand: z.enum(cupBrands),
+    diameter: z.enum(cupDiameters),
+    size: z.enum(cupSizes),
+    color: z.enum(cupColors),
+    min_stock: z.number().int().nonnegative(),
+    cost_price: z.number().nonnegative(),
+    default_sell_price: z.number().nonnegative(),
+    is_active: z.boolean(),
+  })
+  .superRefine((values, context) => {
+    if (!getAllowedCupBrands(values.type).includes(values.brand)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["brand"],
+        message: "Invalid brand for the selected type.",
+      })
+    }
+
+    if (!getAllowedCupDiameters(values.type).includes(values.diameter)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["diameter"],
+        message: "Invalid diameter for the selected type.",
+      })
+    }
+
+    if (!getAllowedCupSizes(values.type).includes(values.size)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["size"],
+        message: "Invalid size for the selected type.",
+      })
+    }
+
+    if (!getAllowedCupColors(values.type, values.brand).includes(values.color)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["color"],
+        message: "Invalid color for the selected type and brand.",
+      })
+    }
+  })
 
 type CupFormValues = z.infer<typeof cupFormSchema>
 
 const emptyFormValues: CupFormValues = {
   sku: "",
-  brand: "",
-  size: "",
-  dimension: "",
-  material: "",
-  color: "",
+  type: "plastic",
+  brand: "dabba",
+  diameter: "95mm",
+  size: "12oz",
+  color: "transparent",
   min_stock: 0,
   cost_price: 0,
   default_sell_price: 0,
@@ -88,6 +141,16 @@ export function CupsPage() {
     defaultValues: emptyFormValues,
   })
 
+  const selectedType = useWatch({ control: form.control, name: "type" })
+  const selectedBrand = useWatch({ control: form.control, name: "brand" })
+  const availableBrands = useMemo(() => getAllowedCupBrands(selectedType), [selectedType])
+  const availableDiameters = useMemo(() => getAllowedCupDiameters(selectedType), [selectedType])
+  const availableSizes = useMemo(() => getAllowedCupSizes(selectedType), [selectedType])
+  const availableColors = useMemo(
+    () => getAllowedCupColors(selectedType, selectedBrand),
+    [selectedType, selectedBrand],
+  )
+
   useEffect(() => {
     if (!dialogOpen) {
       return
@@ -96,14 +159,36 @@ export function CupsPage() {
     form.reset(selectedCup ? toFormValues(selectedCup) : emptyFormValues)
   }, [dialogOpen, selectedCup, form])
 
+  useEffect(() => {
+    const currentBrand = form.getValues("brand")
+    if (!availableBrands.includes(currentBrand)) {
+      form.setValue("brand", availableBrands[0], { shouldValidate: true })
+    }
+
+    const currentDiameter = form.getValues("diameter")
+    if (!availableDiameters.includes(currentDiameter)) {
+      form.setValue("diameter", availableDiameters[0], { shouldValidate: true })
+    }
+
+    const currentSize = form.getValues("size")
+    if (!availableSizes.includes(currentSize)) {
+      form.setValue("size", availableSizes[0], { shouldValidate: true })
+    }
+  }, [availableBrands, availableDiameters, availableSizes, form])
+
+  useEffect(() => {
+    const currentColor = form.getValues("color")
+    if (!availableColors.includes(currentColor)) {
+      form.setValue("color", availableColors[0], { shouldValidate: true })
+    }
+  }, [availableColors, form])
+
   async function onSubmit(values: CupFormValues) {
     setSubmitError(null)
 
     const payload: CupPayload = {
       ...values,
       sku: normalizeSku(values.sku),
-      material: values.material?.trim() || undefined,
-      color: values.color?.trim() || undefined,
       cost_price: values.cost_price.toFixed(2),
       default_sell_price: values.default_sell_price.toFixed(2),
     }
@@ -140,7 +225,7 @@ export function CupsPage() {
           <div className="grid gap-1">
             <CardTitle>Cup Catalog</CardTitle>
             <CardDescription>
-              SKU is the inventory identity. Staff payloads omit cost and sell price fields.
+              SKU is the inventory identity. Contract rules are backend-enforced and mirrored in the form.
             </CardDescription>
           </div>
           {isAdmin ? <Button onClick={openCreateDialog}>Create Cup</Button> : null}
@@ -164,9 +249,11 @@ export function CupsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>SKU</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Brand</TableHead>
+                <TableHead>Diameter</TableHead>
                 <TableHead>Size</TableHead>
-                <TableHead>Dimension</TableHead>
+                <TableHead>Color</TableHead>
                 <TableHead>Min stock</TableHead>
                 <TableHead>Status</TableHead>
                 {hasPricing(cupsQuery.data) ? <TableHead>Sell price</TableHead> : null}
@@ -180,9 +267,11 @@ export function CupsPage() {
                   onClick={() => openDetailDialog(cup)}
                 >
                   <TableCell className="font-medium">{cup.sku}</TableCell>
-                  <TableCell>{cup.brand}</TableCell>
+                  <TableCell>{formatCupContractLabel(cup.type)}</TableCell>
+                  <TableCell>{formatCupContractLabel(cup.brand)}</TableCell>
+                  <TableCell>{cup.diameter}</TableCell>
                   <TableCell>{cup.size}</TableCell>
-                  <TableCell>{cup.dimension}</TableCell>
+                  <TableCell>{formatCupContractLabel(cup.color)}</TableCell>
                   <TableCell>{cup.min_stock}</TableCell>
                   <TableCell>
                     <Badge variant={cup.is_active ? "default" : "secondary"}>
@@ -215,7 +304,7 @@ export function CupsPage() {
             <DialogTitle>{selectedCup ? "Cup Detail" : "Create Cup"}</DialogTitle>
             <DialogDescription>
               {isAdmin
-                ? "Maintain cup catalog records with shared form primitives."
+                ? "Maintain cup catalog records using the enforced cup contract."
                 : "Staff can inspect cup records but cannot edit catalog data."}
             </DialogDescription>
           </DialogHeader>
@@ -230,11 +319,41 @@ export function CupsPage() {
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextFormField control={form.control} disabled={!isAdmin} label="SKU" name="sku" />
-                <TextFormField control={form.control} disabled={!isAdmin} label="Brand" name="brand" />
-                <TextFormField control={form.control} disabled={!isAdmin} label="Size" name="size" />
-                <TextFormField control={form.control} disabled={!isAdmin} label="Dimension" name="dimension" />
-                <TextFormField control={form.control} disabled={!isAdmin} label="Material" name="material" />
-                <TextFormField control={form.control} disabled={!isAdmin} label="Color" name="color" />
+                <SelectFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Type"
+                  name="type"
+                  options={cupTypes}
+                />
+                <SelectFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Brand"
+                  name="brand"
+                  options={availableBrands}
+                />
+                <SelectFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Diameter"
+                  name="diameter"
+                  options={availableDiameters}
+                />
+                <SelectFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Size"
+                  name="size"
+                  options={availableSizes}
+                />
+                <SelectFormField
+                  control={form.control}
+                  disabled={!isAdmin}
+                  label="Color"
+                  name="color"
+                  options={availableColors}
+                />
                 <NumberFormField
                   control={form.control}
                   disabled={!isAdmin}
@@ -269,7 +388,9 @@ export function CupsPage() {
                     </FormControl>
                     <div className="grid gap-1">
                       <FormLabel>Active catalog record</FormLabel>
-                      <FormDescription>Inactive cups remain visible but should not be used for new operational work.</FormDescription>
+                      <FormDescription>
+                        Inactive cups remain visible but should not be used for new operational work.
+                      </FormDescription>
                     </div>
                   </FormItem>
                 )}
@@ -299,7 +420,7 @@ function TextFormField({
   control: ReturnType<typeof useForm<CupFormValues>>["control"]
   disabled: boolean
   label: string
-  name: keyof CupFormValues
+  name: "sku"
 }) {
   return (
     <FormField
@@ -311,10 +432,51 @@ function TextFormField({
           <FormControl>
             <Input
               disabled={disabled}
-              value={typeof field.value === "string" ? field.value : ""}
+              value={field.value}
               onChange={(event) => field.onChange(event.target.value)}
             />
           </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+}
+
+function SelectFormField({
+  control,
+  disabled,
+  label,
+  name,
+  options,
+}: {
+  control: ReturnType<typeof useForm<CupFormValues>>["control"]
+  disabled: boolean
+  label: string
+  name: "type" | "brand" | "diameter" | "size" | "color"
+  options: readonly string[]
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <Select disabled={disabled} value={field.value} onValueChange={field.onChange}>
+            <FormControl>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {options.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {formatCupContractLabel(option)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <FormMessage />
         </FormItem>
       )}
@@ -395,11 +557,11 @@ function hasPricing(cups: Cup[] | undefined): boolean {
 function toFormValues(cup: Cup): CupFormValues {
   return {
     sku: cup.sku,
+    type: cup.type,
     brand: cup.brand,
+    diameter: cup.diameter,
     size: cup.size,
-    dimension: cup.dimension,
-    material: cup.material ?? "",
-    color: cup.color ?? "",
+    color: cup.color,
     min_stock: cup.min_stock,
     cost_price: Number(cup.cost_price ?? 0),
     default_sell_price: Number(cup.default_sell_price ?? 0),

@@ -66,10 +66,10 @@ export class ReportsRepository {
         cup: {
           id: cups.id,
           sku: cups.sku,
+          type: cups.type,
           brand: cups.brand,
+          diameter: cups.diameter,
           size: cups.size,
-          dimension: cups.dimension,
-          material: cups.material,
           color: cups.color,
           is_active: cups.isActive,
         },
@@ -81,10 +81,10 @@ export class ReportsRepository {
       .groupBy(
         cups.id,
         cups.sku,
+        cups.type,
         cups.brand,
+        cups.diameter,
         cups.size,
-        cups.dimension,
-        cups.material,
         cups.color,
         cups.isActive,
       )
@@ -110,10 +110,10 @@ export class ReportsRepository {
         cup: {
           id: cups.id,
           sku: cups.sku,
+          type: cups.type,
           brand: cups.brand,
+          diameter: cups.diameter,
           size: cups.size,
-          dimension: cups.dimension,
-          material: cups.material,
           color: cups.color,
           is_active: cups.isActive,
         },
@@ -132,10 +132,10 @@ export class ReportsRepository {
       .groupBy(
         cups.id,
         cups.sku,
+        cups.type,
         cups.brand,
+        cups.diameter,
         cups.size,
-        cups.dimension,
-        cups.material,
         cups.color,
         cups.isActive,
       )

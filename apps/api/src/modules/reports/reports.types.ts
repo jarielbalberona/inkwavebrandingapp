@@ -7,11 +7,11 @@ export interface InventoryReportItemDto {
   cup: {
     id: string
     sku: string
+    type: string
     brand: string
+    diameter: string
     size: string
-    dimension: string
-    material: string | null
-    color: string | null
+    color: string
     min_stock: number
     is_active: boolean
   }
@@ -50,11 +50,11 @@ export interface CupUsageReportItemDto {
   cup: {
     id: string
     sku: string
+    type: string
     brand: string
+    diameter: string
     size: string
-    dimension: string
-    material: string | null
-    color: string | null
+    color: string
     is_active: boolean
   }
   consumed_quantity: number
@@ -73,11 +73,11 @@ export interface SalesCostVisibilityReportItemDto {
   cup: {
     id: string
     sku: string
+    type: string
     brand: string
+    diameter: string
     size: string
-    dimension: string
-    material: string | null
-    color: string | null
+    color: string
     is_active: boolean
   }
   released_quantity: number
@@ -111,10 +111,10 @@ export function toInventoryReportItemDto(
     cup: {
       id: balance.cup.id,
       sku: balance.cup.sku,
+      type: balance.cup.type,
       brand: balance.cup.brand,
+      diameter: balance.cup.diameter,
       size: balance.cup.size,
-      dimension: balance.cup.dimension,
-      material: balance.cup.material,
       color: balance.cup.color,
       min_stock: balance.cup.minStock,
       is_active: balance.cup.isActive,

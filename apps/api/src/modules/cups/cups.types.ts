@@ -5,11 +5,11 @@ import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/rol
 export interface AdminCupDto {
   id: string
   sku: string
+  type: string
   brand: string
+  diameter: string
   size: string
-  dimension: string
-  material: string | null
-  color: string | null
+  color: string
   min_stock: number
   cost_price: string
   default_sell_price: string
@@ -39,10 +39,10 @@ function toAdminCupDto(cup: Cup): AdminCupDto {
   return {
     id: cup.id,
     sku: cup.sku,
+    type: cup.type,
     brand: cup.brand,
+    diameter: cup.diameter,
     size: cup.size,
-    dimension: cup.dimension,
-    material: cup.material,
     color: cup.color,
     min_stock: cup.minStock,
     cost_price: cup.costPrice,

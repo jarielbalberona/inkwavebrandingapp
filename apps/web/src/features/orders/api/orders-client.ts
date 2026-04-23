@@ -23,11 +23,11 @@ export const progressStageSchema = z.enum([
 const orderCupSchema = z.object({
   id: z.string().uuid(),
   sku: z.string(),
+  type: z.enum(["paper", "plastic"]),
   brand: z.string(),
+  diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   size: z.string(),
-  dimension: z.string(),
-  material: z.string().nullable(),
-  color: z.string().nullable(),
+  color: z.enum(["transparent", "black", "white", "kraft"]),
 })
 
 const orderItemSchema = z.object({

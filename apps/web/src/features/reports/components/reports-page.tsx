@@ -260,9 +260,10 @@ function InventoryReportTable({ items }: { items: InventoryReportItem[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>SKU</TableHead>
+          <TableHead>Type</TableHead>
           <TableHead>Brand</TableHead>
           <TableHead>Size</TableHead>
-          <TableHead>Dimension</TableHead>
+          <TableHead>Diameter</TableHead>
           <TableHead>On hand</TableHead>
           <TableHead>Reserved</TableHead>
           <TableHead>Available</TableHead>
@@ -274,9 +275,10 @@ function InventoryReportTable({ items }: { items: InventoryReportItem[] }) {
         {items.map((item) => (
           <TableRow key={item.cup.id}>
             <TableCell className="font-medium">{item.cup.sku}</TableCell>
+            <TableCell>{item.cup.type}</TableCell>
             <TableCell>{item.cup.brand}</TableCell>
             <TableCell>{item.cup.size}</TableCell>
-            <TableCell>{item.cup.dimension}</TableCell>
+            <TableCell>{item.cup.diameter}</TableCell>
             <TableCell>{item.on_hand.toLocaleString()}</TableCell>
             <TableCell>{item.reserved.toLocaleString()}</TableCell>
             <TableCell>
@@ -506,9 +508,10 @@ function CupUsageReportTable({ items }: { items: CupUsageReportItem[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>SKU</TableHead>
+          <TableHead>Type</TableHead>
           <TableHead>Brand</TableHead>
           <TableHead>Size</TableHead>
-          <TableHead>Dimension</TableHead>
+          <TableHead>Diameter</TableHead>
           <TableHead>Consumed Quantity</TableHead>
           <TableHead>Status</TableHead>
         </TableRow>
@@ -517,9 +520,10 @@ function CupUsageReportTable({ items }: { items: CupUsageReportItem[] }) {
         {sortedItems.map((item) => (
           <TableRow key={item.cup.id}>
             <TableCell className="font-medium">{item.cup.sku}</TableCell>
+            <TableCell>{item.cup.type}</TableCell>
             <TableCell>{item.cup.brand}</TableCell>
             <TableCell>{item.cup.size}</TableCell>
-            <TableCell>{item.cup.dimension}</TableCell>
+            <TableCell>{item.cup.diameter}</TableCell>
             <TableCell>{item.consumed_quantity.toLocaleString()}</TableCell>
             <TableCell>
               <Badge variant={item.cup.is_active ? "default" : "secondary"}>

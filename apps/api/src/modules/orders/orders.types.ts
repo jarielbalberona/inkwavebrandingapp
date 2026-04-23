@@ -11,11 +11,11 @@ import type { ProgressEventWithRelations } from "./orders.repository.js"
 interface OrderCupDto {
   id: string
   sku: string
+  type: string
   brand: string
+  diameter: string
   size: string
-  dimension: string
-  material: string | null
-  color: string | null
+  color: string
 }
 
 interface BaseOrderItemDto {
@@ -127,11 +127,11 @@ function toCupDto(cup: Cup): OrderCupDto {
   return {
     id: cup.id,
     sku: cup.sku,
+    type: cup.type,
     brand: cup.brand,
+    diameter: cup.diameter,
     size: cup.size,
-    dimension: cup.dimension,
-    material: cup.material ?? null,
-    color: cup.color ?? null,
+    color: cup.color,
   }
 }
 

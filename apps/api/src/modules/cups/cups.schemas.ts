@@ -1,38 +1,62 @@
 import { z } from "zod"
 
+import {
+  addCupContractIssues,
+  cupBrandSchema,
+  cupColorSchema,
+  cupDiameterSchema,
+  cupSizeSchema,
+  cupTypeSchema,
+} from "./cups.contract.js"
 import { skuSchema } from "./sku.js"
-
-const requiredText = (max: number) => z.string().trim().min(1).max(max)
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .transform((value) => (value === "" ? undefined : value))
 
 export const cupMoneySchema = z
   .string()
   .trim()
   .regex(/^\d+(\.\d{1,2})?$/, "Must be a non-negative money amount with up to 2 decimals")
 
-export const createCupSchema = z.object({
+const baseCupSchema = z.object({
   sku: skuSchema,
-  brand: requiredText(160),
-  size: requiredText(80),
-  dimension: requiredText(120),
-  material: optionalText(80),
-  color: optionalText(80),
+  type: cupTypeSchema,
+  brand: cupBrandSchema,
+  diameter: cupDiameterSchema,
+  size: cupSizeSchema,
+  color: cupColorSchema,
   minStock: z.number().int().nonnegative().default(0),
   costPrice: cupMoneySchema.default("0"),
   defaultSellPrice: cupMoneySchema.default("0"),
   isActive: z.boolean().default(true),
 })
 
-export const updateCupSchema = createCupSchema.partial().refine(
-  (value) => Object.keys(value).length > 0,
-  "At least one cup field is required",
-)
+export const createCupSchema = baseCupSchema.superRefine((input, context) => {
+  addCupContractIssues(input, context)
+})
+
+export const updateCupSchema = baseCupSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "At least one cup field is required")
+  .superRefine((input, context) => {
+    if (
+      input.type === undefined ||
+      input.brand === undefined ||
+      input.diameter === undefined ||
+      input.size === undefined ||
+      input.color === undefined
+    ) {
+      return
+    }
+
+    addCupContractIssues(
+      {
+        type: input.type,
+        brand: input.brand,
+        diameter: input.diameter,
+        size: input.size,
+        color: input.color,
+      },
+      context,
+    )
+  })
 
 export const cupIdSchema = z.string().uuid()
 
@@ -46,24 +70,24 @@ export const cupListQuerySchema = z.object({
 
 export const createCupRequestSchema = z
   .object({
-    sku: createCupSchema.shape.sku,
-    brand: createCupSchema.shape.brand,
-    size: createCupSchema.shape.size,
-    dimension: createCupSchema.shape.dimension,
-    material: createCupSchema.shape.material,
-    color: createCupSchema.shape.color,
-    min_stock: createCupSchema.shape.minStock,
-    cost_price: createCupSchema.shape.costPrice,
-    default_sell_price: createCupSchema.shape.defaultSellPrice,
-    is_active: createCupSchema.shape.isActive,
+    sku: baseCupSchema.shape.sku,
+    type: baseCupSchema.shape.type,
+    brand: baseCupSchema.shape.brand,
+    diameter: baseCupSchema.shape.diameter,
+    size: baseCupSchema.shape.size,
+    color: baseCupSchema.shape.color,
+    min_stock: baseCupSchema.shape.minStock,
+    cost_price: baseCupSchema.shape.costPrice,
+    default_sell_price: baseCupSchema.shape.defaultSellPrice,
+    is_active: baseCupSchema.shape.isActive,
   })
   .transform((input) =>
     createCupSchema.parse({
       sku: input.sku,
+      type: input.type,
       brand: input.brand,
+      diameter: input.diameter,
       size: input.size,
-      dimension: input.dimension,
-      material: input.material,
       color: input.color,
       minStock: input.min_stock,
       costPrice: input.cost_price,
@@ -79,10 +103,10 @@ export const updateCupRequestSchema = createCupRequestSchema
   .transform((input) =>
     updateCupSchema.parse({
       sku: input.sku,
+      type: input.type,
       brand: input.brand,
+      diameter: input.diameter,
       size: input.size,
-      dimension: input.dimension,
-      material: input.material,
       color: input.color,
       minStock: input.min_stock,
       costPrice: input.cost_price,
