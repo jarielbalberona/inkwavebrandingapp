@@ -9,6 +9,7 @@ import { handleCustomersRoute } from "./modules/customers/customers.routes.js"
 import { handleCupsRoute } from "./modules/cups/cups.routes.js"
 import { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
 import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
+import { handleReportsRoute } from "./modules/reports/reports.routes.js"
 
 const env = loadApiEnv()
 
@@ -51,6 +52,10 @@ const server = createServer(async (request, response) => {
     }
 
     if (await handleOrdersRoute(request, response, { env: runtimeEnv })) {
+      return
+    }
+
+    if (await handleReportsRoute(request, response, { env: runtimeEnv })) {
       return
     }
 
