@@ -28,6 +28,7 @@ import {
   OrderCustomerInactiveError,
   OrderCustomerNotFoundError,
   OrderLineItemNotFoundError,
+  OrderPrintedQuantityNotReservedError,
   OrderProgressClosedError,
   OrderProgressValidationError,
   OrdersService,
@@ -130,6 +131,7 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderCupInactiveError ||
     error instanceof DuplicateOrderCupError ||
     error instanceof OrderLineItemNotFoundError ||
+    error instanceof OrderPrintedQuantityNotReservedError ||
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||
     error instanceof InventoryBalanceCupNotFoundError ||

@@ -4,6 +4,7 @@ import type { DatabaseClient } from "../../db/client.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
+import { InventoryRepository } from "../inventory/inventory.repository.js"
 import { InventoryService } from "../inventory/inventory.service.js"
 import {
   createOrderLineItemProgressEventSchema,
@@ -81,6 +82,14 @@ export class OrderProgressValidationError extends Error {
 
   constructor(message: string) {
     super(message)
+  }
+}
+
+export class OrderPrintedQuantityNotReservedError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Printed quantity exceeds remaining reserved stock")
   }
 }
 
@@ -202,41 +211,69 @@ export class OrdersService {
     user: SafeUser,
   ) {
     const parsedInput = createOrderLineItemProgressEventSchema.parse(input)
-    const orderItem = await this.ordersRepository.findOrderItemWithOrder(orderLineItemId)
 
-    if (!orderItem) {
-      throw new OrderLineItemNotFoundError()
-    }
+    return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
+      const orderItem = await ordersRepository.findOrderItemWithOrder(orderLineItemId)
 
-    if (orderItem.order.status === "canceled") {
-      throw new OrderProgressClosedError()
-    }
+      if (!orderItem) {
+        throw new OrderLineItemNotFoundError()
+      }
 
-    const existingEvents = await this.ordersRepository.listProgressEventsForOrderItem(orderLineItemId)
-    const nextTotals = calculateProgressTotals(orderItem.quantity, [
-      ...existingEvents,
-      {
+      if (orderItem.order.status === "canceled") {
+        throw new OrderProgressClosedError()
+      }
+
+      const existingEvents = await ordersRepository.listProgressEventsForOrderItem(orderLineItemId)
+      const nextTotals = calculateProgressTotals(orderItem.quantity, [
+        ...existingEvents,
+        {
+          stage: parsedInput.stage,
+          quantity: parsedInput.quantity,
+        },
+      ])
+
+      validateProgressTotals(orderItem.quantity, nextTotals)
+
+      const event = await ordersRepository.createProgressEvent({
+        orderLineItemId,
         stage: parsedInput.stage,
         quantity: parsedInput.quantity,
-      },
-    ])
+        note: parsedInput.note,
+        eventDate: parsedInput.event_date,
+        createdByUserId: user.id,
+      })
 
-    validateProgressTotals(orderItem.quantity, nextTotals)
+      if (parsedInput.stage === "printed") {
+        const inventoryRepository = new InventoryRepository(db)
+        const balance = await inventoryRepository.getBalanceByCupId(orderItem.cupId)
 
-    const event = await this.ordersRepository.createProgressEvent({
-      orderLineItemId,
-      stage: parsedInput.stage,
-      quantity: parsedInput.quantity,
-      note: parsedInput.note,
-      eventDate: parsedInput.event_date,
-      createdByUserId: user.id,
+        if (!balance) {
+          throw new OrderCupNotFoundError()
+        }
+
+        if (balance.reserved < parsedInput.quantity || balance.onHand < parsedInput.quantity) {
+          throw new OrderPrintedQuantityNotReservedError()
+        }
+
+        await inventoryRepository.appendMovement({
+          cupId: orderItem.cupId,
+          movementType: "consume",
+          quantity: parsedInput.quantity,
+          orderId: orderItem.orderId,
+          orderItemId: orderItem.id,
+          note: "Consumed by printed progress event",
+          reference: event.id,
+          createdByUserId: user.id,
+        })
+      }
+
+      const events = [...existingEvents, event]
+
+      return {
+        event: toProgressEventDto(event),
+        totals: calculateProgressTotals(orderItem.quantity, events),
+      }
     })
-    const events = [...existingEvents, event]
-
-    return {
-      event: toProgressEventDto(event),
-      totals: calculateProgressTotals(orderItem.quantity, events),
-    }
   }
 }
 
