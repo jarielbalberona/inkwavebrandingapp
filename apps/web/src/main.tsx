@@ -5,7 +5,7 @@ import { RouterProvider } from "@tanstack/react-router"
 
 import "@workspace/ui/globals.css"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
-import { router } from "@/app/router.tsx"
+import { router } from "@/router.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 
 const queryClient = new QueryClient()
