@@ -13,6 +13,7 @@ export class DashboardService {
       this.dashboardRepository.countOrdersByStatus(),
     ])
     const cupBalances = balances.filter((balance) => balance.itemType === "cup")
+    const lidBalances = balances.filter((balance) => balance.itemType === "lid")
 
     const countsByStatus = new Map(orderRows.map((row) => [row.status, row.count]))
     const statuses = orderReportStatuses.map((status) => ({
@@ -22,9 +23,12 @@ export class DashboardService {
 
     return {
       inventory: {
-        tracked_cups: cupBalances.length,
-        low_stock_count: cupBalances.filter((balance) => balance.onHand - balance.reserved <= balance.cup.minStock)
-          .length,
+        tracked_items: balances.length,
+        tracked_cup_count: cupBalances.length,
+        tracked_lid_count: lidBalances.length,
+        low_stock_cup_count: cupBalances.filter(
+          (balance) => balance.onHand - balance.reserved <= balance.cup.minStock,
+        ).length,
       },
       orders: {
         statuses,

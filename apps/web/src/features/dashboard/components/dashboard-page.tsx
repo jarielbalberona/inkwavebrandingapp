@@ -52,15 +52,15 @@ export function DashboardPage() {
             <>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
-                  label="Tracked cups"
-                  value={summary.inventory.tracked_cups}
-                  description="Active and inactive cup records with inventory tracking."
+                  label="Tracked items"
+                  value={summary.inventory.tracked_items}
+                  description={`Inventory-tracked cups and lids. Cups: ${summary.inventory.tracked_cup_count.toLocaleString()} • Lids: ${summary.inventory.tracked_lid_count.toLocaleString()}.`}
                 />
                 <MetricCard
-                  label="Low stock"
-                  value={summary.inventory.low_stock_count}
-                  description="Count of tracked cups where available stock is below threshold."
-                  tone={summary.inventory.low_stock_count > 0 ? "destructive" : "default"}
+                  label="Low-stock cups"
+                  value={summary.inventory.low_stock_cup_count}
+                  description="Cup threshold only. Lids do not have reorder thresholds in schema yet."
+                  tone={summary.inventory.low_stock_cup_count > 0 ? "destructive" : "default"}
                 />
                 <MetricCard
                   label="Pending orders"
@@ -147,9 +147,10 @@ function OrderStatusCard({ summary }: { summary: DashboardSummary }) {
 
 function OperationalNotesCard({ summary }: { summary: DashboardSummary }) {
   const attentionItems = [
-    summary.inventory.low_stock_count > 0
-      ? `${summary.inventory.low_stock_count.toLocaleString()} low-stock cup records need attention.`
+    summary.inventory.low_stock_cup_count > 0
+      ? `${summary.inventory.low_stock_cup_count.toLocaleString()} low-stock cup records need attention.`
       : "No low-stock cup records right now.",
+    `${summary.inventory.tracked_lid_count.toLocaleString()} lid SKUs are tracked in inventory, but lids still have no low-stock threshold model.`,
     summary.orders.partial_released_count > 0
       ? `${summary.orders.partial_released_count.toLocaleString()} orders are partially released and still open.`
       : "No partially released orders right now.",

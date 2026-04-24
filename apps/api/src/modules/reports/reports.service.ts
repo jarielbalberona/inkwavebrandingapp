@@ -19,11 +19,11 @@ export class ReportsService {
 
   async getInventorySummary(): Promise<InventoryReportDto> {
     const balances = await this.reportsRepository.listInventoryBalances()
-    const cupBalances = balances.filter((balance) => balance.itemType === "cup")
 
     return {
       low_stock_basis: "available",
-      items: cupBalances.map(toInventoryReportItemDto),
+      low_stock_scope: "cup_min_stock_only",
+      items: balances.map(toInventoryReportItemDto),
     }
   }
 
@@ -32,7 +32,8 @@ export class ReportsService {
 
     return {
       low_stock_basis: summary.low_stock_basis,
-      items: summary.items.filter((item) => item.is_low_stock),
+      low_stock_scope: summary.low_stock_scope,
+      items: summary.items.filter((item) => item.item_type === "cup" && item.is_low_stock),
     }
   }
 

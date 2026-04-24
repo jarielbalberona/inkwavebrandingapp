@@ -2,20 +2,21 @@ import { z } from "zod"
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
 
-const reportCupSchema = z.object({
+const reportInventoryItemSchema = z.object({
   id: z.string().uuid(),
   sku: z.string(),
   type: z.enum(["paper", "plastic"]),
   brand: z.string(),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
-  size: z.string(),
-  color: z.enum(["transparent", "black", "white", "kraft"]),
-  min_stock: z.number(),
+  size_or_shape: z.string(),
+  color: z.string(),
+  min_stock: z.number().nullable(),
   is_active: z.boolean(),
 })
 
 const inventoryReportItemSchema = z.object({
-  cup: reportCupSchema,
+  item_type: z.enum(["cup", "lid"]),
+  item: reportInventoryItemSchema,
   on_hand: z.number(),
   reserved: z.number(),
   available: z.number(),
@@ -24,6 +25,7 @@ const inventoryReportItemSchema = z.object({
 
 const inventoryReportSchema = z.object({
   low_stock_basis: z.literal("available"),
+  low_stock_scope: z.literal("cup_min_stock_only"),
   items: z.array(inventoryReportItemSchema),
 })
 

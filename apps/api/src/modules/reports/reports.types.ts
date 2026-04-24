@@ -4,15 +4,16 @@ import type { CupUsageReportQuery } from "./reports.schemas.js"
 import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
 
 export interface InventoryReportItemDto {
-  cup: {
+  item_type: "cup" | "lid"
+  item: {
     id: string
     sku: string
     type: string
     brand: string
     diameter: string
-    size: string
+    size_or_shape: string
     color: string
-    min_stock: number
+    min_stock: number | null
     is_active: boolean
   }
   on_hand: number
@@ -23,6 +24,7 @@ export interface InventoryReportItemDto {
 
 export interface InventoryReportDto {
   low_stock_basis: "available"
+  low_stock_scope: "cup_min_stock_only"
   items: InventoryReportItemDto[]
 }
 
@@ -105,28 +107,46 @@ export interface SalesCostVisibilityReportDto {
 export function toInventoryReportItemDto(
   balance: InventoryBalanceSummary,
 ): InventoryReportItemDto {
-  if (balance.itemType !== "cup") {
-    throw new Error("Inventory reports currently operate on cup balances only")
-  }
-
   const available = calculateAvailable(balance.onHand, balance.reserved)
 
+  if (balance.itemType === "cup") {
+    return {
+      item_type: "cup",
+      item: {
+        id: balance.cup.id,
+        sku: balance.cup.sku,
+        type: balance.cup.type,
+        brand: balance.cup.brand,
+        diameter: balance.cup.diameter,
+        size_or_shape: balance.cup.size,
+        color: balance.cup.color,
+        min_stock: balance.cup.minStock,
+        is_active: balance.cup.isActive,
+      },
+      on_hand: balance.onHand,
+      reserved: balance.reserved,
+      available,
+      is_low_stock: available <= balance.cup.minStock,
+    }
+  }
+
   return {
-    cup: {
-      id: balance.cup.id,
-      sku: balance.cup.sku,
-      type: balance.cup.type,
-      brand: balance.cup.brand,
-      diameter: balance.cup.diameter,
-      size: balance.cup.size,
-      color: balance.cup.color,
-      min_stock: balance.cup.minStock,
-      is_active: balance.cup.isActive,
+    item_type: "lid",
+    item: {
+      id: balance.lid.id,
+      sku: balance.lid.sku,
+      type: balance.lid.type,
+      brand: balance.lid.brand,
+      diameter: balance.lid.diameter,
+      size_or_shape: balance.lid.shape,
+      color: balance.lid.color,
+      min_stock: null,
+      is_active: balance.lid.isActive,
     },
     on_hand: balance.onHand,
     reserved: balance.reserved,
     available,
-    is_low_stock: available <= balance.cup.minStock,
+    is_low_stock: false,
   }
 }
 

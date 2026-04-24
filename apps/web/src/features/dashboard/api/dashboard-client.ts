@@ -9,8 +9,10 @@ const dashboardOrderStatusSchema = z.object({
 
 const dashboardSummarySchema = z.object({
   inventory: z.object({
-    tracked_cups: z.number(),
-    low_stock_count: z.number(),
+    tracked_items: z.number(),
+    tracked_cup_count: z.number(),
+    tracked_lid_count: z.number(),
+    low_stock_cup_count: z.number(),
   }),
   orders: z.object({
     statuses: z.array(dashboardOrderStatusSchema),

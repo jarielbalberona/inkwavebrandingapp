@@ -72,10 +72,9 @@ export function ReportsPage() {
         <CardHeader>
           <CardTitle>Reports</CardTitle>
           <CardDescription>
-            Inventory, order, usage, and admin financial reporting now come from backend source
-            data. No stale
-            <span className="mx-1 font-medium text-foreground">printing</span>
-            status is shown anywhere in this screen.
+            Inventory summary now reflects tracked cups and lids. Low-stock remains cup-threshold
+            only because lids do not have reorder thresholds in schema. Usage and financial views
+            remain explicitly cup-based.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -137,7 +136,7 @@ export function ReportsPage() {
             <p className="text-sm text-muted-foreground">
               {activeTab === "inventory-summary"
                 ? "No inventory report rows available yet."
-                : "No low-stock rows right now."}
+                : "No low-stock cup rows right now."}
             </p>
           ) : null}
 
@@ -194,7 +193,11 @@ function InventoryReportSummaryCards({
       <MetricCard
         label="Visible rows"
         value={items?.length ?? 0}
-        description={activeTab === "inventory-summary" ? "All cups in summary" : "Low-stock rows"}
+        description={
+          activeTab === "inventory-summary"
+            ? "Tracked cups and lids in inventory summary"
+            : "Cup rows below available-vs-min-stock threshold"
+        }
       />
       <MetricCard
         label="Total available"
@@ -203,8 +206,8 @@ function InventoryReportSummaryCards({
       />
       <MetricCard
         label="Inactive rows"
-        value={sum(items, (item) => (item.cup.is_active ? 0 : 1))}
-        description="Inactive cups still shown if data exists"
+        value={sum(items, (item) => (item.item.is_active ? 0 : 1))}
+        description="Inactive rows still shown if data exists"
       />
     </div>
   )
@@ -260,9 +263,10 @@ function InventoryReportTable({ items }: { items: InventoryReportItem[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>SKU</TableHead>
+          <TableHead>Item</TableHead>
           <TableHead>Type</TableHead>
           <TableHead>Brand</TableHead>
-          <TableHead>Size</TableHead>
+          <TableHead>Size / Shape</TableHead>
           <TableHead>Diameter</TableHead>
           <TableHead>On hand</TableHead>
           <TableHead>Reserved</TableHead>
@@ -273,12 +277,13 @@ function InventoryReportTable({ items }: { items: InventoryReportItem[] }) {
       </TableHeader>
       <TableBody>
         {items.map((item) => (
-          <TableRow key={item.cup.id}>
-            <TableCell className="font-medium">{item.cup.sku}</TableCell>
-            <TableCell>{item.cup.type}</TableCell>
-            <TableCell>{item.cup.brand}</TableCell>
-            <TableCell>{item.cup.size}</TableCell>
-            <TableCell>{item.cup.diameter}</TableCell>
+          <TableRow key={item.item.id}>
+            <TableCell className="font-medium">{item.item.sku}</TableCell>
+            <TableCell className="capitalize">{item.item_type}</TableCell>
+            <TableCell>{item.item.type}</TableCell>
+            <TableCell>{item.item.brand}</TableCell>
+            <TableCell>{item.item.size_or_shape}</TableCell>
+            <TableCell>{item.item.diameter}</TableCell>
             <TableCell>{item.on_hand.toLocaleString()}</TableCell>
             <TableCell>{item.reserved.toLocaleString()}</TableCell>
             <TableCell>
@@ -286,14 +291,28 @@ function InventoryReportTable({ items }: { items: InventoryReportItem[] }) {
                 {item.available.toLocaleString()}
               </span>
             </TableCell>
-            <TableCell>{item.cup.min_stock.toLocaleString()}</TableCell>
+            <TableCell>
+              {item.item.min_stock === null ? (
+                <span className="text-muted-foreground">No threshold</span>
+              ) : (
+                item.item.min_stock.toLocaleString()
+              )}
+            </TableCell>
             <TableCell>
               <div className="flex gap-2">
-                <Badge variant={item.is_low_stock ? "destructive" : "outline"}>
-                  {item.is_low_stock ? "Low stock" : "Healthy"}
+                <Badge
+                  variant={
+                    item.item_type === "cup" && item.is_low_stock ? "destructive" : "outline"
+                  }
+                >
+                  {item.item_type === "cup"
+                    ? item.is_low_stock
+                      ? "Low stock"
+                      : "Healthy"
+                    : "No threshold"}
                 </Badge>
-                <Badge variant={item.cup.is_active ? "default" : "secondary"}>
-                  {item.cup.is_active ? "Active" : "Inactive"}
+                <Badge variant={item.item.is_active ? "default" : "secondary"}>
+                  {item.item.is_active ? "Active" : "Inactive"}
                 </Badge>
               </div>
             </TableCell>
@@ -354,12 +373,12 @@ function CupUsageReportSection({ report }: { report: CupUsageReport | undefined 
         <MetricCard
           label="Tracked SKUs"
           value={sortedItems.length}
-          description="Only cups with consume movements appear"
+          description="Cup-only usage surface based on inventory consumption movements"
         />
         <MetricCard
           label="Total consumed"
           value={report?.total_consumed_quantity ?? 0}
-          description="Sum of consume movement quantities"
+          description="Cup consume and order-linked adjustment quantities"
         />
         <MetricCard
           label="Inactive SKUs"
@@ -414,22 +433,22 @@ function SalesCostReportSection({
         <MetricCard
           label="Released quantity"
           value={report?.totals.released_quantity ?? 0}
-          description="Explicit quantity basis from backend"
+          description="Cup-only released quantity basis from backend"
         />
         <MoneyMetricCard
           label="Sell total"
           value={report?.totals.sell_total ?? "0.00"}
-          description="Backend-calculated released sell value"
+          description="Cup-only released sell value"
         />
         <MoneyMetricCard
           label="Cost total"
           value={report?.totals.cost_total ?? "0.00"}
-          description="Backend-calculated released cost value"
+          description="Cup-only released cost value"
         />
         <MoneyMetricCard
           label="Gross profit"
           value={report?.totals.gross_profit ?? "0.00"}
-          description="Simple released-basis profit visibility"
+          description="Cup-only released-basis profit visibility"
         />
       </div>
 

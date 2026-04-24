@@ -9,8 +9,10 @@ export interface DashboardOrderStatusCountDto {
 
 export interface DashboardSummaryDto {
   inventory: {
-    tracked_cups: number
-    low_stock_count: number
+    tracked_items: number
+    tracked_cup_count: number
+    tracked_lid_count: number
+    low_stock_cup_count: number
   }
   orders: {
     statuses: DashboardOrderStatusCountDto[]

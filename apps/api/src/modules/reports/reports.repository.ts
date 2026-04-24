@@ -1,4 +1,4 @@
-import { and, asc, gte, lte, eq, sql } from "drizzle-orm"
+import { and, asc, gte, isNotNull, lte, eq, or, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import { cups, inventoryMovements, orders } from "../../db/schema/index.js"
@@ -56,7 +56,13 @@ export class ReportsRepository {
 
   async listCupUsage(query: CupUsageReportQuery): Promise<CupUsageRow[]> {
     const conditions = [
-      eq(inventoryMovements.movementType, "consume"),
+      or(
+        eq(inventoryMovements.movementType, "consume"),
+        and(
+          eq(inventoryMovements.movementType, "adjustment_out"),
+          isNotNull(inventoryMovements.orderItemId),
+        ),
+      ),
       query.start_date ? gte(inventoryMovements.createdAt, query.start_date) : undefined,
       query.end_date ? lte(inventoryMovements.createdAt, query.end_date) : undefined,
     ].filter(Boolean)
