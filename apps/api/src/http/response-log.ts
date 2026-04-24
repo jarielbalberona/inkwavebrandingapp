@@ -21,6 +21,7 @@ export interface HttpResponseLog {
     table?: string
     detail?: string
     constraint?: string
+    pg_message?: string
   }
 }
 
@@ -93,6 +94,9 @@ export function record5xxResponseBodyForLogging(
   }
   if (typeof o.constraint === "string") {
     clientError.constraint = o.constraint
+  }
+  if (typeof o.pg_message === "string") {
+    clientError.pg_message = truncate(o.pg_message, MAX_ERROR_TEXT)
   }
 
   patchLog(response, { clientError })

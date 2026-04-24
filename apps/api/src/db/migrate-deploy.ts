@@ -91,6 +91,10 @@ function previewStatement(statement: string): string {
   return statement.replaceAll(/\s+/g, " ").trim().slice(0, 240)
 }
 
+function recordedMigrationKey(hash: string, createdAt: string | number): string {
+  return `${String(createdAt)}:${hash}`
+}
+
 function migrationRequiresAutocommit(migration: ParsedMigration): boolean {
   return migration.statements.some((statement) =>
     /^\s*ALTER\s+TYPE\s+.+\s+ADD\s+VALUE\b/i.test(statement),
@@ -111,18 +115,21 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
       )
     `)
 
-    const lastMigrationResult = await client.query<{ created_at: string | number }>(`
-      SELECT created_at
+    // Apply by journal order, but skip only migrations already recorded. Using max(created_at) >=
+    // migration.when is wrong: journal entries can have non-monotonic "when" timestamps, which
+    // caused newer migrations to permanently skip older ones (e.g. 0015, 0023).
+    const appliedResult = await client.query<{ created_at: string; hash: string }>(`
+      SELECT created_at, hash
       FROM "drizzle"."__drizzle_migrations"
-      ORDER BY created_at DESC
-      LIMIT 1
     `)
-    const lastCreatedAt = Number(lastMigrationResult.rows[0]?.created_at ?? 0)
+    const appliedKeys = new Set(
+      appliedResult.rows.map((row) => recordedMigrationKey(row.hash, row.created_at)),
+    )
 
     let applied = 0
 
     for (const migration of migrations) {
-      if (lastCreatedAt >= migration.folderMillis) {
+      if (appliedKeys.has(recordedMigrationKey(migration.hash, migration.folderMillis))) {
         continue
       }
 
@@ -152,6 +159,7 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
         if (useTransaction) {
           await client.query("COMMIT")
         }
+        appliedKeys.add(recordedMigrationKey(migration.hash, migration.folderMillis))
         applied += 1
       } catch (error) {
         if (useTransaction) {
@@ -173,7 +181,7 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
 
     if (applied === 0) {
       console.log(
-        `Migrations: database already at journal head (last created_at=${String(lastCreatedAt)}). Nothing to apply among ${migrations.length} known migrations.`,
+        `Migrations: up to date. Journal has ${migrations.length} migration(s); database has ${appliedResult.rows.length} __drizzle_migrations row(s). Nothing new applied in this run.`,
       )
     } else {
       console.log(`Migrations: applied ${applied} migration(s) successfully.`)

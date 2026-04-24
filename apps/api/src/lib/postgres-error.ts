@@ -67,14 +67,21 @@ export function collectPostgresErrorMetadata(error: unknown): CollectedPostgresE
     return undefined
   }
 
-  const code = pickFirstString((n) => (typeof n.code === "string" && PG_CODE.test(n.code) ? n.code : ""))!
+  const primary = pgNodes[pgNodes.length - 1] as Record<string, unknown>
+  const codeRaw = primary.code
+  if (typeof codeRaw !== "string" || !PG_CODE.test(codeRaw)) {
+    return null
+  }
+  const code = codeRaw
   const driverMessage =
-    pickFirstString((n) => (typeof n.message === "string" ? n.message : undefined)) ||
+    (typeof primary.message === "string" && primary.message.length > 0
+      ? primary.message
+      : pickFirstString((n) => (typeof n.message === "string" ? n.message : undefined))) ||
     "PostgreSQL error (no message)"
 
   let column = pickFirstString((n) => (typeof n.column === "string" ? n.column : undefined))
   let table = pickFirstString((n) => (typeof n.table === "string" ? n.table : undefined))
-  let detail = pickFirstString((n) => (typeof n.detail === "string" ? n.detail : undefined))
+  const detail = pickFirstString((n) => (typeof n.detail === "string" ? n.detail : undefined))
   const constraint = pickFirstString((n) => (typeof n.constraint === "string" ? n.constraint : undefined))
 
   if (code === "42703" || code === "42P01") {

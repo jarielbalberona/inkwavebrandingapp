@@ -56,6 +56,8 @@ Before running migrations in staging or production:
    - `pnpm --filter @workspace/api db:drizzle-check`
 6. Do not run ad hoc SQL against a guessed target unless incident response explicitly requires it and the target database has already been verified.
 
+`db:migrate:deploy` records each migration in `drizzle.__drizzle_migrations` and skips a migration only when a row with the same `created_at` (journal `when`) **and** `hash` already exists. Journal entry timestamps are not guaranteed to be increasing; never assume `max(created_at)` is enough to decide what is “already applied.”
+
 ## Local Development Baseline
 
 Local Docker PostgreSQL uses:

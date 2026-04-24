@@ -1,4 +1,9 @@
-type LogLevel = "info" | "error"
+/**
+ * Structured logging via [Pino](https://github.com/pinojs/pino). JSON to stdout;
+ * use `LOG_LEVEL` (e.g. `debug`, `info`, `warn`, `error`) or default `info` in production
+ * and `debug` otherwise.
+ */
+import pino from "pino"
 
 type JsonValue =
   | string
@@ -8,17 +13,34 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue }
 
-interface LogPayload {
+export interface LogPayload {
   event: string
   [key: string]: JsonValue
 }
 
-export function logInfo(payload: LogPayload) {
-  writeLog("info", payload)
+const level =
+  process.env.LOG_LEVEL ??
+  (process.env.NODE_ENV === "production" ? "info" : "debug")
+
+/** Root logger; use `logInfo` / `logError` or create a child with `logger.child({ ... })`. */
+export const logger = pino({
+  name: "inkwave-api",
+  level,
+  formatters: {
+    level: (label) => ({ level: label }),
+  },
+  redact: {
+    paths: ["password", "passwordHash", "*.password", "req.headers.authorization", "cookie"],
+    censor: "[Redacted]",
+  },
+})
+
+export function logInfo(payload: LogPayload): void {
+  logger.info(payload)
 }
 
-export function logError(payload: LogPayload) {
-  writeLog("error", payload)
+export function logError(payload: LogPayload): void {
+  logger.error(payload)
 }
 
 export function serializeError(error: unknown): Record<string, JsonValue> {
@@ -35,19 +57,4 @@ export function serializeError(error: unknown): Record<string, JsonValue> {
     message: typeof error === "string" ? error : "Unknown error",
     stack: null,
   }
-}
-
-function writeLog(level: LogLevel, payload: LogPayload) {
-  const entry = JSON.stringify({
-    level,
-    timestamp: new Date().toISOString(),
-    ...payload,
-  })
-
-  if (level === "error") {
-    console.error(entry)
-    return
-  }
-
-  console.log(entry)
 }

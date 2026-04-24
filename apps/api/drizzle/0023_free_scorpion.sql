@@ -1,1 +1,1 @@
-ALTER TABLE "users" ADD COLUMN "permissions" text[] DEFAULT '{}'::text[] NOT NULL;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "permissions" text[] DEFAULT '{}'::text[] NOT NULL;

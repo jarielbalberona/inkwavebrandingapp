@@ -5,6 +5,7 @@ import type { ApiEnv } from "../../config/env.js"
 import { getDatabaseClient } from "../../db/client.js"
 import { readJsonBody, sendJson } from "../../http/json.js"
 import { getRequestPath } from "../../http/routes.js"
+import { collectPostgresErrorMetadata } from "../../lib/postgres-error.js"
 import { requireAuthenticatedRequest } from "../auth/auth.middleware.js"
 import { AuthorizationError, sendForbidden } from "../auth/authorization.js"
 import { AuthService } from "../auth/auth.service.js"
@@ -273,6 +274,7 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
       detail: persistenceError.detail,
       column: persistenceError.column,
       table: persistenceError.table,
+      ...(persistenceError.pg_message ? { pg_message: persistenceError.pg_message } : {}),
     })
     return
   }
@@ -295,6 +297,8 @@ interface OrderPersistenceErrorResponse {
   detail?: string
   column?: string
   table?: string
+  /** Truncated driver/Postgres text for support logs; safe to read in server logs, not a secret. */
+  pg_message?: string
 }
 
 /**
@@ -395,75 +399,57 @@ function userMessageForOrderDbError(
   return "The order could not be saved. Check your network, refresh the form, and try again. If a customer or product was deleted while you were working, re-select it."
 }
 
+const PG_MESSAGE_MAX = 2_000
+
+function truncateForApiMessage(message: string, max: number): string {
+  if (message.length <= max) {
+    return message
+  }
+  return `${message.slice(0, max)}…`
+}
+
 function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse | null {
-  const code = getDbErrorCode(error)
+  const meta = collectPostgresErrorMetadata(error)
+  const code = meta?.code ?? getDbErrorCode(error)
 
   if (!code) {
     return null
   }
 
-  const constraint = getDbErrorString(error, "constraint")
-  const detail = getDbErrorString(error, "detail")
-  const column = getDbErrorString(error, "column")
-  const table = getDbErrorString(error, "table")
+  const constraint = meta?.constraint ?? getDbErrorString(error, "constraint")
+  const detail = meta?.detail ?? getDbErrorString(error, "detail")
+  const column = meta?.column ?? getDbErrorString(error, "column")
+  const table = meta?.table ?? getDbErrorString(error, "table")
+  const pg_message = meta ? truncateForApiMessage(meta.driverMessage, PG_MESSAGE_MAX) : undefined
+  const message = userMessageForOrderDbError(code, constraint, detail, column, table)
 
-  if (code === "23503") {
-    return {
-      statusCode: 409,
-      error: userMessageForOrderDbError(code, constraint, detail, column, table),
-      code,
-      constraint,
-      detail,
-      column,
-      table,
-    }
-  }
-
-  if (code === "23505") {
-    return {
-      statusCode: 409,
-      error: userMessageForOrderDbError(code, constraint, detail, column, table),
-      code,
-      constraint,
-      detail,
-      column,
-      table,
-    }
-  }
-
-  if (code === "23514" || code === "23502" || code === "22P02") {
-    return {
-      statusCode: 400,
-      error: userMessageForOrderDbError(code, constraint, detail, column, table),
-      code,
-      constraint,
-      detail,
-      column,
-      table,
-    }
-  }
-
-  if (code === "42703" || code === "42P01" || code === "40001" || code === "40P01" || code === "57014") {
-    return {
-      statusCode: 500,
-      error: userMessageForOrderDbError(code, constraint, detail, column, table),
-      code,
-      constraint,
-      detail,
-      column,
-      table,
-    }
-  }
-
-  return {
-    statusCode: 500,
-    error: userMessageForOrderDbError(code, constraint, detail, column, table),
+  const base = {
+    error: message,
     code,
     constraint,
     detail,
     column,
     table,
+    ...(pg_message ? { pg_message } : {}),
   }
+
+  if (code === "23503") {
+    return { statusCode: 409, ...base }
+  }
+
+  if (code === "23505") {
+    return { statusCode: 409, ...base }
+  }
+
+  if (code === "23514" || code === "23502" || code === "22P02") {
+    return { statusCode: 400, ...base }
+  }
+
+  if (code === "42703" || code === "42P01" || code === "40001" || code === "40P01" || code === "57014") {
+    return { statusCode: 500, ...base }
+  }
+
+  return { statusCode: 500, ...base }
 }
 
 function getDbErrorCode(error: unknown): string | undefined {

@@ -11,11 +11,13 @@ If somebody claims that is “full observability,” they are lying. It is only 
 
 ## Current Log Events
 
-The API currently emits JSON logs for:
+The API uses [Pino](https://github.com/pinojs/pino) and emits JSON logs to stdout for:
 
 - `api_server_started`
 - `http_request_completed`
 - `http_request_failed`
+
+Set `LOG_LEVEL` on the API service (e.g. `debug`, `info`, `warn`, `error`) to tune verbosity. Defaults: `info` when `NODE_ENV=production`, otherwise `debug`.
 
 Fields include:
 
