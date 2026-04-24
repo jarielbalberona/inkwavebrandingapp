@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import { users, type User } from "../../db/schema/index.js"
@@ -33,6 +33,14 @@ export class UsersRepository {
 
   async list(): Promise<User[]> {
     return this.db.select().from(users).orderBy(desc(users.createdAt), desc(users.email))
+  }
+
+  async listActiveAdmins(): Promise<User[]> {
+    return this.db
+      .select()
+      .from(users)
+      .where(and(eq(users.isActive, true), eq(users.role, "admin")))
+      .orderBy(desc(users.createdAt), desc(users.email))
   }
 
   async createUser(input: CreateUserInput & { passwordHash: string }): Promise<User> {
