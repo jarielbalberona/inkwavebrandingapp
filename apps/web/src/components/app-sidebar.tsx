@@ -2,6 +2,7 @@ import {
   BookOpenTextIcon,
   BoxIcon,
   Disc3Icon,
+  FileTextIcon,
   LayoutDashboardIcon,
   PackageSearchIcon,
   ShoppingCartIcon,
@@ -23,18 +24,20 @@ import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import type { AuthenticatedUser } from "@/features/auth/api/auth-client"
 
-const operationsItems = [
-  { title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon },
-  { title: "Cups", to: "/cups", icon: BoxIcon },
-  { title: "Lids", to: "/lids", icon: Disc3Icon },
-  { title: "Customers", to: "/customers", icon: UsersRoundIcon },
-  { title: "Inventory", to: "/inventory", icon: PackageSearchIcon },
-  { title: "Orders", to: "/orders", icon: ShoppingCartIcon },
-  { title: "Reports", to: "/reports", icon: BookOpenTextIcon },
-] as const
-
 export function AppSidebar({ user }: { user: AuthenticatedUser }) {
   const displayName = user.displayName ?? user.email
+  const operationsItems = [
+    { title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon },
+    { title: "Cups", to: "/cups", icon: BoxIcon },
+    { title: "Lids", to: "/lids", icon: Disc3Icon },
+    { title: "Customers", to: "/customers", icon: UsersRoundIcon },
+    { title: "Inventory", to: "/inventory", icon: PackageSearchIcon },
+    { title: "Orders", to: "/orders", icon: ShoppingCartIcon },
+    ...(user.role === "admin"
+      ? [{ title: "Invoices", to: "/invoices", icon: FileTextIcon }]
+      : []),
+    { title: "Reports", to: "/reports", icon: BookOpenTextIcon },
+  ] as const
 
   return (
     <Sidebar collapsible="icon" variant="inset">
