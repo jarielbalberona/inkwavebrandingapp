@@ -27,8 +27,16 @@ export function getAllowedLidShapes(type: LidType): readonly LidShape[] {
   return type === "paper" ? ["coffee_lid"] : ["dome", "flat", "strawless", "tall_lid"]
 }
 
-export function getAllowedLidColors(type: LidType): readonly LidColor[] {
-  return type === "paper" ? ["black", "white"] : ["transparent"]
+export function getAllowedLidColors(type: LidType, brand: LidBrand): readonly LidColor[] {
+  if (type === "paper") {
+    return ["black", "white"]
+  }
+
+  if (brand === "dabba" || brand === "grecoopack") {
+    return ["transparent"]
+  }
+
+  return ["transparent", "black"]
 }
 
 export function formatLidContractLabel(value: string): string {

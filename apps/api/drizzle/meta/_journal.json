@@ -176,6 +176,13 @@
       "when": 1777062916955,
       "tag": "0025_careful_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1777064635519,
+      "tag": "0026_tranquil_doomsday",
+      "breakpoints": true
     }
   ]
 }

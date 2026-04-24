@@ -102,11 +102,11 @@ const lidFormSchema = z
       })
     }
 
-    if (!getAllowedLidColors(values.type).includes(values.color)) {
+    if (!getAllowedLidColors(values.type, values.brand).includes(values.color)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["color"],
-        message: "Invalid color for the selected type.",
+        message: "Invalid color for the selected type and brand.",
       })
     }
   })
@@ -160,7 +160,10 @@ export function LidsPage() {
   const availableBrands = useMemo(() => getAllowedLidBrands(selectedType), [selectedType])
   const availableDiameters = useMemo(() => getAllowedLidDiameters(selectedType), [selectedType])
   const availableShapes = useMemo(() => getAllowedLidShapes(selectedType), [selectedType])
-  const availableColors = useMemo(() => getAllowedLidColors(selectedType), [selectedType])
+  const availableColors = useMemo(
+    () => getAllowedLidColors(selectedType, selectedBrand),
+    [selectedBrand, selectedType],
+  )
   const skuPreview = useMemo(
     () =>
       generateLidSkuPreview({

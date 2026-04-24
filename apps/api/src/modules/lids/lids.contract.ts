@@ -39,8 +39,19 @@ export function getAllowedLidShapes(type: LidContractShape["type"]): readonly Li
   return type === "paper" ? ["coffee_lid"] : ["dome", "flat", "strawless", "tall_lid"]
 }
 
-export function getAllowedLidColors(type: LidContractShape["type"]): readonly LidContractShape["color"][] {
-  return type === "paper" ? ["black", "white"] : ["transparent"]
+export function getAllowedLidColors(
+  type: LidContractShape["type"],
+  brand: LidContractShape["brand"],
+): readonly LidContractShape["color"][] {
+  if (type === "paper") {
+    return ["black", "white"]
+  }
+
+  if (brand === "dabba" || brand === "grecoopack") {
+    return ["transparent"]
+  }
+
+  return ["transparent", "black"]
 }
 
 export function addLidContractIssues(input: LidContractShape, context: z.RefinementCtx): void {
@@ -77,14 +88,16 @@ export function addLidContractIssues(input: LidContractShape, context: z.Refinem
     })
   }
 
-  if (!getAllowedLidColors(input.type).includes(input.color)) {
+  if (!getAllowedLidColors(input.type, input.brand).includes(input.color)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["color"],
       message:
         input.type === "paper"
           ? "Paper lids must use black or white."
-          : "Plastic lids must be transparent.",
+          : input.brand === "dabba" || input.brand === "grecoopack"
+            ? "Dabba and Grecoopack plastic lids must be transparent."
+            : "China supplier and other supplier plastic lids must be transparent or black.",
     })
   }
 }

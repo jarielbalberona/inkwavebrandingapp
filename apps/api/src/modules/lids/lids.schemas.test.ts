@@ -29,6 +29,45 @@ test("createLidRequestSchema accepts a valid plastic lid contract", () => {
   })
 })
 
+test("createLidRequestSchema accepts black plastic lids for China supplier and other supplier", () => {
+  for (const brand of ["china_supplier", "other_supplier"] as const) {
+    const result = createLidRequestSchema.parse({
+      type: "plastic",
+      brand,
+      diameter: "95mm",
+      shape: "flat",
+      color: "black",
+      min_stock: 25,
+      cost_price: "3.25",
+      default_sell_price: "5.00",
+      is_active: true,
+    })
+
+    assert.equal(result.brand, brand)
+    assert.equal(result.color, "black")
+  }
+})
+
+test("createLidRequestSchema rejects black plastic lids for Dabba and Grecoopack", () => {
+  for (const brand of ["dabba", "grecoopack"] as const) {
+    assert.throws(
+      () =>
+        createLidRequestSchema.parse({
+          type: "plastic",
+          brand,
+          diameter: "95mm",
+          shape: "flat",
+          color: "black",
+          min_stock: 25,
+          cost_price: "3.25",
+          default_sell_price: "5.00",
+          is_active: true,
+        }),
+      /must be transparent/,
+    )
+  }
+})
+
 test("createLidRequestSchema rejects invalid paper lid color", () => {
   assert.throws(
     () =>

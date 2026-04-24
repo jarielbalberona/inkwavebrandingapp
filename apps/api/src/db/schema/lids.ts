@@ -92,7 +92,17 @@ export const lids = pgTable(
       sql`(
         (${table.type} = 'paper' AND ${table.color} IN ('black', 'white'))
         OR
-        (${table.type} = 'plastic' AND ${table.color} = 'transparent')
+        (
+          ${table.type} = 'plastic'
+          AND ${table.brand} IN ('dabba', 'grecoopack')
+          AND ${table.color} = 'transparent'
+        )
+        OR
+        (
+          ${table.type} = 'plastic'
+          AND ${table.brand} IN ('china_supplier', 'other_supplier')
+          AND ${table.color} IN ('transparent', 'black')
+        )
       )`,
     ),
   ],
