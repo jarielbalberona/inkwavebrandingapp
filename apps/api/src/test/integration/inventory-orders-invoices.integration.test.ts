@@ -640,6 +640,53 @@ describe("inventory, order, and invoice integration", () => {
     expect(updateResponse.body.error).toBe("Invoice is locked because it has been paid")
   })
 
+  it("does not expose an invoice structural edit route", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const nonStockItem = await seedNonStockItem({
+      name: "Invoice Patch Guard",
+      defaultSellPrice: "12.00",
+      costPrice: "4.00",
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 2 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const invoiceId = invoiceResponse.body.invoice.id as string
+    const patchResponse = await api
+      .patch(`/invoices/${invoiceId}`)
+      .set("Cookie", adminCookie)
+      .send({
+        subtotal: "1.00",
+        items: [],
+      })
+
+    expect(patchResponse.status).toBe(404)
+
+    const invoiceDetailResponse = await api
+      .get(`/invoices/${invoiceId}`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceDetailResponse.status).toBe(200)
+    expect(invoiceDetailResponse.body.invoice.subtotal).toBe("24.00")
+    expect(invoiceDetailResponse.body.invoice.items).toHaveLength(1)
+  })
+
   it("keeps custom_charge out of inventory movements and product-oriented reports", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()
