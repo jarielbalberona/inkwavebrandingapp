@@ -43,3 +43,19 @@ test("createLidRequestSchema rejects invalid paper lid color", () => {
     /black or white/,
   )
 })
+
+test("createLidRequestSchema rejects a missing default sell price", () => {
+  assert.throws(
+    () =>
+      createLidRequestSchema.parse({
+        type: "plastic",
+        brand: "grecoopack",
+        diameter: "95mm",
+        shape: "dome",
+        color: "transparent",
+        cost_price: "3.25",
+        is_active: true,
+      }),
+    /default_sell_price/,
+  )
+})

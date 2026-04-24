@@ -2,20 +2,6 @@ import { z } from "zod"
 
 export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9_-]{0,79}$/
 
-const cupSizeCodes = {
-  "6.5oz": "6.5",
-  "8oz": "8",
-  "12oz": "12",
-  "16oz": "16",
-  "20oz": "20",
-  "22oz": "22",
-} as const
-
-const cupTypeCodes = {
-  paper: "PPR",
-  plastic: "PLSTC",
-} as const
-
 const cupBrandCodes = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
@@ -35,17 +21,17 @@ export function normalizeSku(value: string): string {
 }
 
 export interface CupSkuPreviewInput {
-  type: keyof typeof cupTypeCodes
+  type: "paper" | "plastic"
   brand: keyof typeof cupBrandCodes
-  size: keyof typeof cupSizeCodes
+  size: "6.5oz" | "8oz" | "12oz" | "16oz" | "20oz" | "22oz"
   color: keyof typeof cupColorCodes
 }
 
 export function generateCupSkuPreview(input: CupSkuPreviewInput): string {
   return normalizeSku(
     [
-      cupSizeCodes[input.size],
-      cupTypeCodes[input.type],
+      input.size,
+      input.type,
       cupBrandCodes[input.brand],
       cupColorCodes[input.color],
     ].join("-"),

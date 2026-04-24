@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm, useWatch } from "react-hook-form"
+import { useForm, useWatch, type DefaultValues } from "react-hook-form"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
@@ -68,7 +68,10 @@ const cupFormSchema = z
     color: z.enum(cupColors),
     min_stock: z.number().int().nonnegative(),
     cost_price: z.number().nonnegative(),
-    default_sell_price: z.number().nonnegative(),
+    default_sell_price: z.number({
+      required_error: "Default sell price is required.",
+      invalid_type_error: "Default sell price is required.",
+    }).nonnegative(),
     is_active: z.boolean(),
   })
   .superRefine((values, context) => {
@@ -107,7 +110,7 @@ const cupFormSchema = z
 
 type CupFormValues = z.infer<typeof cupFormSchema>
 
-const emptyFormValues: CupFormValues = {
+const emptyFormValues: DefaultValues<CupFormValues> = {
   type: "plastic",
   brand: "dabba",
   diameter: "95mm",
@@ -115,7 +118,6 @@ const emptyFormValues: CupFormValues = {
   color: "transparent",
   min_stock: 0,
   cost_price: 0,
-  default_sell_price: 0,
   is_active: true,
 }
 
@@ -516,6 +518,8 @@ function CurrencyFormField({
   label: string
   name: "cost_price" | "default_sell_price"
 }) {
+  const preserveEmptyValue = name === "default_sell_price"
+
   return (
     <FormField
       control={control}
@@ -528,7 +532,7 @@ function CurrencyFormField({
               disabled={disabled}
               min={0}
               value={field.value}
-              onChange={(value) => field.onChange(value ?? 0)}
+              onChange={(value) => field.onChange(preserveEmptyValue ? value : (value ?? 0))}
             />
           </FormControl>
         </FormItem>

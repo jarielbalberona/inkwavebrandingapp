@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm, useWatch } from "react-hook-form"
+import { useForm, useWatch, type DefaultValues } from "react-hook-form"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
@@ -52,18 +52,20 @@ const generalItemFormSchema = z.object({
   description: z.string().trim().max(1000).optional(),
   has_cost_price: z.boolean(),
   cost_price: z.number().nonnegative(),
-  default_sell_price: z.number().nonnegative(),
+  default_sell_price: z.number({
+    required_error: "Default sell price is required.",
+    invalid_type_error: "Default sell price is required.",
+  }).nonnegative(),
   is_active: z.boolean(),
 })
 
 type GeneralItemFormValues = z.infer<typeof generalItemFormSchema>
 
-const emptyFormValues: GeneralItemFormValues = {
+const emptyFormValues: DefaultValues<GeneralItemFormValues> = {
   name: "",
   description: "",
   has_cost_price: false,
   cost_price: 0,
-  default_sell_price: 0,
   is_active: true,
 }
 
@@ -297,7 +299,7 @@ export function GeneralItemsPage() {
                     <FormControl>
                       <Input.Currency
                         value={field.value}
-                        onChange={(value) => field.onChange(value ?? 0)}
+                        onChange={(value) => field.onChange(value)}
                         placeholder="0.00"
                       />
                     </FormControl>

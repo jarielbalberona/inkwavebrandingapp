@@ -3,20 +3,6 @@ import type { LidContractShape } from "../../modules/lids/lids.contract.js"
 
 export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9_-]{0,79}$/
 
-const cupSizeCodes: Record<CupContractShape["size"], string> = {
-  "6.5oz": "6.5",
-  "8oz": "8",
-  "12oz": "12",
-  "16oz": "16",
-  "20oz": "20",
-  "22oz": "22",
-}
-
-const cupTypeCodes: Record<CupContractShape["type"], string> = {
-  paper: "PPR",
-  plastic: "PLSTC",
-}
-
 const cupBrandCodes: Record<CupContractShape["brand"], string> = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
@@ -45,14 +31,6 @@ const lidBrandCodes: Record<LidContractShape["brand"], string> = {
   other_supplier: "OTHSPLR",
 }
 
-const lidShapeCodes: Record<LidContractShape["shape"], string> = {
-  dome: "DM",
-  flat: "FLT",
-  strawless: "STRWLS",
-  coffee_lid: "CFFLD",
-  tall_lid: "TLLD",
-}
-
 const lidColorCodes: Record<LidContractShape["color"], string> = {
   transparent: "TRNSPRNT",
   black: "BLCK",
@@ -69,8 +47,8 @@ export function normalizeSku(value: string): string {
 export function generateCupSku(input: CupSkuInput): string {
   return normalizeSku(
     [
-      cupSizeCodes[input.size],
-      cupTypeCodes[input.type],
+      input.size,
+      input.type,
       cupBrandCodes[input.brand],
       cupColorCodes[input.color],
     ].join("-"),
@@ -81,7 +59,7 @@ export function generateLidSku(input: LidSkuInput): string {
   const segments = [
     lidDiameterCodes[input.diameter],
     lidBrandCodes[input.brand],
-    lidShapeCodes[input.shape],
+    input.shape,
   ]
 
   if (shouldIncludeLidColorInSku(input)) {

@@ -46,3 +46,20 @@ test("createCupRequestSchema rejects invalid plastic cup diameter for dabba", ()
     /95mm/,
   )
 })
+
+test("createCupRequestSchema rejects a missing default sell price", () => {
+  assert.throws(
+    () =>
+      createCupRequestSchema.parse({
+        type: "paper",
+        brand: "other_supplier",
+        diameter: "80mm",
+        size: "12oz",
+        color: "kraft",
+        min_stock: 25,
+        cost_price: "10.50",
+        is_active: true,
+      }),
+    /default_sell_price/,
+  )
+})

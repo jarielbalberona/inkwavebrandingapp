@@ -12,14 +12,6 @@ const lidBrandCodes = {
   other_supplier: "OTHSPLR",
 } as const
 
-const lidShapeCodes = {
-  dome: "DM",
-  flat: "FLT",
-  strawless: "STRWLS",
-  coffee_lid: "CFFLD",
-  tall_lid: "TLLD",
-} as const
-
 const lidColorCodes = {
   transparent: "TRNSPRNT",
   black: "BLCK",
@@ -29,7 +21,7 @@ const lidColorCodes = {
 export interface LidSkuPreviewInput {
   diameter: keyof typeof lidDiameterCodes
   brand: keyof typeof lidBrandCodes
-  shape: keyof typeof lidShapeCodes
+  shape: "dome" | "flat" | "strawless" | "coffee_lid" | "tall_lid"
   color: keyof typeof lidColorCodes
 }
 
@@ -37,12 +29,12 @@ export function generateLidSkuPreview(input: LidSkuPreviewInput): string {
   const segments: string[] = [
     lidDiameterCodes[input.diameter],
     lidBrandCodes[input.brand],
-    lidShapeCodes[input.shape],
+    input.shape,
   ]
 
   if (input.color !== "transparent") {
     segments.push(lidColorCodes[input.color])
   }
 
-  return segments.join("-")
+  return segments.join("-").trim().replace(/\s+/g, "-").toUpperCase()
 }

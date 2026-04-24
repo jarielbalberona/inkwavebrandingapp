@@ -23,7 +23,7 @@ const baseLidSchema = z.object({
   shape: lidShapeSchema,
   color: lidColorSchema,
   costPrice: lidMoneySchema.default("0"),
-  defaultSellPrice: lidMoneySchema.default("0"),
+  defaultSellPrice: lidMoneySchema,
   isActive: z.boolean().default(true),
 })
 

@@ -20,7 +20,7 @@ import type { InvoicePdfData } from "../shared/types/index.js"
 
 export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
   return (
-    <Document>
+    <Document title={invoice.invoice_number}>
       <PdfPageShell
         header={
           <PdfHeader

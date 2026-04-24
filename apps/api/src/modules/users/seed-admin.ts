@@ -1,4 +1,4 @@
-import { loadApiEnv } from "../../config/env.js"
+import { loadApiEnv, loadDatabaseEnv } from "../../config/env.js"
 import { getDatabaseClient } from "../../db/client.js"
 import { hashPassword } from "./passwords.js"
 import { bootstrapAdminSchema } from "./users.schemas.js"
@@ -25,6 +25,7 @@ function readSeedInput() {
 
 export async function seedAdminUser() {
   const input = readSeedInput()
+  loadDatabaseEnv()
   const repository = new UsersRepository(getDatabaseClient())
   const passwordHash = await hashPassword(input.password)
 

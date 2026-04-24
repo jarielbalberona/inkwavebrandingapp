@@ -4,7 +4,7 @@ import { toInvoiceDto } from "./invoices.types.js"
 
 export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): InvoicePdfData {
   return {
-    brand_name: "Ink Wave Branding App",
+    brand_name: "Ink Wave Branding",
     document_title: "Invoice",
     invoice_number: invoice.invoice_number,
     order_reference: invoice.order_number_snapshot,
@@ -12,10 +12,11 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
     status: toInvoicePdfStatus(invoice.status),
     from: {
       label: "From",
-      name: "Ink Wave Branding App",
+      name: "Ink Wave Branding",
       lines: [
-        "Cup printing operations",
-        "Production begins after invoice confirmation.",
+        "Highlighting your brand through print and packaging.",
+        "hello@inkwavebrand.ing",
+        "+63 917 7755 537",
       ],
     },
     to: {
@@ -52,8 +53,9 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
     remaining_balance: invoice.status === "pending" ? invoice.subtotal : "0.00",
     payment_instructions: toInvoicePdfPaymentInstructions(invoice.status),
     support_lines: [
-      "Ink Wave Branding App",
-      "Coordinate through the assigned order contact for invoice follow-up.",
+      "Ink Wave Branding",
+      "hello@inkwavebrand.ing",
+      "+63 917 7755 537",
     ],
     footer_note: invoice.status === "void" ? "This invoice has been voided." : "Thank you for your order.",
   }
@@ -99,8 +101,10 @@ function toInvoicePdfPaymentInstructions(status: ReturnType<typeof toInvoiceDto>
       return ["This invoice is void and should not be used for payment collection."]
     default:
       return [
-        "Treat this invoice as pending until payment is confirmed by an admin.",
-        "Do not begin production from this document alone.",
+        "Send payment to:",
+        "Aiko Kitane / InkWaveBranding Digital Printing Services",
+        "BDO",
+        "006670290348",
       ]
   }
 }

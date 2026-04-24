@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { formatCurrency } from "@workspace/ui/lib/number"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type { Cup } from "@/features/cups/api/cups-client"
@@ -112,6 +113,29 @@ const emptyLineItem: OrderCreateValues["line_items"][number] = {
   unit_sell_price: undefined,
   unit_cost_price: undefined,
   notes: "",
+}
+
+function parseMoneyAmount(value: string | undefined | null): number | null {
+  if (!value) {
+    return null
+  }
+
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : null
+}
+
+function resolveCatalogLineItemUnitAmount(
+  item:
+    | Cup
+    | Lid
+    | NonStockItem
+    | undefined,
+): number | null {
+  if (!item || !("default_sell_price" in item)) {
+    return null
+  }
+
+  return parseMoneyAmount(item.default_sell_price)
 }
 
 
@@ -311,12 +335,31 @@ function OrderCreateLineItemFields({
       control,
       name: `line_items.${index}.item_type`,
     }) ?? "cup"
+  const quantity =
+    useWatch({
+      control,
+      name: `line_items.${index}.quantity`,
+    }) ?? 0
+  const itemId = useWatch({
+    control,
+    name: `line_items.${index}.item_id`,
+  })
+  const customChargeUnitSellPrice = useWatch({
+    control,
+    name: `line_items.${index}.unit_sell_price`,
+  })
   const availableItems =
     itemType === "cup"
       ? activeCups
       : itemType === "lid"
         ? activeLids
         : activeNonStockItems
+  const selectedCatalogItem = availableItems.find((item) => item.id === itemId)
+  const unitAmount =
+    itemType === "custom_charge"
+      ? customChargeUnitSellPrice ?? null
+      : resolveCatalogLineItemUnitAmount(selectedCatalogItem)
+  const lineTotal = unitAmount !== null ? quantity * unitAmount : null
 
   useEffect(() => {
     if (itemType === "custom_charge") {
@@ -443,9 +486,17 @@ function OrderCreateLineItemFields({
               </FormItem>
             )}
           />
+
+          {lineTotal !== null ? (
+            <div className="md:col-span-2">
+              <p className="text-muted-foreground text-sm">
+                Line total: <span className="font-medium text-foreground">{formatCurrency(lineTotal)}</span>
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-[15%_35%_10%_40%]">
+        <div className="grid gap-3 md:grid-cols-[36%_15%_10%_37%]">
           <FormField
             control={control}
             name={`line_items.${index}.item_id`}
@@ -527,6 +578,14 @@ function OrderCreateLineItemFields({
               </FormItem>
             )}
           />
+
+          {lineTotal !== null ? (
+            <div className="md:col-span-4">
+              <p className="text-muted-foreground text-sm">
+                Line total: <span className="font-medium text-foreground">{formatCurrency(lineTotal)}</span>
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -670,13 +729,13 @@ export function OrderCreatePage() {
   }
 
   return (
-    <Card >
+    <Card>
       <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="grid gap-1">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="grid min-w-0 gap-1">
             <CardTitle>Create Pending Order</CardTitle>
           </div>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto">
             <Link to="/orders">Back to orders</Link>
           </Button>
         </div>

@@ -101,8 +101,8 @@ export function useUpdateOrderPrioritiesMutation() {
         queryKey: ordersQueryKey,
       })
 
-      queryClient.setQueriesData<Order[]>({ queryKey: ordersQueryKey }, (current) => {
-        if (!current) {
+      queryClient.setQueriesData({ queryKey: ordersQueryKey }, (current) => {
+        if (!Array.isArray(current)) {
           return current
         }
 

@@ -1,7 +1,13 @@
 import { config as loadDotenvFile } from "dotenv"
+import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { z } from "zod"
+
+const require = createRequire(import.meta.url)
+const parsePgConnectionString = require("pg-connection-string") as (
+  connectionString: string,
+) => Record<string, unknown>
 
 let dotenvLoaded = false
 
@@ -19,6 +25,32 @@ const optionalNonEmptyString = z.preprocess(
   z.string().trim().min(1).optional(),
 )
 
+/** Strips wrapping quotes and line breaks often introduced by dashboard paste / shell export. */
+function normalizeDatabaseUrlValue(value: unknown): unknown {
+  if (value === undefined || value === null) {
+    return value
+  }
+  if (typeof value !== "string") {
+    return value
+  }
+  let s = value.trim().replaceAll(/\r|\n/g, "")
+  if (s === "") {
+    return undefined
+  }
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim()
+  }
+  return s === "" ? undefined : s
+}
+
+const optionalDatabaseUrl = z.preprocess(
+  normalizeDatabaseUrlValue,
+  z.string().trim().min(1).optional(),
+)
+
 const optionalSessionSecret = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
   z.string().trim().min(32).optional(),
@@ -29,7 +61,7 @@ export const apiEnvSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: optionalNonEmptyString,
+  DATABASE_URL: optionalDatabaseUrl,
   DATABASE_SSL_MODE: z.enum(["disable", "require"]).default("disable"),
   AUTH_SESSION_SECRET: optionalSessionSecret,
   AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
@@ -129,6 +161,16 @@ export function loadDatabaseEnv(): DatabaseEnv {
 
   if (!env.databaseUrl) {
     throw new Error("Invalid API environment: DATABASE_URL is required")
+  }
+
+  try {
+    parsePgConnectionString(env.databaseUrl)
+  } catch {
+    throw new Error(
+      "Invalid API environment: DATABASE_URL is not a valid PostgreSQL connection URL. " +
+        "Copy the full Internal or External URL from your host (including hostname and database name). " +
+        "If the password contains @, :, #, /, or ?, percent-encode those characters in the URL.",
+    )
   }
 
   return {

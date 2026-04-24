@@ -22,7 +22,7 @@ const baseCupSchema = z.object({
   color: cupColorSchema,
   minStock: z.number().int().nonnegative().default(0),
   costPrice: cupMoneySchema.default("0"),
-  defaultSellPrice: cupMoneySchema.default("0"),
+  defaultSellPrice: cupMoneySchema,
   isActive: z.boolean().default(true),
 })
 

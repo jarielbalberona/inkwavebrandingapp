@@ -25,7 +25,7 @@ export function PdfHeader({
     <View fixed style={sharedStyles.fixedHeader}>
       <View style={sharedStyles.column}>
         {brand}
-        <Text style={sharedStyles.muted}>{reference}</Text>
+        <Text style={{...sharedStyles.muted, paddingTop: 4}}>{reference}</Text>
       </View>
 
       <View style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
