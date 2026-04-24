@@ -15,7 +15,7 @@ export function ProductsPage() {
       </div>
 
       <Tabs defaultValue="cups" className="grid gap-4">
-        <TabsList className="w-full justify-start rounded-none">
+        <TabsList className="w-full justify-start">
           <TabsTrigger value="cups">Cups</TabsTrigger>
           <TabsTrigger value="lids">Lids</TabsTrigger>
           <TabsTrigger value="general-items">General Items</TabsTrigger>

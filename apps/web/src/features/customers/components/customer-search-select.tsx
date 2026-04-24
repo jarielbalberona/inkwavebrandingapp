@@ -83,7 +83,7 @@ export function CustomerSearchSelect({
       </div>
 
       {selectedCustomer ? (
-        <Card className="rounded-none">
+        <Card>
           <CardContent className="grid gap-2 p-4 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="font-medium">Selected customer</span>

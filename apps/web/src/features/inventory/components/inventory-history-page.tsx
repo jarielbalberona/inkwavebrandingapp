@@ -42,7 +42,7 @@ export function InventoryHistoryPage() {
   const movementsQuery = useInventoryMovementsQuery(query)
 
   return (
-    <Card className="rounded-none">
+    <Card>
       <CardHeader className="gap-4">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid gap-1">
@@ -70,10 +70,10 @@ export function InventoryHistoryPage() {
           <div className="grid gap-2">
             <Label>Item type</Label>
             <Select value={itemType} onValueChange={setItemType}>
-              <SelectTrigger className="w-full rounded-none">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="All item types" />
               </SelectTrigger>
-              <SelectContent className="rounded-none">
+              <SelectContent>
                 <SelectItem value="all">All item types</SelectItem>
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
@@ -84,10 +84,10 @@ export function InventoryHistoryPage() {
           <div className="grid gap-2">
             <Label>Movement type</Label>
             <Select value={movementType} onValueChange={setMovementType}>
-              <SelectTrigger className="w-full rounded-none">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="All movement types" />
               </SelectTrigger>
-              <SelectContent className="rounded-none">
+              <SelectContent>
                 <SelectItem value="all">All movement types</SelectItem>
                 {inventoryMovementTypeOptions.map((option) => (
                   <SelectItem key={option} value={option}>

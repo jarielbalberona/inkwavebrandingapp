@@ -134,7 +134,7 @@ export function GeneralItemsPage() {
 
   return (
     <div className="grid gap-4">
-      <Card className="rounded-none">
+      <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="grid gap-1">
             <CardTitle>General Items</CardTitle>
@@ -209,7 +209,7 @@ export function GeneralItemsPage() {
           }
         }}
       >
-        <DialogContent className="rounded-none sm:max-w-xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{selectedItem ? "Edit General Item" : "Create General Item"}</DialogTitle>
             <DialogDescription>

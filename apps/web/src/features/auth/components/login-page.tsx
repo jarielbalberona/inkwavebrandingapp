@@ -22,7 +22,7 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,var(--muted),transparent_32rem)] px-4">
-      <Card className="w-full max-w-md rounded-none">
+      <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
           <CardDescription>

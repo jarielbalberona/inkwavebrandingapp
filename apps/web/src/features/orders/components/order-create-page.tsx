@@ -348,11 +348,11 @@ function OrderCreateLineItemFields({
               }}
             >
               <FormControl>
-                <SelectTrigger className="w-full rounded-none">
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
               </FormControl>
-              <SelectContent className="rounded-none">
+              <SelectContent>
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
@@ -464,7 +464,7 @@ function OrderCreateLineItemFields({
                   onValueChange={itemIdField.onChange}
                 >
                   <FormControl>
-                    <SelectTrigger className="w-full rounded-none">
+                    <SelectTrigger className="w-full">
                       <SelectValue
                         placeholder={
                           itemType === "cup"
@@ -482,7 +482,7 @@ function OrderCreateLineItemFields({
                       />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent className="rounded-none">
+                  <SelectContent>
                     {availableItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {itemType === "cup"
@@ -816,7 +816,6 @@ export function OrderCreatePage() {
 
             <Button
               type="submit"
-              className="rounded-none"
               disabled={createOrderMutation.isPending || cupsQuery.isLoading || lidsQuery.isLoading}
             >
               {createOrderMutation.isPending ? "Creating order..." : "Create pending order"}

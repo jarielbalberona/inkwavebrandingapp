@@ -34,7 +34,7 @@ export function InvoicesPage() {
   }
 
   return (
-    <Card className="rounded-none">
+    <Card>
       <CardHeader className="gap-4">
         <div className="grid gap-1">
           <CardTitle>Invoices</CardTitle>

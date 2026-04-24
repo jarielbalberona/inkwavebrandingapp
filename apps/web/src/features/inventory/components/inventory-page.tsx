@@ -49,7 +49,16 @@ import {
   useInventoryBalancesQuery,
   useStockIntakeMutation,
 } from "@/features/inventory/hooks/use-inventory"
-import { PlusIcon } from "lucide-react"
+import { PackageSearchIcon, PlusIcon } from "lucide-react"
+
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@workspace/ui/components/empty"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 
 const stockIntakeFormSchema = z.object({
   quantity: z.number().int().positive("Quantity must be a positive whole number."),
@@ -238,9 +247,9 @@ export function InventoryPage() {
   }
 
   return (
-    <div className="grid gap-4">
-      <Card className="rounded-none">
-        <CardHeader className="gap-4">
+    <div className="grid gap-3">
+      <Card>
+        <CardHeader className="gap-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="grid gap-1">
               <CardTitle>Inventory Balances</CardTitle>
@@ -299,17 +308,22 @@ export function InventoryPage() {
             />
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4">
-          {balancesQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading live inventory balances...</p>
-          ) : null}
+        <CardContent className="grid gap-3">
+          {balancesQuery.isLoading ? <InventoryTableSkeleton /> : null}
 
           {!balancesQuery.isLoading && filteredBalances.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No tracked items match the current search.
-            </p>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <PackageSearchIcon />
+                </EmptyMedia>
+                <EmptyTitle>No balances to show</EmptyTitle>
+                <EmptyDescription>No tracked items match the current search.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : null}
 
+          {!balancesQuery.isLoading && filteredBalances.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow>
@@ -508,11 +522,11 @@ export function InventoryPage() {
                                       onValueChange={field.onChange}
                                     >
                                       <FormControl>
-                                        <SelectTrigger className="w-full rounded-none border px-3">
+                                        <SelectTrigger className="w-full border px-3">
                                           <SelectValue placeholder="Select adjustment type" />
                                         </SelectTrigger>
                                       </FormControl>
-                                      <SelectContent className="rounded-none">
+                                      <SelectContent>
                                         <SelectItem value="adjustment_in">Adjustment in</SelectItem>
                                         <SelectItem value="adjustment_out">
                                           Adjustment out
@@ -593,8 +607,32 @@ export function InventoryPage() {
               ))}
             </TableBody>
           </Table>
+          ) : null}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+const INV_SKEL_HEADER_KEYS = ["h0", "h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8", "h9"] as const
+const INV_SKEL_ROW_KEYS = ["r0", "r1", "r2", "r3", "r4", "r5"] as const
+const INV_SKEL_CELL_KEYS = ["c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9"] as const
+
+function InventoryTableSkeleton() {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-10 gap-2">
+        {INV_SKEL_HEADER_KEYS.map((id) => (
+          <Skeleton key={id} className="h-4 w-full" />
+        ))}
+      </div>
+      {INV_SKEL_ROW_KEYS.map((rowId) => (
+        <div key={rowId} className="grid grid-cols-10 gap-2">
+          {INV_SKEL_CELL_KEYS.map((cellId) => (
+            <Skeleton key={`${rowId}-${cellId}`} className="h-9 w-full" />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

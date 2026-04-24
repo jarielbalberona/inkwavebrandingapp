@@ -68,7 +68,7 @@ export function ReportsPage() {
 
   return (
     <div className="grid gap-4">
-      <Card className="rounded-none">
+      <Card>
         <CardHeader>
           <CardTitle>Reports</CardTitle>
           <CardDescription>
@@ -223,7 +223,7 @@ function MetricCard({
   value: number
 }) {
   return (
-    <Card className="rounded-none">
+    <Card>
       <CardHeader className="gap-1">
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-2xl">{value.toLocaleString()}</CardTitle>
@@ -245,7 +245,7 @@ function MoneyMetricCard({
   value: string
 }) {
   return (
-    <Card className="rounded-none">
+    <Card>
       <CardHeader className="gap-1">
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-2xl">{value}</CardTitle>
@@ -338,7 +338,7 @@ function OrderStatusReportSection({ report }: { report: OrderStatusReport | unde
       </div>
 
       {report ? (
-        <Card className="rounded-none">
+        <Card>
           <CardHeader>
             <CardDescription>Total orders tracked</CardDescription>
             <CardTitle className="text-2xl">{report.total_orders.toLocaleString()}</CardTitle>
@@ -388,7 +388,7 @@ function CupUsageReportSection({ report }: { report: CupUsageReport | undefined 
       </div>
 
       {report ? (
-        <Card className="rounded-none">
+        <Card>
           <CardHeader>
             <CardDescription>Filter basis</CardDescription>
             <CardTitle className="text-lg">
@@ -453,7 +453,7 @@ function SalesCostReportSection({
       </div>
 
       {report ? (
-        <Card className="rounded-none">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">Financial Basis</CardTitle>
             <CardDescription>

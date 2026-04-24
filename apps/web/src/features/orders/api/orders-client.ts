@@ -59,13 +59,17 @@ const orderCustomChargeSchema = z.object({
   description_snapshot: z.string(),
 })
 
+const nullableOmittedField = <T extends z.ZodTypeAny>(schema: T) =>
+  schema.nullish().transform((value) => value ?? null)
+
 const orderItemSchema = z.discriminatedUnion("item_type", [
   z.object({
     id: z.string().uuid(),
     item_type: z.literal("cup"),
     cup: orderCupSchema,
     lid: z.null(),
-    non_stock_item: z.null(),
+    non_stock_item: nullableOmittedField(z.null()),
+    custom_charge: nullableOmittedField(z.null()),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -79,7 +83,8 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("lid"),
     cup: z.null(),
     lid: orderLidSchema,
-    non_stock_item: z.null(),
+    non_stock_item: nullableOmittedField(z.null()),
+    custom_charge: nullableOmittedField(z.null()),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -94,7 +99,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     cup: z.null(),
     lid: z.null(),
     non_stock_item: orderNonStockItemSchema,
-    custom_charge: z.null(),
+    custom_charge: nullableOmittedField(z.null()),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -108,7 +113,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("custom_charge"),
     cup: z.null(),
     lid: z.null(),
-    non_stock_item: z.null(),
+    non_stock_item: nullableOmittedField(z.null()),
     custom_charge: orderCustomChargeSchema,
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),

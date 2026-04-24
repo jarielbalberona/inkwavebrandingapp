@@ -4,6 +4,14 @@ import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+} from "@workspace/ui/components/item"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 
 import type { DashboardSummary } from "@/features/dashboard/api/dashboard-client"
 import { useDashboardSummaryQuery } from "@/features/dashboard/hooks/use-dashboard"
@@ -14,10 +22,10 @@ export function DashboardPage() {
   const summary = summaryQuery.data
 
   return (
-    <div className="grid gap-4">
-      <Card className="rounded-none">
-        <CardHeader className="gap-4">
-          <div className="flex items-start justify-between gap-4">
+    <div className="grid gap-3">
+      <Card>
+        <CardHeader className="gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="grid gap-1">
               <CardTitle>Dashboard</CardTitle>
             </div>
@@ -34,20 +42,18 @@ export function DashboardPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid gap-3">
           {summaryQuery.isError ? (
             <Alert variant="destructive">
               <AlertDescription>{summaryQuery.error.message}</AlertDescription>
             </Alert>
           ) : null}
 
-          {summaryQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading dashboard summary...</p>
-          ) : null}
+          {summaryQuery.isLoading ? <DashboardSummarySkeleton /> : null}
 
           {summary ? (
             <>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
                   label="Tracked items"
                   value={summary.inventory.tracked_items}
@@ -71,7 +77,7 @@ export function DashboardPage() {
                 />
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
                 <OrderStatusCard summary={summary} />
                 <OperationalNotesCard summary={summary} />
               </div>
@@ -79,6 +85,54 @@ export function DashboardPage() {
           ) : null}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+const METRIC_SKELETON_KEYS = ["m0", "m1", "m2", "m3"] as const
+const STATUS_SKELETON_KEYS = ["s0", "s1", "s2"] as const
+const NOTES_SKELETON_KEYS = ["n0", "n1", "n2", "n3"] as const
+
+function DashboardSummarySkeleton() {
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {METRIC_SKELETON_KEYS.map((id) => (
+          <Card key={id} size="sm">
+            <CardHeader className="gap-2">
+              <Skeleton className="h-3.5 w-28" />
+              <Skeleton className="h-8 w-16" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-12 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <Card size="sm">
+          <CardHeader>
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="mt-2 h-3 w-full max-w-md" />
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {STATUS_SKELETON_KEYS.map((id) => (
+              <Skeleton key={id} className="h-16 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+        <Card size="sm">
+          <CardHeader>
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="mt-2 h-3 w-full" />
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {NOTES_SKELETON_KEYS.map((id) => (
+              <Skeleton key={id} className="h-14 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -95,7 +149,7 @@ function MetricCard({
   value: number
 }) {
   return (
-    <Card className="rounded-none">
+    <Card size="sm">
       <CardHeader className="gap-1">
         <CardDescription>{label}</CardDescription>
         <CardTitle className={tone === "destructive" ? "text-2xl text-destructive" : "text-2xl"}>
@@ -111,32 +165,40 @@ function MetricCard({
 
 function OrderStatusCard({ summary }: { summary: DashboardSummary }) {
   return (
-    <Card className="rounded-none">
+    <Card>
       <CardHeader>
         <CardTitle>Order Statuses</CardTitle>
         <CardDescription>
           Derived from the current fulfillment model, including partial releases.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <CardContent className="grid gap-2">
+        <ItemGroup>
           {summary.orders.statuses.map((item) => (
-            <div key={item.status} className="flex items-center justify-between border p-3">
-              <div className="grid gap-1">
-                <span className="text-sm font-medium">{formatStatus(item.status)}</span>
-                <span className="text-xs text-muted-foreground">{statusDescription(item.status)}</span>
-              </div>
-              <Badge variant={statusBadgeVariant(item.status)}>{item.count.toLocaleString()}</Badge>
-            </div>
+            <Item key={item.status} variant="outline" size="sm" className="items-center">
+              <ItemContent>
+                <span className="text-sm font-medium leading-tight text-foreground">
+                  {formatStatus(item.status)}
+                </span>
+                <ItemDescription>{statusDescription(item.status)}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Badge variant={statusBadgeVariant(item.status)}>{item.count.toLocaleString()}</Badge>
+              </ItemActions>
+            </Item>
           ))}
-        </div>
+        </ItemGroup>
 
-        <div className="border p-3 text-sm text-muted-foreground">
-          Total orders tracked:{" "}
-          <span className="font-medium text-foreground">
-            {summary.orders.total_orders.toLocaleString()}
-          </span>
-        </div>
+        <Item variant="muted" size="sm" className="text-sm text-muted-foreground">
+          <ItemContent>
+            <p>
+              Total orders tracked:{" "}
+              <span className="font-medium text-foreground">
+                {summary.orders.total_orders.toLocaleString()}
+              </span>
+            </p>
+          </ItemContent>
+        </Item>
       </CardContent>
     </Card>
   )
@@ -157,19 +219,21 @@ function OperationalNotesCard({ summary }: { summary: DashboardSummary }) {
   ]
 
   return (
-    <Card className="rounded-none">
+    <Card>
       <CardHeader>
         <CardTitle>Operational Notes</CardTitle>
-        <CardDescription>
-          Quick summary derived from backend-safe counts only.
-        </CardDescription>
+        <CardDescription>Quick summary derived from backend-safe counts only.</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 text-sm">
-        {attentionItems.map((item) => (
-          <div key={item} className="border p-3 text-muted-foreground">
-            {item}
-          </div>
-        ))}
+      <CardContent>
+        <ItemGroup>
+          {attentionItems.map((item) => (
+            <Item key={item} variant="outline" size="sm">
+              <ItemContent>
+                <ItemDescription className="text-balance text-muted-foreground">{item}</ItemDescription>
+              </ItemContent>
+            </Item>
+          ))}
+        </ItemGroup>
       </CardContent>
     </Card>
   )

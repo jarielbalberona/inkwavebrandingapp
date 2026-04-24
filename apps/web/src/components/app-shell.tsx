@@ -36,7 +36,7 @@ export function AppShell() {
       <AppSidebar user={currentUser.data} />
       <SidebarInset className="@container/main">
         <SiteHeader />
-        <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
+        <div className="flex flex-1 flex-col gap-3 p-3 lg:p-4">
           <Outlet />
         </div>
       </SidebarInset>

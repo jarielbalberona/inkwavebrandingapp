@@ -222,7 +222,7 @@ export function LidsPage() {
   
   return (
     <div className="grid gap-4">
-      <Card className="rounded-none">
+      <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="grid gap-1">
             <CardTitle>Lids Catalog</CardTitle>
@@ -322,7 +322,7 @@ export function LidsPage() {
                 control={form.control}
                 name="is_active"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center gap-3 rounded-none border p-3">
+                  <FormItem className="flex flex-row items-center gap-3 border p-3">
                     <FormControl>
                       <Checkbox
                         checked={field.value}

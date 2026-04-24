@@ -86,7 +86,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
   }
 
   return (
-    <Card className="rounded-none">
+    <Card>
       <CardHeader className="gap-4">
         <div className="flex items-start justify-between gap-4">
           <div className="grid gap-1">
@@ -100,6 +100,13 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
             <Button asChild variant="outline">
               <Link to="/orders">Back to orders</Link>
             </Button>
+            {order ? (
+              <Button asChild variant="outline">
+                <Link to="/orders/$orderId/fulfillment" params={{ orderId: order.id }}>
+                  Fulfillment
+                </Link>
+              </Button>
+            ) : null}
             {order ? (
               <Button asChild variant="outline">
                 <Link to="/orders/$orderId/edit" params={{ orderId: order.id }}>
