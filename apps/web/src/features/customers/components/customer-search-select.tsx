@@ -70,16 +70,12 @@ export function CustomerSearchSelect({
               onClick={() => onSelect(customer)}
             >
               <span className="flex items-start justify-between gap-3">
-                <span className="grid gap-1">
-                  <span className="font-medium">{customer.business_name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {customer.customer_code ?? "No customer code"}
-                    {formatContact(customer) ? ` · ${formatContact(customer)}` : ""}
-                  </span>
-                </span>
-                <Badge variant={customer.is_active ? "default" : "secondary"}>
-                  {customer.is_active ? "Active" : "Inactive"}
-                </Badge>
+              <div className="flex items-center align-middle gap-2">
+                    <span className="font-medium">{customer.business_name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({customer.contact_person ? `${customer.contact_person}` : ""} {customer.contact_number ? ` · ${customer.contact_number}` : ""})
+                    </span>
+                  </div>
               </span>
             </button>
           )
@@ -102,8 +98,4 @@ export function CustomerSearchSelect({
       ) : null}
     </div>
   )
-}
-
-function formatContact(customer: Customer): string | null {
-  return customer.contact_person ?? customer.email ?? customer.contact_number ?? null
 }

@@ -24,7 +24,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -173,8 +172,8 @@ export function CustomersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Customer</TableHead>
-                <TableHead>Code</TableHead>
                 <TableHead>Contact</TableHead>
+                <TableHead>Number</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -186,8 +185,8 @@ export function CustomersPage() {
                   onClick={() => openDetailDialog(customer)}
                 >
                   <TableCell className="font-medium">{customer.business_name}</TableCell>
-                  <TableCell>{customer.customer_code ?? "None"}</TableCell>
-                  <TableCell>{formatContact(customer)}</TableCell>
+                  <TableCell>{customer.contact_person ? `${customer.contact_person}` : ""}</TableCell>
+                  <TableCell>{customer.contact_number ? `${customer.contact_number}` : ""}</TableCell>
                   <TableCell>
                     <Badge variant={customer.is_active ? "default" : "secondary"}>
                       {customer.is_active ? "Active" : "Inactive"}
@@ -230,12 +229,11 @@ export function CustomersPage() {
           <Form {...form}>
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
-                <TextFormField control={form.control} disabled={!isAdmin} label="Customer code" name="customerCode" />
                 <TextFormField control={form.control} disabled={!isAdmin} label="Business name" name="businessName" />
                 <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact person" name="contactPerson" />
                 <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact number" name="contactNumber" />
-              </div>
               <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Email" name="email" />
+              </div>
               <TextAreaFormField control={form.control} disabled={!canEditConfidentialFields} label="Address" name="address" />
               <TextAreaFormField control={form.control} disabled={!canEditConfidentialFields} label="Notes" name="notes" />
 
@@ -362,12 +360,4 @@ function toPayload(values: CustomerFormValues): CustomerPayload {
     notes: values.notes?.trim() || undefined,
     isActive: values.isActive,
   }
-}
-
-function formatContact(customer: Customer) {
-  if ("contact_person" in customer && customer.contact_person) {
-    return customer.contact_person
-  }
-
-  return "Restricted"
 }

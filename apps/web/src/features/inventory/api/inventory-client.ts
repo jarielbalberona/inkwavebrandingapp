@@ -149,6 +149,14 @@ export type StockIntakePayload =
       note?: string
       reference?: string
     }
+  | {
+      itemType: "lid"
+      cupId?: undefined
+      lidId: string
+      quantity: number
+      note?: string
+      reference?: string
+    }
 
 export type InventoryAdjustmentPayload =
   | {
@@ -167,14 +175,6 @@ export type InventoryAdjustmentPayload =
       movementType: "adjustment_in" | "adjustment_out"
       quantity: number
       note: string
-      reference?: string
-    }
-  | {
-      itemType: "lid"
-      cupId?: undefined
-      lidId: string
-      quantity: number
-      note?: string
       reference?: string
     }
 
