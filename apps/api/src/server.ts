@@ -34,6 +34,8 @@ server.listen(env.port, () => {
           env.databaseName),
     ),
     sentryEnabled: Boolean(env.sentryDsn),
+    emailProvider: env.emailProvider,
+    resendConfigured: Boolean(env.resendApiKey && env.resendFromEmail),
     storageProvider: storageConfig.provider,
     storagePublicUrlConfigured: Boolean(storageConfig.r2?.publicUrl),
     webOriginConfigured: Boolean(env.webOrigin),

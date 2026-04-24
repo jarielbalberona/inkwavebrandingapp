@@ -93,6 +93,10 @@ export const apiEnvSchema = z.object({
   SENTRY_DSN: optionalNonEmptyString,
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
   OPENAI_API_KEY: optionalNonEmptyString,
+  EMAIL_PROVIDER: z.enum(["none", "resend"]).default("none"),
+  RESEND_API_KEY: optionalNonEmptyString,
+  RESEND_FROM_EMAIL: optionalNonEmptyString,
+  RESEND_REPLY_TO_EMAIL: optionalNonEmptyString,
   STORAGE_PROVIDER: z.enum(["none", "r2"]).default("none"),
   R2_ACCOUNT_ID: optionalNonEmptyString,
   R2_ACCESS_KEY_ID: optionalNonEmptyString,
@@ -143,6 +147,10 @@ export interface ApiEnv {
   sentryDsn?: string
   sentryTracesSampleRate: number
   openaiApiKey?: string
+  emailProvider: ParsedApiEnv["EMAIL_PROVIDER"]
+  resendApiKey?: string
+  resendFromEmail?: string
+  resendReplyToEmail?: string
   storageProvider: ParsedApiEnv["STORAGE_PROVIDER"]
   r2AccountId?: string
   r2AccessKeyId?: string
@@ -202,6 +210,10 @@ export function parseApiEnv(input: unknown): ApiEnv {
     sentryDsn: result.data.SENTRY_DSN,
     sentryTracesSampleRate: result.data.SENTRY_TRACES_SAMPLE_RATE,
     openaiApiKey: result.data.OPENAI_API_KEY,
+    emailProvider: result.data.EMAIL_PROVIDER,
+    resendApiKey: result.data.RESEND_API_KEY,
+    resendFromEmail: result.data.RESEND_FROM_EMAIL,
+    resendReplyToEmail: result.data.RESEND_REPLY_TO_EMAIL,
     storageProvider: result.data.STORAGE_PROVIDER,
     r2AccountId: result.data.R2_ACCOUNT_ID,
     r2AccessKeyId: result.data.R2_ACCESS_KEY_ID,
@@ -215,6 +227,7 @@ export function parseApiEnv(input: unknown): ApiEnv {
   }
 
   validateStorageEnv(env)
+  validateEmailEnv(env)
 
   return env
 }
@@ -293,6 +306,25 @@ function validateStorageEnv(env: ApiEnv) {
   if (missingFields.length > 0) {
     throw new Error(
       `Invalid API environment: storage provider r2 requires ${missingFields.join(", ")}`,
+    )
+  }
+}
+
+function validateEmailEnv(env: ApiEnv) {
+  if (env.emailProvider !== "resend") {
+    return
+  }
+
+  const missingFields = [
+    ["RESEND_API_KEY", env.resendApiKey],
+    ["RESEND_FROM_EMAIL", env.resendFromEmail],
+  ]
+    .filter(([, value]) => !value)
+    .map(([field]) => field)
+
+  if (missingFields.length > 0) {
+    throw new Error(
+      `Invalid API environment: email provider resend requires ${missingFields.join(", ")}`,
     )
   }
 }
