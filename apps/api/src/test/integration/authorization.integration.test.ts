@@ -279,6 +279,13 @@ describe("authorization integration", () => {
     expect(staffPdfResponse.status).toBe(403)
     expect(staffPdfResponse.body.error).toBe("Admin role required")
 
+    const staffShareLinkResponse = await api
+      .get(`/invoices/${invoiceId}/share-link`)
+      .set("Cookie", staffCookie)
+
+    expect(staffShareLinkResponse.status).toBe(403)
+    expect(staffShareLinkResponse.body.error).toBe("Admin role required")
+
     const adminDetailResponse = await api
       .get(`/invoices/${invoiceId}`)
       .set("Cookie", adminCookie)

@@ -13,6 +13,14 @@ import { toInvoicePdfData } from "./invoice-pdf.mapper.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 import { toInvoiceDto } from "./invoices.types.js"
 
+export class InvoiceShareLinkUnavailableError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Shareable invoice links require R2 public CDN storage.")
+  }
+}
+
 export class InvoiceDocumentsService {
   constructor(
     private readonly invoicesRepository: InvoicesRepository,
@@ -40,6 +48,7 @@ export class InvoiceDocumentsService {
 
     const invoiceDto = toInvoiceDto(invoice, user)
     const filename = `${invoiceDto.invoice_number}.pdf`
+    const desiredVisibility = this.getDesiredVisibility()
 
     if (!this.storageProvider) {
       const pdfBuffer = await renderInvoicePdf(toInvoicePdfData(invoiceDto))
@@ -54,7 +63,12 @@ export class InvoiceDocumentsService {
 
     const currentAsset = invoice.documentAsset ?? null
 
-    if (currentAsset && currentAsset.updatedAt >= invoice.updatedAt) {
+    if (
+      currentAsset &&
+      currentAsset.updatedAt >= invoice.updatedAt &&
+      currentAsset.visibility === desiredVisibility &&
+      (desiredVisibility !== "public" || Boolean(currentAsset.publicUrl))
+    ) {
       try {
         const storedObject = await this.storageProvider.getObject(currentAsset.objectKey)
 
@@ -80,7 +94,7 @@ export class InvoiceDocumentsService {
       body: pdfBuffer,
       contentType: "application/pdf",
       contentLength: pdfBuffer.byteLength,
-      visibility: "private",
+      visibility: desiredVisibility,
     })
 
     if (currentAsset) {
@@ -133,5 +147,36 @@ export class InvoiceDocumentsService {
       contentLength: pdfBuffer.byteLength,
       filename,
     }
+  }
+
+  async getShareablePdfLink(invoiceId: string, user: SafeUser) {
+    assertAdmin(user)
+
+    if (!this.storageProvider || !this.storageConfig.r2?.usePublicCdn) {
+      throw new InvoiceShareLinkUnavailableError()
+    }
+
+    await this.getPdfDocument(invoiceId, user)
+
+    const invoice = await this.invoicesRepository.findByIdWithRelations(invoiceId)
+
+    if (!invoice) {
+      throw new InvoiceNotFoundError()
+    }
+
+    const publicUrl = invoice.documentAsset?.publicUrl ?? null
+
+    if (!publicUrl) {
+      throw new InvoiceShareLinkUnavailableError()
+    }
+
+    return {
+      url: publicUrl,
+      filename: invoice.documentAsset?.filename ?? `${invoice.invoiceNumber}.pdf`,
+    }
+  }
+
+  private getDesiredVisibility() {
+    return this.storageConfig.r2?.usePublicCdn ? "public" : "private"
   }
 }

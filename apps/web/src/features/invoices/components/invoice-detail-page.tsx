@@ -1,3 +1,5 @@
+import { useState } from "react"
+
 import { Link } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
@@ -16,12 +18,16 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { getInvoiceShareLink } from "@/features/invoices/api/invoices-client"
 import { useInvoiceQuery } from "@/features/invoices/hooks/use-invoices"
 import { apiBaseUrl } from "@/lib/api"
 
 export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const currentUser = useCurrentUser()
   const invoiceQuery = useInvoiceQuery(invoiceId)
+  const [shareMessage, setShareMessage] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [isCreatingShareLink, setIsCreatingShareLink] = useState(false)
 
   if (currentUser.data?.role !== "admin") {
     return (
@@ -32,6 +38,26 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   }
 
   const invoice = invoiceQuery.data ?? null
+
+  async function handleCopyShareLink() {
+    if (!invoice || isCreatingShareLink) {
+      return
+    }
+
+    setIsCreatingShareLink(true)
+    setShareMessage(null)
+    setShareError(null)
+
+    try {
+      const shareLink = await getInvoiceShareLink(invoice.id)
+      await navigator.clipboard.writeText(shareLink.url)
+      setShareMessage(`Copied share link for ${shareLink.filename}.`)
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : "Unable to copy share link.")
+    } finally {
+      setIsCreatingShareLink(false)
+    }
+  }
 
   return (
     <Card>
@@ -47,6 +73,18 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
             <Button asChild variant="outline">
               <Link to="/invoices">Back to invoices</Link>
             </Button>
+            {invoice ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isCreatingShareLink}
+                onClick={() => {
+                  void handleCopyShareLink()
+                }}
+              >
+                {isCreatingShareLink ? "Preparing link..." : "Copy share link"}
+              </Button>
+            ) : null}
             {invoice ? (
               <Button
                 type="button"
@@ -73,6 +111,18 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
         {invoiceQuery.isError ? (
           <Alert variant="destructive">
             <AlertDescription>{invoiceQuery.error.message}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {shareError ? (
+          <Alert variant="destructive">
+            <AlertDescription>{shareError}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {shareMessage ? (
+          <Alert>
+            <AlertDescription>{shareMessage}</AlertDescription>
           </Alert>
         ) : null}
 

@@ -60,8 +60,14 @@ const invoiceResponseSchema = z.object({
   invoice: invoiceSchema,
 })
 
+const invoiceShareLinkResponseSchema = z.object({
+  url: z.string().url(),
+  filename: z.string(),
+})
+
 export type InvoiceListItem = z.infer<typeof invoiceListItemSchema>
 export type Invoice = z.infer<typeof invoiceSchema>
+export type InvoiceShareLink = z.infer<typeof invoiceShareLinkResponseSchema>
 
 export interface ListInvoicesFilters {
   search?: string
@@ -108,6 +114,27 @@ export async function getInvoice(invoiceId: string): Promise<Invoice> {
 
     if (error instanceof ApiClientError) {
       throw new Error("Unable to load invoice.")
+    }
+
+    throw error
+  }
+}
+
+export async function getInvoiceShareLink(invoiceId: string): Promise<InvoiceShareLink> {
+  try {
+    const data = await api.get<unknown>(`/invoices/${invoiceId}/share-link`)
+    return invoiceShareLinkResponseSchema.parse(data)
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Invoice not found.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("Only admins can share invoices.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error(error.message || "Unable to create share link.")
     }
 
     throw error

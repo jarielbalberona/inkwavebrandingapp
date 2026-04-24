@@ -11,7 +11,10 @@ import { AuthService } from "../auth/auth.service.js"
 import { AssetsRepository } from "../assets/assets.repository.js"
 import { OrdersRepository } from "../orders/orders.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
-import { InvoiceDocumentsService } from "./invoice-documents.service.js"
+import {
+  InvoiceDocumentsService,
+  InvoiceShareLinkUnavailableError,
+} from "./invoice-documents.service.js"
 import { invoicesListQuerySchema } from "./invoices.schemas.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 import {
@@ -70,6 +73,7 @@ export async function handleInvoicesRoute(
   }
 
   const invoicePdfMatch = path.match(/^\/invoices\/([^/]+)\/pdf$/)
+  const invoiceShareLinkMatch = path.match(/^\/invoices\/([^/]+)\/share-link$/)
 
   if (invoicePdfMatch && request.method === "GET") {
     await withAuthenticatedUser(request, response, context, async (_, user) => {
@@ -86,6 +90,20 @@ export async function handleInvoicesRoute(
         "Content-Disposition": `inline; filename="${pdfDocument.filename}"`,
       })
       response.end(pdfDocument.body)
+    })
+    return true
+  }
+
+  if (invoiceShareLinkMatch && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (_, user) => {
+      const db = getDatabaseClient()
+      const shareLink = await InvoiceDocumentsService.fromEnv(
+        new InvoicesRepository(db),
+        new AssetsRepository(db),
+        context.env,
+      ).getShareablePdfLink(invoiceShareLinkMatch[1] ?? "", user)
+
+      sendJson(response, 200, shareLink)
     })
     return true
   }
@@ -137,7 +155,8 @@ function handleInvoicesError(response: ServerResponse, error: unknown) {
     error instanceof InvoiceNotFoundError ||
     error instanceof InvoiceOrderNotFoundError ||
     error instanceof InvoiceAlreadyExistsError ||
-    error instanceof InvoiceOrderCanceledError
+    error instanceof InvoiceOrderCanceledError ||
+    error instanceof InvoiceShareLinkUnavailableError
   ) {
     sendJson(response, error.statusCode, { error: error.message })
     return

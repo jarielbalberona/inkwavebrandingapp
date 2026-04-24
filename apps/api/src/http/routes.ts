@@ -29,6 +29,7 @@ export const routeDefinitions = [
   { access: "protected", method: "GET", path: "/invoices" },
   { access: "protected", method: "GET", path: "/invoices/:id" },
   { access: "protected", method: "GET", path: "/invoices/:id/pdf" },
+  { access: "protected", method: "GET", path: "/invoices/:id/share-link" },
   { access: "protected", method: "GET", path: "/order-line-items/:id/progress-events" },
   { access: "protected", method: "POST", path: "/order-line-items/:id/progress-events" },
   { access: "protected", method: "GET", path: "/orders" },

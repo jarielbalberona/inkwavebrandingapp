@@ -42,6 +42,27 @@ test("InvoiceDocumentsService renders inline PDF when storage is disabled", asyn
   assert.equal(assetCreated, false)
 })
 
+test("InvoiceDocumentsService rejects share links when public CDN storage is unavailable", async () => {
+  const service = new InvoiceDocumentsService(
+    {
+      findByIdWithRelations: async () => buildInvoiceRecord(),
+    } as never,
+    {} as never,
+    {
+      provider: "none",
+      maxFileBytes: 5 * 1024 * 1024,
+      maxRequestBytes: 50 * 1024 * 1024,
+      r2: null,
+    },
+    null,
+  )
+
+  await assert.rejects(
+    () => service.getShareablePdfLink("invoice-1", adminUser),
+    /Shareable invoice links require R2 public CDN storage/,
+  )
+})
+
 test("InvoiceDocumentsService stores a new private invoice PDF asset when R2 is enabled", async () => {
   let createdAssetInput: unknown
   let linkedDocumentAsset: { invoiceId: string; assetId: string | null } | null = null
@@ -181,6 +202,64 @@ test("InvoiceDocumentsService reuses the stored PDF when the linked asset is new
   assert.equal(document.body.toString("utf8"), "stored-pdf")
   assert.equal(document.filename, "INV-20260424-TEST0001.pdf")
   assert.equal(uploaded, false)
+})
+
+test("InvoiceDocumentsService returns a public share link when R2 public CDN is enabled", async () => {
+  const service = new InvoiceDocumentsService(
+    {
+      findByIdWithRelations: async () =>
+        buildInvoiceRecord({
+          documentAsset: {
+            id: "asset-1",
+            kind: "invoice_pdf",
+            storageProvider: "r2",
+            visibility: "public",
+            objectKey: "invoices/invoice-1/pdf/current.pdf",
+            publicUrl: "https://cdn.example.com/invoices/invoice-1/pdf/current.pdf",
+            filename: "INV-20260424-TEST0001.pdf",
+            contentType: "application/pdf",
+            sizeBytes: 123,
+            createdAt: new Date("2026-04-24T10:10:00.000Z"),
+            updatedAt: new Date("2026-04-24T10:10:00.000Z"),
+          },
+          updatedAt: new Date("2026-04-24T10:00:00.000Z"),
+        }),
+    } as never,
+    {} as never,
+    {
+      provider: "r2",
+      maxFileBytes: 5 * 1024 * 1024,
+      maxRequestBytes: 50 * 1024 * 1024,
+      r2: {
+        accountId: "acct",
+        accessKeyId: "key",
+        secretAccessKey: "secret",
+        bucketName: "bucket",
+        endpoint: "https://acct.r2.cloudflarestorage.com",
+        publicUrl: "https://cdn.example.com",
+        usePublicCdn: true,
+      },
+    },
+    {
+      putObject: async () => {
+        throw new Error("putObject should not be used when the stored public asset is fresh")
+      },
+      getObject: async () => ({
+        body: Buffer.from("stored-pdf"),
+        contentType: "application/pdf",
+        contentLength: 10,
+      }),
+      deleteObject: async () => {
+        throw new Error("deleteObject should not be used when reusing the current asset")
+      },
+      getPublicUrl: (objectKey: string) => `https://cdn.example.com/${objectKey}`,
+    },
+  )
+
+  const shareLink = await service.getShareablePdfLink("invoice-1", adminUser)
+
+  assert.equal(shareLink.url, "https://cdn.example.com/invoices/invoice-1/pdf/current.pdf")
+  assert.equal(shareLink.filename, "INV-20260424-TEST0001.pdf")
 })
 
 function buildInvoiceRecord(overrides: Record<string, unknown> = {}) {
