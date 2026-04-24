@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
+import type { Pool } from "pg"
 
 import { loadDatabaseEnv } from "../config/env.js"
-import { getDatabasePool } from "./pool.js"
+import { createDatabasePool } from "./pool.js"
 
 interface JournalEntry {
   idx: number
@@ -23,10 +24,9 @@ interface ParsedMigration {
   statements: string[]
 }
 
-async function assertMigrationStateIsSafe(): Promise<void> {
+async function assertMigrationStateIsSafe(pool: Pool): Promise<void> {
   loadDatabaseEnv()
 
-  const pool = getDatabasePool()
   const client = await pool.connect()
 
   try {
@@ -59,7 +59,6 @@ async function assertMigrationStateIsSafe(): Promise<void> {
     }
   } finally {
     client.release()
-    await pool.end()
   }
 }
 
@@ -92,9 +91,8 @@ function previewStatement(statement: string): string {
   return statement.replaceAll(/\s+/g, " ").trim().slice(0, 240)
 }
 
-async function runDeployMigrations(): Promise<void> {
+async function runDeployMigrations(pool: Pool): Promise<void> {
   const migrations = await readMigrations()
-  const pool = getDatabasePool()
   const client = await pool.connect()
 
   try {
@@ -158,13 +156,18 @@ async function runDeployMigrations(): Promise<void> {
     }
   } finally {
     client.release()
-    await pool.end()
   }
 }
 
 async function main(): Promise<void> {
-  await assertMigrationStateIsSafe()
-  await runDeployMigrations()
+  const pool = createDatabasePool()
+
+  try {
+    await assertMigrationStateIsSafe(pool)
+    await runDeployMigrations(pool)
+  } finally {
+    await pool.end()
+  }
 }
 
 main().catch((error: unknown) => {
