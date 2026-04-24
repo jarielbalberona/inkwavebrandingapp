@@ -166,7 +166,29 @@ const invoiceSchema = z.object({
   }),
   status: invoiceStatusSchema,
   subtotal: z.string(),
+  total_amount: z.string(),
+  paid_amount: z.string(),
+  remaining_balance: z.string(),
+  due_date: z.string().nullable(),
+  notes: z.string().nullable(),
   items: z.array(invoiceItemSchema),
+  payments: z.array(
+    z.object({
+      id: z.string().uuid(),
+      amount: z.string(),
+      payment_date: z.string(),
+      note: z.string().nullable(),
+      created_by: z
+        .object({
+          id: z.string().uuid(),
+          email: z.string().email(),
+          display_name: z.string().nullable(),
+        })
+        .nullable(),
+      created_at: z.string(),
+      updated_at: z.string(),
+    }),
+  ),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -349,7 +371,7 @@ export async function getOrderInvoice(orderId: string): Promise<Invoice> {
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new Error("Only admins can view invoices.")
+      throw new Error("You do not have permission to view invoices.")
     }
 
     if (error instanceof ApiClientError) {
@@ -366,7 +388,7 @@ export async function generateOrderInvoice(orderId: string): Promise<Invoice> {
     return invoiceResponseSchema.parse(data).invoice
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new Error("Only admins can generate invoices.")
+      throw new Error("You do not have permission to generate invoices.")
     }
 
     if (error instanceof ApiClientError && error.status === 404) {

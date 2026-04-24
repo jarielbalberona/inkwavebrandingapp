@@ -22,6 +22,7 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, hasPermission } from "@/features/auth/permissions"
 import type { Invoice, Order, OrderStatus } from "@/features/orders/api/orders-client"
 import {
   useCancelOrderMutation,
@@ -34,8 +35,8 @@ import { apiBaseUrl } from "@/lib/api"
 export function OrderViewPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
   const orderQuery = useOrderQuery(orderId)
-  const isAdmin = currentUser.data?.role === "admin"
-  const orderInvoiceQuery = useOrderInvoiceQuery(orderId, isAdmin)
+  const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
+  const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canManageInvoices)
   const generateOrderInvoiceMutation = useGenerateOrderInvoiceMutation()
   const cancelOrderMutation = useCancelOrderMutation()
   const [pageError, setPageError] = useState<string | null>(null)
@@ -43,7 +44,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
 
   const order = orderQuery.data ?? null
   const invoiceLockBlocksEdit =
-    orderInvoiceQuery.data?.status === "paid" || orderInvoiceQuery.data?.status === "void"
+    orderInvoiceQuery.data?.status === "paid" ||
+    orderInvoiceQuery.data?.status === "void" ||
+    Number(orderInvoiceQuery.data?.paid_amount ?? "0") > 0
   const canOpenEdit =
     order !== null &&
     order.status !== "canceled" &&
@@ -100,8 +103,8 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
           <div className="grid gap-1">
             <CardTitle>Order Details</CardTitle>
             <CardDescription>
-              View the order record, line items, and admin-only invoice actions without mixing them
-              into fulfillment progress.
+              View the order record, line items, and permission-gated invoice actions without mixing
+              them into fulfillment progress.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -219,7 +222,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
               </div>
             </div>
 
-            {isAdmin ? (
+            {canManageInvoices ? (
               <InvoicePanel
                 invoice={orderInvoiceQuery.data}
                 invoiceError={orderInvoiceQuery.isError ? orderInvoiceQuery.error.message : null}
@@ -291,7 +294,7 @@ function InvoicePanel({
         <div className="grid gap-1">
           <p className="font-medium">Invoice</p>
           <p className="text-muted-foreground">
-            Admin-only financial snapshot. While it is unpaid, structural changes must go through the order. Once it is paid or voided, structural edits are locked.
+            Admin-only financial snapshot. While no payment has been recorded, structural changes must go through the order. Once payment starts, or once it is paid or voided, structural edits are locked.
           </p>
         </div>
         {canGenerate ? (
@@ -318,6 +321,14 @@ function InvoicePanel({
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Subtotal</p>
             <p className="font-medium">{resolvedInvoice.subtotal}</p>
+          </div>
+          <div className="border p-3">
+            <p className="text-xs text-muted-foreground">Paid</p>
+            <p className="font-medium">{resolvedInvoice.paid_amount}</p>
+          </div>
+          <div className="border p-3">
+            <p className="text-xs text-muted-foreground">Remaining</p>
+            <p className="font-medium">{resolvedInvoice.remaining_balance}</p>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Generated</p>

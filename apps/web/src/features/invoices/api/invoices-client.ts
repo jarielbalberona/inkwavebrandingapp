@@ -16,6 +16,9 @@ const invoiceListItemSchema = z.object({
   }),
   status: invoiceStatusSchema,
   subtotal: z.string(),
+  total_amount: z.string(),
+  paid_amount: z.string(),
+  remaining_balance: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -29,6 +32,22 @@ const invoiceItemSchema = z.object({
   unit_price: z.string(),
   line_total: z.string(),
   created_at: z.string(),
+})
+
+const invoicePaymentSchema = z.object({
+  id: z.string().uuid(),
+  amount: z.string(),
+  payment_date: z.string(),
+  note: z.string().nullable(),
+  created_by: z
+    .object({
+      id: z.string().uuid(),
+      email: z.string().email(),
+      display_name: z.string().nullable(),
+    })
+    .nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
 })
 
 const invoiceSchema = z.object({
@@ -47,7 +66,13 @@ const invoiceSchema = z.object({
   }),
   status: invoiceStatusSchema,
   subtotal: z.string(),
+  total_amount: z.string(),
+  paid_amount: z.string(),
+  remaining_balance: z.string(),
+  due_date: z.string().nullable(),
+  notes: z.string().nullable(),
   items: z.array(invoiceItemSchema),
+  payments: z.array(invoicePaymentSchema),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -68,6 +93,11 @@ const invoiceShareLinkResponseSchema = z.object({
 export type InvoiceListItem = z.infer<typeof invoiceListItemSchema>
 export type Invoice = z.infer<typeof invoiceSchema>
 export type InvoiceShareLink = z.infer<typeof invoiceShareLinkResponseSchema>
+export interface RecordInvoicePaymentPayload {
+  amount: string
+  payment_date: string
+  note?: string
+}
 
 export interface ListInvoicesFilters {
   search?: string
@@ -88,7 +118,7 @@ export async function listInvoices(filters: ListInvoicesFilters = {}): Promise<I
     return invoicesResponseSchema.parse(data).invoices
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new Error("Only admins can view invoices.")
+      throw new Error("You do not have permission to view invoices.")
     }
 
     if (error instanceof ApiClientError) {
@@ -109,7 +139,7 @@ export async function getInvoice(invoiceId: string): Promise<Invoice> {
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new Error("Only admins can view invoices.")
+      throw new Error("You do not have permission to view invoices.")
     }
 
     if (error instanceof ApiClientError) {
@@ -130,11 +160,56 @@ export async function getInvoiceShareLink(invoiceId: string): Promise<InvoiceSha
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new Error("Only admins can share invoices.")
+      throw new Error("You do not have permission to share invoices.")
     }
 
     if (error instanceof ApiClientError) {
       throw new Error(error.message || "Unable to create share link.")
+    }
+
+    throw error
+  }
+}
+
+export async function recordInvoicePayment(
+  invoiceId: string,
+  payload: RecordInvoicePaymentPayload,
+): Promise<Invoice> {
+  try {
+    const data = await api.post<unknown>(`/invoices/${invoiceId}/payments`, payload)
+    return invoiceResponseSchema.parse(data).invoice
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Invoice not found.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("You do not have permission to record invoice payments.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error(error.message || "Unable to record payment.")
+    }
+
+    throw error
+  }
+}
+
+export async function voidInvoice(invoiceId: string): Promise<Invoice> {
+  try {
+    const data = await api.post<unknown>(`/invoices/${invoiceId}/void`, {})
+    return invoiceResponseSchema.parse(data).invoice
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Invoice not found.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("You do not have permission to void invoices.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error(error.message || "Unable to void invoice.")
     }
 
     throw error
