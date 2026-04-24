@@ -19,8 +19,15 @@ export interface StoredObject {
   publicUrl: string | null
 }
 
+export interface RetrievedObject {
+  body: Buffer
+  contentType: string | null
+  contentLength: number | null
+}
+
 export interface ObjectStorageProvider {
   putObject(input: PutObjectInput): Promise<StoredObject>
+  getObject(objectKey: string): Promise<RetrievedObject>
   deleteObject(objectKey: string): Promise<void>
   getPublicUrl(objectKey: string, visibility?: StoredObjectVisibility): string | null
 }

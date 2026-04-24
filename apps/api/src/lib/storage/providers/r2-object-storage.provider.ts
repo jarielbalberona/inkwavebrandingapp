@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 
 import type { R2StorageConfig } from "../../../config/storage.js"
 import type { ObjectStorageProvider, PutObjectInput } from "../object-storage.types.js"
@@ -38,6 +38,27 @@ export class R2ObjectStorageProvider implements ObjectStorageProvider {
         Key: objectKey,
       }),
     )
+  }
+
+  async getObject(objectKey: string) {
+    const response = await this.getClient().send(
+      new GetObjectCommand({
+        Bucket: this.config.bucketName,
+        Key: objectKey,
+      }),
+    )
+
+    const bytes = await response.Body?.transformToByteArray()
+
+    if (!bytes) {
+      throw new Error(`Stored object ${objectKey} has no body`)
+    }
+
+    return {
+      body: Buffer.from(bytes),
+      contentType: response.ContentType ?? null,
+      contentLength: response.ContentLength ?? null,
+    }
   }
 
   getPublicUrl(objectKey: string, visibility: "public" | "private" = "private") {

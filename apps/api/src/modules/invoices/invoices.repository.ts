@@ -114,6 +114,7 @@ export class InvoicesRepository {
     return this.db.query.invoices.findFirst({
       where: eq(invoices.id, id),
       with: {
+        documentAsset: true,
         items: {
           with: {
             orderItem: true,
@@ -127,6 +128,7 @@ export class InvoicesRepository {
     return this.db.query.invoices.findFirst({
       where: eq(invoices.orderId, orderId),
       with: {
+        documentAsset: true,
         items: {
           with: {
             orderItem: true,
@@ -134,5 +136,15 @@ export class InvoicesRepository {
         },
       },
     })
+  }
+
+  async setDocumentAssetId(invoiceId: string, documentAssetId: string | null): Promise<void> {
+    await this.db
+      .update(invoices)
+      .set({
+        documentAssetId,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, invoiceId))
   }
 }
