@@ -504,7 +504,7 @@ function OrderCreateLineItemFields({
           ) : null}
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-[36%_15%_10%_37%]">
+        <div className="grid gap-3 md:grid-cols-[50%_15%_10%_23%]">
           <FormField
             control={control}
             name={`line_items.${index}.item_id`}

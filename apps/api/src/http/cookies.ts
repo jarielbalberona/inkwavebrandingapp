@@ -25,6 +25,8 @@ export interface CookieOptions {
   path?: string
   sameSite?: "Lax" | "Strict" | "None"
   secure?: boolean
+  /** CHIPS: required by some browsers (notably WebKit) for credentialed cross-site `fetch` to persist the cookie. */
+  partitioned?: boolean
 }
 
 export function serializeCookie(name: string, value: string, options: CookieOptions = {}): string {
@@ -44,6 +46,10 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
 
   if (options.secure) {
     parts.push("Secure")
+  }
+
+  if (options.partitioned) {
+    parts.push("Partitioned")
   }
 
   return parts.join("; ")
