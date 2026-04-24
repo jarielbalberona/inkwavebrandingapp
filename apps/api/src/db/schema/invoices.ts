@@ -13,6 +13,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core"
 
+import { assets } from "./assets.js"
 import { customers } from "./customers.js"
 import { orderItems, orderLineItemTypeEnum, orders } from "./orders.js"
 import { users } from "./users.js"
@@ -39,6 +40,9 @@ export const invoices = pgTable(
     customerAddressSnapshot: varchar("customer_address_snapshot", { length: 500 }),
     status: invoiceStatusEnum("status").notNull().default("pending"),
     subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
+    documentAssetId: uuid("document_asset_id").references(() => assets.id, {
+      onDelete: "set null",
+    }),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -103,6 +107,10 @@ export const invoicesRelations = relations(invoices, ({ many, one }) => ({
   createdByUser: one(users, {
     fields: [invoices.createdByUserId],
     references: [users.id],
+  }),
+  documentAsset: one(assets, {
+    fields: [invoices.documentAssetId],
+    references: [assets.id],
   }),
   items: many(invoiceItems),
 }))

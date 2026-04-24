@@ -1,3 +1,4 @@
+export * from "./assets.js"
 export * from "./customers.js"
 export * from "./cups.js"
 export * from "./inventory.js"
