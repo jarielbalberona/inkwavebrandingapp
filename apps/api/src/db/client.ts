@@ -6,7 +6,7 @@ import * as schema from "./schema/index.js"
 
 export type DatabaseClient = NodePgDatabase<typeof schema>
 
-export function createDatabaseClient() {
+export function createDatabaseClient(): DatabaseClient {
   return drizzle(getDatabasePool(), {
     schema,
   })

@@ -8,7 +8,7 @@ services:
     name: ink-wave-branding-web
     runtime: static
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter web build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter web build
     staticPublishPath: apps/web/dist
     envVars:
       - key: VITE_API_BASE_URL
@@ -18,7 +18,7 @@ services:
     name: ink-wave-branding-api
     runtime: node
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/api build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/api build
     startCommand: pnpm --filter @workspace/api start
     healthCheckPath: /health
     envVars:
