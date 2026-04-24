@@ -17,72 +17,64 @@ import {
   sharedStyles,
 } from "../shared/index.js"
 import type { InvoicePdfData } from "../shared/types/index.js"
+import { toInkWaveInvoiceViewModel } from "./invoice-view-model.js"
 
 export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
+  const viewModel = toInkWaveInvoiceViewModel(invoice)
+
   return (
     <Document>
       <PdfPageShell
         header={
           <PdfHeader
-            brand={<Text style={sharedStyles.hero}>Ink Wave</Text>}
-            title="Invoice"
-            reference={invoice.invoice_number}
-            subtitle={invoice.order_number_snapshot}
-            status={<PdfStatusBadge label="Pending" tone="warning" />}
+            brand={<Text style={sharedStyles.hero}>{viewModel.brandName}</Text>}
+            title={viewModel.documentTitle}
+            reference={viewModel.invoiceNumber}
+            subtitle={viewModel.orderReference}
+            status={<PdfStatusBadge label={viewModel.status.label} tone={viewModel.status.tone} />}
           />
         }
-        footerLeft={`Generated ${new Date(invoice.created_at).toLocaleDateString("en-PH")}`}
-        footerCenter="Ink Wave Branding App"
+        footerLeft={`Generated ${viewModel.generatedAt}`}
+        footerCenter={viewModel.supportLines[0]}
       >
         <View style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <Text style={sharedStyles.invoiceRef}>{invoice.invoice_number}</Text>
+          <Text style={sharedStyles.invoiceRef}>{viewModel.invoiceNumber}</Text>
           <Text style={sharedStyles.muted}>Print order invoice</Text>
         </View>
 
         <PdfSection>
           <PdfPartiesBlock
-            left={{
-              label: "From",
-              name: "Ink Wave Branding App",
-              lines: ["Cup printing operations"],
-            }}
-            right={{
-              label: "To",
-              name: invoice.customer.business_name,
-              lines: getCustomerLines(invoice),
-            }}
+            left={viewModel.from}
+            right={viewModel.to}
           />
         </PdfSection>
 
         <PdfSection>
           <PdfMetaGrid
             leftTitle="Invoice details"
-            leftItems={[
-              { label: "Invoice number", value: invoice.invoice_number },
-              { label: "Generated", value: new Date(invoice.created_at).toLocaleDateString("en-PH") },
-            ]}
+            leftItems={viewModel.leftMeta}
             rightTitle="Order details"
-            rightItems={[
-              { label: "Order reference", value: invoice.order_number_snapshot },
-              { label: "Line items", value: invoice.items.length.toLocaleString() },
-            ]}
+            rightItems={viewModel.rightMeta}
           />
         </PdfSection>
 
-        <PdfSection title="Charges">
+        <PdfSection
+          title="Charges"
+          description="Order-specific line items for this print job."
+        >
           <PdfTable
             columns={[
               {
                 key: "item",
                 title: "Item",
                 width: "26%",
-                render: (item) => item.description_snapshot,
+                render: (item) => item.item,
               },
               {
                 key: "specs",
                 title: "Specs",
                 width: "28%",
-                render: (item) => formatInvoiceItemType(item.item_type),
+                render: (item) => item.specs,
               },
               {
                 key: "quantity",
@@ -96,53 +88,66 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
                 title: "Unit Price",
                 width: "17%",
                 align: "right",
-                render: (item) => formatMoney(item.unit_price),
+                render: (item) => formatMoney(item.unitPrice),
               },
               {
                 key: "total",
                 title: "Total",
                 width: "17%",
                 align: "right",
-                render: (item) => formatMoney(item.line_total),
+                render: (item) => formatMoney(item.total),
               },
             ]}
-            rows={invoice.items}
+            rows={viewModel.lineItems}
           />
 
           <PdfSummaryBlock
             rows={[
               {
                 label: "Subtotal",
-                value: formatMoney(invoice.subtotal),
+                value: formatMoney(viewModel.summary.subtotal),
+              },
+              {
+                label: "Discount",
+                value: formatMoney(viewModel.summary.discount),
+              },
+              {
+                label: "Total",
+                value: formatMoney(viewModel.summary.total),
+              },
+              {
+                label: "Paid amount",
+                value: formatMoney(viewModel.summary.paidAmount),
+              },
+              {
+                label: "Remaining balance",
+                value: formatMoney(viewModel.summary.remainingBalance),
                 emphasis: true,
               },
             ]}
           />
         </PdfSection>
+
+        <PdfSection title="Payment and support">
+          <View style={sharedStyles.footerBlock}>
+            {viewModel.paymentInstructions.map((line) => (
+              <Text key={line} style={sharedStyles.body}>
+                {line}
+              </Text>
+            ))}
+          </View>
+
+          <View style={sharedStyles.footerBlock}>
+            {viewModel.supportLines.map((line) => (
+              <Text key={line} style={sharedStyles.muted}>
+                {line}
+              </Text>
+            ))}
+          </View>
+
+          <Text style={sharedStyles.muted}>{viewModel.footerNote}</Text>
+        </PdfSection>
       </PdfPageShell>
     </Document>
   )
-}
-
-function formatInvoiceItemType(itemType: InvoicePdfData["items"][number]["item_type"]) {
-  switch (itemType) {
-    case "cup":
-      return "Cup"
-    case "lid":
-      return "Lid"
-    case "non_stock_item":
-      return "General"
-    case "custom_charge":
-      return "Charge"
-  }
-}
-
-function getCustomerLines(invoice: InvoicePdfData) {
-  return [
-    invoice.customer.contact_person,
-    invoice.customer.contact_number,
-    invoice.customer.email,
-    invoice.customer.address,
-    invoice.customer.customer_code ? `Code: ${invoice.customer.customer_code}` : null,
-  ].filter((line): line is string => Boolean(line))
 }
