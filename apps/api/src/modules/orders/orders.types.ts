@@ -1,4 +1,4 @@
-import type { Cup, Customer, Lid } from "../../db/schema/index.js"
+import type { Cup, Customer, Lid, NonStockItem } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
 import { toCustomerDto } from "../customers/customers.types.js"
@@ -25,11 +25,18 @@ interface OrderLidDto {
   color: string
 }
 
+interface OrderNonStockItemDto {
+  id: string
+  name: string
+  description: string | null
+}
+
 interface BaseOrderItemDto {
   id: string
-  item_type: "cup" | "lid"
+  item_type: "cup" | "lid" | "non_stock_item"
   cup: OrderCupDto | null
   lid: OrderLidDto | null
+  non_stock_item: OrderNonStockItemDto | null
   description_snapshot: string
   quantity: number
   notes: string | null
@@ -47,6 +54,7 @@ type StaffOrderItemDto = BaseOrderItemDto
 interface BaseOrderDto {
   id: string
   order_number: string
+  priority: number
   status: string
   customer: ReturnType<typeof toCustomerDto>
   items: Array<AdminOrderItemDto | StaffOrderItemDto>
@@ -123,6 +131,7 @@ function toBaseOrderDto(
   return {
     id: order.id,
     order_number: order.orderNumber,
+    priority: order.priority,
     status: order.status,
     customer: toCustomerDto(order.customer as Customer, user),
     items: order.items.map(mapItem),
@@ -139,6 +148,22 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
       item_type: "cup",
       cup: toCupDto(item.cup as Cup),
       lid: null,
+      non_stock_item: null,
+      description_snapshot: item.descriptionSnapshot,
+      quantity: item.quantity,
+      notes: item.notes ?? null,
+      created_at: item.createdAt.toISOString(),
+      updated_at: item.updatedAt.toISOString(),
+    }
+  }
+
+  if (item.itemType === "lid") {
+    return {
+      id: item.id,
+      item_type: "lid",
+      cup: null,
+      lid: toLidDto(item.lid as Lid),
+      non_stock_item: null,
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -149,9 +174,10 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
 
   return {
     id: item.id,
-    item_type: "lid",
+    item_type: "non_stock_item",
     cup: null,
-    lid: toLidDto(item.lid as Lid),
+    lid: null,
+    non_stock_item: toNonStockItemDto(item.nonStockItem as NonStockItem),
     description_snapshot: item.descriptionSnapshot,
     quantity: item.quantity,
     notes: item.notes ?? null,
@@ -181,6 +207,14 @@ function toLidDto(lid: Lid): OrderLidDto {
     diameter: lid.diameter,
     shape: lid.shape,
     color: lid.color,
+  }
+}
+
+function toNonStockItemDto(nonStockItem: NonStockItem): OrderNonStockItemDto {
+  return {
+    id: nonStockItem.id,
+    name: nonStockItem.name,
+    description: nonStockItem.description ?? null,
   }
 }
 

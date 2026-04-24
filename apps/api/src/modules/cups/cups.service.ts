@@ -29,6 +29,14 @@ export class CupIdentityLockedError extends Error {
   }
 }
 
+export class CupPersistenceValidationError extends Error {
+  readonly statusCode = 400
+
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 export class CupsService {
   constructor(private readonly cupsRepository: CupsRepository) {}
 
@@ -82,6 +90,11 @@ export class CupsService {
         throw new DuplicateCupSkuError()
       }
 
+      const persistenceValidationError = toCupPersistenceValidationError(error)
+      if (persistenceValidationError) {
+        throw persistenceValidationError
+      }
+
       throw error
     }
   }
@@ -96,6 +109,12 @@ export class CupsService {
         throw new CupNotFoundError()
       }
 
+      const nextSku = generateCupSku({
+        type: input.type ?? existingCup.type,
+        brand: input.brand ?? existingCup.brand,
+        size: input.size ?? existingCup.size,
+        color: input.color ?? existingCup.color,
+      })
       const regeneratesSku = wouldRegenerateCupSku(existingCup, input)
 
       if (regeneratesSku && (await this.cupsRepository.hasHistoricalUsage(id))) {
@@ -104,16 +123,7 @@ export class CupsService {
 
       const cup = await this.cupsRepository.update(id, {
         ...input,
-        ...(regeneratesSku
-          ? {
-              sku: generateCupSku({
-                type: input.type ?? existingCup.type,
-                brand: input.brand ?? existingCup.brand,
-                size: input.size ?? existingCup.size,
-                color: input.color ?? existingCup.color,
-              }),
-            }
-          : undefined),
+        sku: nextSku,
       })
 
       if (!cup) {
@@ -134,16 +144,78 @@ export class CupsService {
         throw new DuplicateCupSkuError()
       }
 
+      const persistenceValidationError = toCupPersistenceValidationError(error)
+      if (persistenceValidationError) {
+        throw persistenceValidationError
+      }
+
       throw error
     }
   }
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: unknown }).code === "23505",
-  )
+  return getDbErrorCode(error) === "23505"
+}
+
+function toCupPersistenceValidationError(error: unknown): CupPersistenceValidationError | null {
+  const code = getDbErrorCode(error)
+  const detail = getDbErrorDetail(error)
+  const message = getDbErrorMessage(error)
+
+  if (code === "23514" || code === "23502" || code === "22P02") {
+    return new CupPersistenceValidationError(
+      detail || message || "Cup data failed database validation.",
+    )
+  }
+
+  return null
+}
+
+function getDbErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null
+  }
+
+  if ("code" in error && typeof (error as { code?: unknown }).code === "string") {
+    return (error as { code: string }).code
+  }
+
+  if ("cause" in error) {
+    return getDbErrorCode((error as { cause?: unknown }).cause)
+  }
+
+  return null
+}
+
+function getDbErrorDetail(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null
+  }
+
+  if ("detail" in error && typeof (error as { detail?: unknown }).detail === "string") {
+    return (error as { detail: string }).detail
+  }
+
+  if ("cause" in error) {
+    return getDbErrorDetail((error as { cause?: unknown }).cause)
+  }
+
+  return null
+}
+
+function getDbErrorMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null
+  }
+
+  if ("message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message
+  }
+
+  if ("cause" in error) {
+    return getDbErrorMessage((error as { cause?: unknown }).cause)
+  }
+
+  return null
 }

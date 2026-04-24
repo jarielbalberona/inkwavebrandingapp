@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm"
+import { asc, desc, eq, inArray, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
@@ -69,6 +69,7 @@ export class OrdersRepository {
           with: {
             cup: true,
             lid: true,
+            nonStockItem: true,
           },
         },
       },
@@ -84,12 +85,21 @@ export class OrdersRepository {
           with: {
             cup: true,
             lid: true,
+            nonStockItem: true,
           },
         },
       },
-      orderBy: [desc(orders.createdAt)],
+      orderBy: [asc(orders.priority), desc(orders.createdAt)],
       limit: 200,
     })
+  }
+
+  async getMinimumPriority(): Promise<number | null> {
+    const result = await this.db
+      .select({ value: sql<number | null>`min(${orders.priority})` })
+      .from(orders)
+
+    return result[0]?.value ?? null
   }
 
   async findOrderItemWithOrder(id: string) {
@@ -99,6 +109,7 @@ export class OrdersRepository {
         order: true,
         cup: true,
         lid: true,
+        nonStockItem: true,
       },
     })
   }
@@ -134,6 +145,40 @@ export class OrdersRepository {
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId))
+  }
+
+  async listAllOrderIdsByPriority(): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .orderBy(asc(orders.priority), desc(orders.createdAt))
+
+    return rows.map((row) => row.id)
+  }
+
+  async countOrdersByIds(orderIds: string[]): Promise<number> {
+    if (orderIds.length === 0) {
+      return 0
+    }
+
+    const rows = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(inArray(orders.id, orderIds))
+
+    return rows.length
+  }
+
+  async replacePrioritiesByOrderIds(orderIds: string[]): Promise<void> {
+    for (const [index, orderId] of orderIds.entries()) {
+      await this.db
+        .update(orders)
+        .set({
+          priority: index,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, orderId))
+    }
   }
 
   async cancelOrder(orderId: string): Promise<void> {

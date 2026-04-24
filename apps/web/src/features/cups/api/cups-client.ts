@@ -20,6 +20,17 @@ export const cupSchema = z.object({
 
 const cupsResponseSchema = z.object({ cups: z.array(cupSchema) })
 const cupResponseSchema = z.object({ cup: cupSchema })
+const cupRequestErrorSchema = z.object({
+  error: z.string(),
+  details: z
+    .array(
+      z.object({
+        path: z.string(),
+        message: z.string(),
+      }),
+    )
+    .optional(),
+})
 
 export type Cup = z.infer<typeof cupSchema>
 
@@ -67,12 +78,37 @@ export async function updateCup(id: string, payload: CupPayload): Promise<Cup> {
   return cupResponseSchema.parse(response).cup
 }
 
+function formatCupRequestError(data: unknown): string | null {
+  const parsed = cupRequestErrorSchema.safeParse(data)
+
+  if (!parsed.success) {
+    return null
+  }
+
+  const details = parsed.data.details
+    ?.map((detail) => (detail.path ? `${detail.path}: ${detail.message}` : detail.message))
+    .filter(Boolean)
+
+  if (details?.length) {
+    return `${parsed.data.error}. ${details.join(" ")}`
+  }
+
+  return parsed.data.error
+}
+
 async function sendCupRequest(path: string, method: "POST" | "PATCH", payload: CupPayload) {
   try {
     return method === "POST"
       ? await api.post<unknown, typeof payload>(path, payload)
       : await api.patch<unknown, typeof payload>(path, payload)
   } catch (error) {
+    if (error instanceof ApiClientError && error.status === 400) {
+      throw new CupsApiError(
+        formatCupRequestError(error.data) ?? error.message ?? "Invalid cup request.",
+        error.status,
+      )
+    }
+
     if (error instanceof ApiClientError && error.status === 409) {
       throw new CupsApiError(
         error.message.includes("historical records")

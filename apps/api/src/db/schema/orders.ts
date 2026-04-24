@@ -16,6 +16,7 @@ import {
 import { cups } from "./cups.js"
 import { customers } from "./customers.js"
 import { lids } from "./lids.js"
+import { nonStockItems } from "./non-stock-items.js"
 import { users } from "./users.js"
 
 export const orderStatusEnum = pgEnum("order_status", [
@@ -37,6 +38,7 @@ export const orderLineItemProgressStageEnum = pgEnum("order_line_item_progress_s
 export const orderLineItemTypeEnum = pgEnum("order_line_item_type", [
   "cup",
   "lid",
+  "non_stock_item",
 ])
 
 export const orders = pgTable(
@@ -47,6 +49,7 @@ export const orders = pgTable(
     customerId: uuid("customer_id")
       .notNull()
       .references(() => customers.id, { onDelete: "restrict" }),
+    priority: integer("priority").notNull().default(0),
     status: orderStatusEnum("status").notNull().default("pending"),
     notes: text("notes"),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
@@ -59,6 +62,7 @@ export const orders = pgTable(
   (table) => [
     uniqueIndex("orders_order_number_unique_idx").on(sql`lower(${table.orderNumber})`),
     index("orders_customer_id_idx").on(table.customerId),
+    index("orders_priority_idx").on(table.priority),
     index("orders_status_idx").on(table.status),
     index("orders_created_at_idx").on(table.createdAt),
     check("orders_order_number_not_blank", sql`length(trim(${table.orderNumber})) > 0`),
@@ -75,6 +79,9 @@ export const orderItems = pgTable(
     itemType: orderLineItemTypeEnum("item_type").notNull(),
     cupId: uuid("cup_id").references(() => cups.id, { onDelete: "restrict" }),
     lidId: uuid("lid_id").references(() => lids.id, { onDelete: "restrict" }),
+    nonStockItemId: uuid("non_stock_item_id").references(() => nonStockItems.id, {
+      onDelete: "restrict",
+    }),
     descriptionSnapshot: text("description_snapshot").notNull(),
     quantity: integer("quantity").notNull(),
     unitCostPrice: numeric("unit_cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -87,6 +94,7 @@ export const orderItems = pgTable(
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_cup_id_idx").on(table.cupId),
     index("order_items_lid_id_idx").on(table.lidId),
+    index("order_items_non_stock_item_id_idx").on(table.nonStockItemId),
     check("order_items_quantity_positive", sql`${table.quantity} > 0`),
     check("order_items_unit_cost_price_non_negative", sql`${table.unitCostPrice} >= 0`),
     check("order_items_unit_sell_price_non_negative", sql`${table.unitSellPrice} >= 0`),
@@ -94,17 +102,36 @@ export const orderItems = pgTable(
     check(
       "order_items_exactly_one_item",
       sql`(
-        (${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL)
+        (${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL)
         OR
-        (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL)
+        (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL AND ${table.nonStockItemId} IS NULL)
+        OR
+        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NOT NULL)
       )`,
     ),
     check(
       "order_items_item_type_matches_reference",
       sql`(
-        (${table.itemType} = 'cup' AND ${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL)
+        (
+          ${table.itemType} = 'cup'
+          AND ${table.cupId} IS NOT NULL
+          AND ${table.lidId} IS NULL
+          AND ${table.nonStockItemId} IS NULL
+        )
         OR
-        (${table.itemType} = 'lid' AND ${table.lidId} IS NOT NULL AND ${table.cupId} IS NULL)
+        (
+          ${table.itemType} = 'lid'
+          AND ${table.lidId} IS NOT NULL
+          AND ${table.cupId} IS NULL
+          AND ${table.nonStockItemId} IS NULL
+        )
+        OR
+        (
+          ${table.itemType} = 'non_stock_item'
+          AND ${table.nonStockItemId} IS NOT NULL
+          AND ${table.cupId} IS NULL
+          AND ${table.lidId} IS NULL
+        )
       )`,
     ),
   ],
@@ -158,6 +185,10 @@ export const orderItemsRelations = relations(orderItems, ({ many, one }) => ({
   lid: one(lids, {
     fields: [orderItems.lidId],
     references: [lids.id],
+  }),
+  nonStockItem: one(nonStockItems, {
+    fields: [orderItems.nonStockItemId],
+    references: [nonStockItems.id],
   }),
   progressEvents: many(orderLineItemProgressEvents),
 }))

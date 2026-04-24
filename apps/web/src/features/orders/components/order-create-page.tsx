@@ -48,6 +48,8 @@ import type { Customer } from "@/features/customers/api/customers-client"
 import { useCustomersQuery } from "@/features/customers/hooks/use-customers"
 import type { Lid } from "@/features/lids/api/lids-client"
 import { useLidsQuery } from "@/features/lids/hooks/use-lids"
+import type { NonStockItem } from "@/features/non-stock-items/api/non-stock-items-client"
+import { useNonStockItemsQuery } from "@/features/non-stock-items/hooks/use-non-stock-items"
 import { CreateOrderError } from "@/features/orders/api/orders-client"
 import { useCreateOrderMutation } from "@/features/orders/hooks/use-orders"
 
@@ -57,7 +59,7 @@ const orderCreateSchema = z.object({
   line_items: z
     .array(
       z.object({
-        item_type: z.enum(["cup", "lid"]),
+        item_type: z.enum(["cup", "lid", "non_stock_item"]),
         item_id: z.string().uuid({ message: "Select a source item." }),
         quantity: z.number().int().positive("Quantity must be a positive whole number."),
         notes: z.string().trim().max(500).optional(),
@@ -250,15 +252,19 @@ function OrderCreateLineItemFields({
   fieldId,
   activeCups,
   activeLids,
+  activeNonStockItems,
   cupsLoading,
   lidsLoading,
+  nonStockItemsLoading,
 }: {
   index: number
   fieldId: string
   activeCups: Cup[]
   activeLids: Lid[]
+  activeNonStockItems: NonStockItem[]
   cupsLoading: boolean
   lidsLoading: boolean
+  nonStockItemsLoading: boolean
 }) {
   const { control, setValue, getValues } = useFormContext<OrderCreateValues>()
   const itemType =
@@ -266,7 +272,12 @@ function OrderCreateLineItemFields({
       control,
       name: `line_items.${index}.item_type`,
     }) ?? "cup"
-  const availableItems = itemType === "cup" ? activeCups : activeLids
+  const availableItems =
+    itemType === "cup"
+      ? activeCups
+      : itemType === "lid"
+        ? activeLids
+        : activeNonStockItems
 
   useEffect(() => {
     const currentId = getValues(`line_items.${index}.item_id`)
@@ -300,6 +311,7 @@ function OrderCreateLineItemFields({
               <SelectContent className="rounded-none">
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
+                <SelectItem value="non_stock_item">General Item</SelectItem>
               </SelectContent>
             </Select>
             
@@ -312,7 +324,13 @@ function OrderCreateLineItemFields({
         name={`line_items.${index}.item_id`}
         render={({ field: itemIdField }) => (
           <FormItem>
-            <FormLabel>{itemType === "cup" ? "Cup SKU" : "Lid"}</FormLabel>
+            <FormLabel>
+              {itemType === "cup"
+                ? "Cup SKU"
+                : itemType === "lid"
+                  ? "Lid"
+                  : "General Item"}
+            </FormLabel>
             <Select
               key={`${fieldId}-${itemType}`}
               value={resolveSelectableItemId(itemIdField.value, availableItems)}
@@ -326,9 +344,13 @@ function OrderCreateLineItemFields({
                         ? cupsLoading
                           ? "Loading cups..."
                           : "Select cup"
-                        : lidsLoading
-                          ? "Loading lids..."
-                          : "Select lid"
+                        : itemType === "lid"
+                          ? lidsLoading
+                            ? "Loading lids..."
+                            : "Select lid"
+                          : nonStockItemsLoading
+                            ? "Loading general items..."
+                            : "Select general item"
                     }
                   />
                 </SelectTrigger>
@@ -338,7 +360,9 @@ function OrderCreateLineItemFields({
                   <SelectItem key={item.id} value={item.id}>
                     {itemType === "cup"
                       ? formatCupOption(item as Cup)
-                      : formatLidOption(item as Lid)}
+                      : itemType === "lid"
+                        ? formatLidOption(item as Lid)
+                        : formatNonStockItemOption(item as NonStockItem)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -386,6 +410,7 @@ export function OrderCreatePage() {
   const navigate = useNavigate()
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
+  const nonStockItemsQuery = useNonStockItemsQuery()
   const createOrderMutation = useCreateOrderMutation()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const activeCups = useMemo(
@@ -395,6 +420,10 @@ export function OrderCreatePage() {
   const activeLids = useMemo(
     () => (lidsQuery.data ?? []).filter((lid) => lid.is_active),
     [lidsQuery.data],
+  )
+  const activeNonStockItems = useMemo(
+    () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
+    [nonStockItemsQuery.data],
   )
 
   const form = useForm<OrderCreateValues>({
@@ -465,9 +494,16 @@ export function OrderCreatePage() {
                 quantity: item.quantity,
                 notes: item.notes?.trim() || undefined,
               }
-            : {
+            : item.item_type === "lid"
+              ? {
                 item_type: "lid",
                 lid_id: item.item_id,
+                quantity: item.quantity,
+                notes: item.notes?.trim() || undefined,
+              }
+              : {
+                item_type: "non_stock_item",
+                non_stock_item_id: item.item_id,
                 quantity: item.quantity,
                 notes: item.notes?.trim() || undefined,
               },
@@ -587,8 +623,10 @@ export function OrderCreatePage() {
                                 fieldId={field.id}
                                 activeCups={activeCups}
                                 activeLids={activeLids}
+                                activeNonStockItems={activeNonStockItems}
                                 cupsLoading={cupsQuery.isLoading}
                                 lidsLoading={lidsQuery.isLoading}
+                                nonStockItemsLoading={nonStockItemsQuery.isLoading}
                               />
                             </div>
                           )}
@@ -655,4 +693,8 @@ function formatCupOption(cup: Cup): string {
 function formatLidOption(lid: Lid): string {
   const skuPart = lid.sku.trim() ? `${lid.sku.trim()} · ` : ""
   return `${skuPart}${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color}`
+}
+
+function formatNonStockItemOption(item: NonStockItem): string {
+  return item.description?.trim() ? `${item.name} · ${item.description}` : item.name
 }

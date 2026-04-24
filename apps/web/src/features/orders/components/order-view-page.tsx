@@ -355,11 +355,25 @@ function totalQuantity(order: Order): number {
 }
 
 function formatOrderItemLabel(item: Order["items"][number]): string {
-  return item.item_type === "cup" ? item.cup.sku : item.lid.sku
+  if (item.item_type === "cup") {
+    return item.cup.sku
+  }
+
+  if (item.item_type === "lid") {
+    return item.lid.sku
+  }
+
+  return item.non_stock_item.name
 }
 
 function formatOrderItemDetails(item: Order["items"][number]): string {
-  return item.item_type === "cup"
-    ? `${item.cup.type} · ${item.cup.brand} · ${item.cup.size} · ${item.cup.diameter}`
-    : `${item.lid.type} · ${item.lid.brand} · ${item.lid.color} · ${item.description_snapshot}`
+  if (item.item_type === "cup") {
+    return `${item.cup.type} · ${item.cup.brand} · ${item.cup.size} · ${item.cup.diameter}`
+  }
+
+  if (item.item_type === "lid") {
+    return `${item.lid.type} · ${item.lid.brand} · ${item.lid.color} · ${item.description_snapshot}`
+  }
+
+  return item.non_stock_item.description?.trim() || item.description_snapshot
 }

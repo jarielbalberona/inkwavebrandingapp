@@ -48,13 +48,19 @@ export const createOrderSchema = z.object({
           quantity: z.number().int().positive(),
           notes: optionalText(500),
         }),
-        z.object({
-          item_type: z.literal("lid"),
-          lid_id: z.string().uuid(),
-          quantity: z.number().int().positive(),
-          notes: optionalText(500),
-        }),
-      ]),
+      z.object({
+        item_type: z.literal("lid"),
+        lid_id: z.string().uuid(),
+        quantity: z.number().int().positive(),
+        notes: optionalText(500),
+      }),
+      z.object({
+        item_type: z.literal("non_stock_item"),
+        non_stock_item_id: z.string().uuid(),
+        quantity: z.number().int().positive(),
+        notes: optionalText(500),
+      }),
+    ]),
     )
     .min(1),
 })
@@ -76,6 +82,15 @@ export const updateOrderSchema = z
     message: "At least one supported order field is required",
   })
 
+export const updateOrderPrioritiesSchema = z
+  .object({
+    order_ids: z.array(z.string().uuid()).min(1),
+  })
+  .strict()
+  .refine((input) => new Set(input.order_ids).size === input.order_ids.length, {
+    message: "Order priorities must not include duplicate order IDs",
+  })
+
 export const orderListQuerySchema = z.object({
   status: orderStatusSchema.optional(),
 })
@@ -84,6 +99,7 @@ export type OrderStatus = z.infer<typeof orderStatusSchema>
 export type OrderLineItemProgressStage = z.infer<typeof orderLineItemProgressStageSchema>
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>
+export type UpdateOrderPrioritiesInput = z.infer<typeof updateOrderPrioritiesSchema>
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>
 export type CreateOrderLineItemProgressEventInput = z.infer<
   typeof createOrderLineItemProgressEventSchema

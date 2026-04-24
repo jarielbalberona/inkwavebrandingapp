@@ -14,7 +14,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@workspace/ui/components/form"
 import { Textarea } from "@workspace/ui/components/textarea"
 
@@ -89,7 +88,9 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
             </CardDescription>
           </div>
           <Button asChild variant="outline">
-            <Link to="/orders">Back to orders</Link>
+            <Link to="/orders/$orderId" params={{ orderId }}>
+              Cancel
+            </Link>
           </Button>
         </div>
       </CardHeader>

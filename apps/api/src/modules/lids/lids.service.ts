@@ -29,6 +29,14 @@ export class LidIdentityLockedError extends Error {
   }
 }
 
+export class LidPersistenceValidationError extends Error {
+  readonly statusCode = 400
+
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 export class LidsService {
   constructor(private readonly lidsRepository: LidsRepository) {}
 
@@ -68,6 +76,11 @@ export class LidsService {
         throw new DuplicateLidError()
       }
 
+      const persistenceValidationError = toLidPersistenceValidationError(error)
+      if (persistenceValidationError) {
+        throw persistenceValidationError
+      }
+
       throw error
     }
   }
@@ -82,6 +95,12 @@ export class LidsService {
         throw new LidNotFoundError()
       }
 
+      const nextSku = generateLidSku({
+        diameter: input.diameter ?? existingLid.diameter,
+        brand: input.brand ?? existingLid.brand,
+        shape: input.shape ?? existingLid.shape,
+        color: input.color ?? existingLid.color,
+      })
       const regeneratesSku = wouldRegenerateLidSku(existingLid, input)
 
       if (regeneratesSku && (await this.lidsRepository.hasHistoricalUsage(id))) {
@@ -90,16 +109,7 @@ export class LidsService {
 
       const lid = await this.lidsRepository.update(id, {
         ...input,
-        ...(regeneratesSku
-          ? {
-              sku: generateLidSku({
-                diameter: input.diameter ?? existingLid.diameter,
-                brand: input.brand ?? existingLid.brand,
-                shape: input.shape ?? existingLid.shape,
-                color: input.color ?? existingLid.color,
-              }),
-            }
-          : undefined),
+        sku: nextSku,
       })
 
       if (!lid) {
@@ -120,6 +130,11 @@ export class LidsService {
         throw new DuplicateLidError()
       }
 
+      const persistenceValidationError = toLidPersistenceValidationError(error)
+      if (persistenceValidationError) {
+        throw persistenceValidationError
+      }
+
       throw error
     }
   }
@@ -132,4 +147,28 @@ function isUniqueViolation(error: unknown): boolean {
       "code" in error &&
       (error as { code?: unknown }).code === "23505",
   )
+}
+
+function toLidPersistenceValidationError(error: unknown): LidPersistenceValidationError | null {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return null
+  }
+
+  const code = (error as { code?: unknown }).code
+  const detail =
+    "detail" in error && typeof (error as { detail?: unknown }).detail === "string"
+      ? (error as { detail: string }).detail
+      : null
+  const message =
+    "message" in error && typeof (error as { message?: unknown }).message === "string"
+      ? (error as { message: string }).message
+      : null
+
+  if (code === "23514" || code === "23502" || code === "22P02") {
+    return new LidPersistenceValidationError(
+      detail || message || "Lid data failed database validation.",
+    )
+  }
+
+  return null
 }

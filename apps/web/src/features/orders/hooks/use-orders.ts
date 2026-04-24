@@ -10,10 +10,13 @@ import {
   listOrders,
   listProgressEvents,
   updateOrder,
+  updateOrderPriorities,
   type CreateOrderPayload,
   type CreateProgressEventPayload,
+  type Order,
   type OrderStatus,
   type UpdateOrderPayload,
+  type UpdateOrderPrioritiesPayload,
 } from "@/features/orders/api/orders-client"
 
 export const ordersQueryKey = ["orders"] as const
@@ -86,11 +89,44 @@ export function useUpdateOrderMutation() {
   })
 }
 
-export function useProgressEventsQuery(orderLineItemId: string | null) {
+export function useUpdateOrderPrioritiesMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: UpdateOrderPrioritiesPayload) => updateOrderPriorities(payload),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: ordersQueryKey })
+
+      const previousEntries = queryClient.getQueriesData<Order[]>({
+        queryKey: ordersQueryKey,
+      })
+
+      queryClient.setQueriesData<Order[]>({ queryKey: ordersQueryKey }, (current) => {
+        if (!current) {
+          return current
+        }
+
+        return applyPriorityOrderToOrders(current, payload.order_ids)
+      })
+
+      return { previousEntries }
+    },
+    onError: (_error, _payload, context) => {
+      context?.previousEntries.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+    },
+  })
+}
+
+export function useProgressEventsQuery(orderLineItemId: string | null, enabled = true) {
   return useQuery({
     queryKey: [...orderProgressEventsQueryKey, orderLineItemId] as const,
     queryFn: () => listProgressEvents(orderLineItemId ?? ""),
-    enabled: Boolean(orderLineItemId),
+    enabled: enabled && Boolean(orderLineItemId),
   })
 }
 
@@ -135,4 +171,41 @@ export function useGenerateOrderInvoiceMutation() {
       })
     },
   })
+}
+
+function applyPriorityOrderToOrders(orders: Order[], orderIds: string[]): Order[] {
+  const requestedIds = new Set(orderIds)
+  const currentOrderIds = orders
+    .slice()
+    .sort((left, right) => {
+      if (left.priority === right.priority) {
+        return (
+          new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+        )
+      }
+
+      return left.priority - right.priority
+    })
+    .map((order) => order.id)
+
+  let replacementIndex = 0
+
+  const reorderedIds = currentOrderIds.map((orderId) => {
+    if (!requestedIds.has(orderId)) {
+      return orderId
+    }
+
+    const nextOrderId = orderIds[replacementIndex]
+    replacementIndex += 1
+    return nextOrderId ?? orderId
+  })
+
+  const priorityById = new Map(
+    reorderedIds.map((orderId, index) => [orderId, index])
+  )
+
+  return orders.map((order) => ({
+    ...order,
+    priority: priorityById.get(order.id) ?? order.priority,
+  }))
 }

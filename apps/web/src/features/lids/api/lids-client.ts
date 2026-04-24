@@ -1,24 +1,59 @@
 import { z } from "zod"
 
+import { generateLidSkuPreview } from "@/features/lids/types/sku"
 import { ApiClientError, api } from "@/lib/api"
 
-export const lidSchema = z.object({
+const lidBaseSchema = z.object({
   id: z.string().uuid(),
-  sku: z.string(),
+  sku: z.string().optional(),
   type: z.enum(["paper", "plastic"]),
   brand: z.enum(["dabba", "grecoopack", "china_supplier", "other_supplier"]),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   shape: z.enum(["dome", "flat", "strawless", "coffee_lid", "tall_lid"]),
   color: z.enum(["transparent", "black", "white"]),
-  cost_price: z.string().optional(),
-  default_sell_price: z.string().optional(),
   is_active: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
 })
 
+const adminLidSchema = lidBaseSchema.extend({
+  cost_price: z.string(),
+  default_sell_price: z.string(),
+})
+
+const staffLidSchema = lidBaseSchema
+  .extend({
+    cost_price: z.undefined().optional(),
+    default_sell_price: z.undefined().optional(),
+  })
+  .strip()
+
+export const lidSchema = z.union([adminLidSchema, staffLidSchema]).transform((lid) => ({
+  ...lid,
+  sku:
+    lid.sku && lid.sku.trim().length > 0
+      ? lid.sku
+      : generateLidSkuPreview({
+          diameter: lid.diameter,
+          brand: lid.brand,
+          shape: lid.shape,
+          color: lid.color,
+        }),
+}))
+
 const lidsResponseSchema = z.object({ lids: z.array(lidSchema) })
 const lidResponseSchema = z.object({ lid: lidSchema })
+const lidRequestErrorSchema = z.object({
+  error: z.string(),
+  details: z
+    .array(
+      z.object({
+        path: z.string(),
+        message: z.string(),
+      }),
+    )
+    .optional(),
+})
 
 export type Lid = z.infer<typeof lidSchema>
 
@@ -65,6 +100,24 @@ export async function updateLid(id: string, payload: Partial<LidPayload>): Promi
   return lidResponseSchema.parse(response).lid
 }
 
+function formatLidRequestError(data: unknown): string | null {
+  const parsed = lidRequestErrorSchema.safeParse(data)
+
+  if (!parsed.success) {
+    return null
+  }
+
+  const details = parsed.data.details
+    ?.map((detail) => (detail.path ? `${detail.path}: ${detail.message}` : detail.message))
+    .filter(Boolean)
+
+  if (details?.length) {
+    return `${parsed.data.error}. ${details.join(" ")}`
+  }
+
+  return parsed.data.error
+}
+
 async function sendLidRequest(
   path: string,
   method: "POST" | "PATCH",
@@ -76,7 +129,10 @@ async function sendLidRequest(
       : await api.patch<unknown, typeof payload>(path, payload)
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 400) {
-      throw new LidsApiError("Check the lid fields and try again.", error.status)
+      throw new LidsApiError(
+        formatLidRequestError(error.data) ?? error.message ?? "Check the lid fields and try again.",
+        error.status,
+      )
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
@@ -97,7 +153,7 @@ async function sendLidRequest(
     }
 
     if (error instanceof ApiClientError) {
-      throw new LidsApiError("Unable to save lid.", error.status)
+      throw new LidsApiError(error.message || "Unable to save lid.", error.status)
     }
 
     throw error

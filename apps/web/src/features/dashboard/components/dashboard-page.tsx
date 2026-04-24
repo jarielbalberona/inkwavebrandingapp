@@ -20,9 +20,6 @@ export function DashboardPage() {
           <div className="flex items-start justify-between gap-4">
             <div className="grid gap-1">
               <CardTitle>Dashboard</CardTitle>
-              <CardDescription>
-                Real operational summary only. No placeholder charts, no stale printing status.
-              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline">

@@ -11,15 +11,16 @@ import { AuthService } from "../auth/auth.service.js"
 import { UsersRepository } from "../users/users.repository.js"
 import { LidsRepository } from "./lids.repository.js"
 import {
-  createLidSchema,
+  createLidRequestSchema,
   lidIdSchema,
   lidListQuerySchema,
-  updateLidSchema,
+  updateLidRequestSchema,
 } from "./lids.schemas.js"
 import {
   DuplicateLidError,
   LidIdentityLockedError,
   LidNotFoundError,
+  LidPersistenceValidationError,
   LidsService,
 } from "./lids.service.js"
 
@@ -47,7 +48,7 @@ export async function handleLidsRoute(
 
   if (path === "/lids" && request.method === "POST") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const input = createLidSchema.parse(await readJsonBody(request))
+      const input = createLidRequestSchema.parse(await readJsonBody(request))
 
       sendJson(response, 201, { lid: await service.create(input, user) })
     })
@@ -67,7 +68,7 @@ export async function handleLidsRoute(
 
   if (idMatch && request.method === "PATCH") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const input = updateLidSchema.parse(await readJsonBody(request))
+      const input = updateLidRequestSchema.parse(await readJsonBody(request))
 
       sendJson(response, 200, {
         lid: await service.update(lidIdSchema.parse(idMatch[1]), input, user),
@@ -105,8 +106,22 @@ async function withAuthenticatedUser(
 }
 
 function handleLidsError(response: ServerResponse, error: unknown) {
-  if (error instanceof ZodError || error instanceof SyntaxError) {
-    sendJson(response, 400, { error: "Invalid lid request" })
+  if (error instanceof ZodError) {
+    sendJson(response, 400, {
+      error: "Invalid lid request",
+      details: error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      })),
+    })
+    return
+  }
+
+  if (error instanceof SyntaxError) {
+    sendJson(response, 400, {
+      error: "Invalid lid request",
+      details: [{ path: "", message: "Request body must be valid JSON." }],
+    })
     return
   }
 
@@ -118,7 +133,8 @@ function handleLidsError(response: ServerResponse, error: unknown) {
   if (
     error instanceof LidNotFoundError ||
     error instanceof DuplicateLidError ||
-    error instanceof LidIdentityLockedError
+    error instanceof LidIdentityLockedError ||
+    error instanceof LidPersistenceValidationError
   ) {
     sendJson(response, error.statusCode, { error: error.message })
     return

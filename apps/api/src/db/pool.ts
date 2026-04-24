@@ -32,3 +32,13 @@ export function getDatabasePool(): Pool {
 
   return pool
 }
+
+export async function resetDatabasePool(): Promise<void> {
+  if (!pool) {
+    return
+  }
+
+  const activePool = pool
+  pool = null
+  await activePool.end()
+}

@@ -219,7 +219,7 @@ export function LidsPage() {
     setSelectedLidId(lid.id)
     setDialogOpen(true)
   }
-
+  
   return (
     <div className="grid gap-4">
       <Card className="rounded-none">
@@ -233,12 +233,6 @@ export function LidsPage() {
           {isAdmin ? <Button onClick={openCreateDialog}>Create Lid</Button> : null}
         </CardHeader>
         <CardContent className="grid gap-4">
-          {lidsQuery.isError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{lidsQuery.error.message}</AlertDescription>
-            </Alert>
-          ) : null}
-
           {lidsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading lids catalog...</p>
           ) : null}
@@ -368,9 +362,6 @@ function ReadOnlySkuField({ value }: { value: string }) {
       <FormControl>
         <Input disabled readOnly value={value} />
       </FormControl>
-      <FormDescription>
-        Generated automatically from diameter, brand, shape, and color when required.
-      </FormDescription>
     </FormItem>
   )
 }

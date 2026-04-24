@@ -1,6 +1,6 @@
 export interface InvoicePdfItem {
   id: string
-  item_type: "cup" | "lid"
+  item_type: "cup" | "lid" | "non_stock_item"
   description_snapshot: string
   quantity: number
   unit_price: string

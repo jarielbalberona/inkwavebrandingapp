@@ -64,6 +64,48 @@ export const lidListQuerySchema = z.object({
     .transform((value) => value === "true"),
 })
 
+/** Wire body uses snake_case, matching the web client and the cups module. */
+export const createLidRequestSchema = z
+  .object({
+    type: baseLidSchema.shape.type,
+    brand: baseLidSchema.shape.brand,
+    diameter: baseLidSchema.shape.diameter,
+    shape: baseLidSchema.shape.shape,
+    color: baseLidSchema.shape.color,
+    cost_price: baseLidSchema.shape.costPrice,
+    default_sell_price: baseLidSchema.shape.defaultSellPrice,
+    is_active: baseLidSchema.shape.isActive,
+  })
+  .transform((input) =>
+    createLidSchema.parse({
+      type: input.type,
+      brand: input.brand,
+      diameter: input.diameter,
+      shape: input.shape,
+      color: input.color,
+      costPrice: input.cost_price,
+      defaultSellPrice: input.default_sell_price,
+      isActive: input.is_active,
+    }),
+  )
+
+export const updateLidRequestSchema = createLidRequestSchema
+  .innerType()
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "At least one lid field is required")
+  .transform((input) =>
+    updateLidSchema.parse({
+      type: input.type,
+      brand: input.brand,
+      diameter: input.diameter,
+      shape: input.shape,
+      color: input.color,
+      costPrice: input.cost_price,
+      defaultSellPrice: input.default_sell_price,
+      isActive: input.is_active,
+    }),
+  )
+
 export type CreateLidInput = z.infer<typeof createLidSchema>
 export type UpdateLidInput = z.infer<typeof updateLidSchema>
 export type LidListQuery = z.infer<typeof lidListQuerySchema>

@@ -1,6 +1,6 @@
 ALTER TABLE "lids" ADD COLUMN "sku" varchar(80);--> statement-breakpoint
 UPDATE "lids"
-SET "sku" = regexp_replace("diameter", 'mm$', '')
+SET "sku" = regexp_replace("diameter"::text, 'mm$', '')
   || '-'
   || CASE "brand"
     WHEN 'dabba' THEN 'DBBA'

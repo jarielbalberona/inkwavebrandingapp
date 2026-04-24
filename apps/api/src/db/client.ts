@@ -21,3 +21,7 @@ export function getDatabaseClient(): DatabaseClient {
 
   return databaseClient
 }
+
+export function resetDatabaseClient(): void {
+  databaseClient = null
+}

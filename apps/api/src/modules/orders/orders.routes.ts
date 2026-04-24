@@ -18,11 +18,13 @@ import {
   InventoryService,
 } from "../inventory/inventory.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
+import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
   orderListQuerySchema,
+  updateOrderPrioritiesSchema,
   updateOrderSchema,
 } from "./orders.schemas.js"
 import { OrdersRepository } from "./orders.repository.js"
@@ -30,6 +32,7 @@ import {
   DuplicateOrderItemError,
   OrderClosedUpdateError,
   OrderCompletedCancellationError,
+  OrderCreateValidationError,
   OrderCustomerReassignmentProgressError,
   OrderCupInactiveError,
   OrderCupNotFoundError,
@@ -40,6 +43,8 @@ import {
   OrderLineItemNotFoundError,
   OrderNotFoundError,
   OrderPrintedQuantityNotReservedError,
+  OrderPrintedQuantityInsufficientStockError,
+  OrderPriorityValidationError,
   OrderProgressClosedError,
   OrderProgressValidationError,
   OrdersService,
@@ -72,6 +77,17 @@ export async function handleOrdersRoute(
       const input = createOrderSchema.parse(await readJsonBody(request))
 
       sendJson(response, 201, { order: await service.create(input, user) })
+    })
+    return true
+  }
+
+  if (path === "/orders/priorities" && request.method === "PATCH") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const input = updateOrderPrioritiesSchema.parse(await readJsonBody(request))
+
+      sendJson(response, 200, {
+        orders: await service.updatePriorities(input, user),
+      })
     })
     return true
   }
@@ -152,6 +168,7 @@ async function withAuthenticatedUser(
         new CustomersRepository(db),
         new CupsRepository(db),
         new LidsRepository(db),
+        new NonStockItemsRepository(db),
         (transactionDb) =>
           new InventoryService(
             new InventoryRepository(transactionDb),
@@ -178,6 +195,7 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
   }
 
   if (
+    error instanceof OrderCreateValidationError ||
     error instanceof OrderCustomerNotFoundError ||
     error instanceof OrderCustomerInactiveError ||
     error instanceof OrderCupNotFoundError ||
@@ -188,15 +206,51 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderLineItemNotFoundError ||
     error instanceof OrderNotFoundError ||
     error instanceof OrderClosedUpdateError ||
+    error instanceof OrderPriorityValidationError ||
     error instanceof OrderCompletedCancellationError ||
     error instanceof OrderCustomerReassignmentProgressError ||
     error instanceof OrderPrintedQuantityNotReservedError ||
+    error instanceof OrderPrintedQuantityInsufficientStockError ||
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||
     error instanceof InventoryBalanceItemNotFoundError ||
     error instanceof InventoryItemInactiveError ||
     error instanceof InventoryReservationInsufficientStockError
   ) {
+    if (error instanceof OrderCreateValidationError) {
+      sendJson(response, error.statusCode, {
+        error: error.message,
+        line_items: error.details.map((detail) => ({
+          line_item_index: detail.lineItemIndex,
+          item_type: detail.itemType,
+          item_id: detail.itemId,
+          field: detail.field,
+          item_label: detail.itemLabel,
+          requested_quantity: detail.requestedQuantity,
+          available_quantity: detail.availableQuantity,
+          message: detail.message,
+        })),
+      })
+      return
+    }
+
+    if (error instanceof InventoryReservationInsufficientStockError) {
+      sendJson(response, error.statusCode, {
+        error: error.message,
+        line_items: error.details.map((detail) => ({
+          line_item_index: detail.lineItemIndex,
+          item_type: detail.itemType,
+          item_id: detail.itemId,
+          field: detail.field,
+          item_label: detail.itemLabel,
+          requested_quantity: detail.requestedQuantity,
+          available_quantity: detail.availableQuantity,
+          message: detail.message,
+        })),
+      })
+      return
+    }
+
     sendJson(response, error.statusCode, { error: error.message })
     return
   }

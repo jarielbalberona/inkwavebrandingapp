@@ -63,7 +63,17 @@ export const cups = pgTable(
       sql`(
         (${table.type} = 'paper' AND ${table.diameter} IN ('80mm', '90mm'))
         OR
-        (${table.type} = 'plastic' AND ${table.diameter} IN ('95mm', '98mm'))
+        (
+          ${table.type} = 'plastic'
+          AND ${table.brand} IN ('dabba', 'grecoopack')
+          AND ${table.diameter} = '95mm'
+        )
+        OR
+        (
+          ${table.type} = 'plastic'
+          AND ${table.brand} IN ('china_supplier', 'other_supplier')
+          AND ${table.diameter} IN ('95mm', '98mm')
+        )
       )`,
     ),
     check(

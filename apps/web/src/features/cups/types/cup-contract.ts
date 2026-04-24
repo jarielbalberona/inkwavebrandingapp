@@ -19,8 +19,16 @@ export function getAllowedCupBrands(type: CupType): readonly CupBrand[] {
   return type === "paper" ? ["other_supplier"] : cupBrands
 }
 
-export function getAllowedCupDiameters(type: CupType): readonly CupDiameter[] {
-  return type === "paper" ? ["80mm", "90mm"] : ["95mm", "98mm"]
+export function getAllowedCupDiameters(type: CupType, brand: CupBrand): readonly CupDiameter[] {
+  if (type === "paper") {
+    return ["80mm", "90mm"]
+  }
+
+  if (brand === "dabba" || brand === "grecoopack") {
+    return ["95mm"]
+  }
+
+  return ["95mm", "98mm"]
 }
 
 export function getAllowedCupSizes(type: CupType): readonly CupSize[] {

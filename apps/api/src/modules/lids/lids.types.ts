@@ -1,4 +1,5 @@
 import type { Lid } from "../../db/schema/index.js"
+import { generateLidSku } from "../../lib/master-data/sku.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
 
@@ -37,7 +38,7 @@ export function toLidDto(lid: Lid, user: Pick<SafeUser, "role">): LidDto {
 function toAdminLidDto(lid: Lid): AdminLidDto {
   return {
     id: lid.id,
-    sku: lid.sku,
+    sku: resolveLidSku(lid),
     type: lid.type,
     brand: lid.brand,
     diameter: lid.diameter,
@@ -49,6 +50,15 @@ function toAdminLidDto(lid: Lid): AdminLidDto {
     created_at: lid.createdAt.toISOString(),
     updated_at: lid.updatedAt.toISOString(),
   }
+}
+
+function resolveLidSku(lid: Lid): string {
+  return generateLidSku({
+    diameter: lid.diameter,
+    brand: lid.brand,
+    shape: lid.shape,
+    color: lid.color,
+  })
 }
 
 function toStaffLidDto(lid: Lid): StaffLidDto {

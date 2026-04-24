@@ -2,7 +2,11 @@ import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertAdmin } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { LidsRepository } from "../lids/lids.repository.js"
-import { InventoryRepository, type InventoryItemReference } from "./inventory.repository.js"
+import {
+  InventoryRepository,
+  type InventoryBalanceSummary,
+  type InventoryItemReference,
+} from "./inventory.repository.js"
 import {
   appendInventoryMovementSchema,
   inventoryAdjustmentRequestSchema,
@@ -53,10 +57,27 @@ export class InventoryAdjustmentOutInsufficientStockError extends Error {
 
 export class InventoryReservationInsufficientStockError extends Error {
   readonly statusCode = 409
+  readonly details: InventoryReservationInsufficientStockDetail[]
 
-  constructor() {
-    super("Insufficient available stock for reservation")
+  constructor(details: InventoryReservationInsufficientStockDetail[]) {
+    super(
+      details.length === 1
+        ? details[0]!.message
+        : "Some line items do not have enough available stock for reservation",
+    )
+    this.details = details
   }
+}
+
+export interface InventoryReservationInsufficientStockDetail {
+  lineItemIndex: number
+  itemType: "cup" | "lid"
+  itemId: string
+  field: "quantity"
+  itemLabel: string
+  requestedQuantity: number
+  availableQuantity: number
+  message: string
 }
 
 export class InventoryService {
@@ -162,7 +183,17 @@ export class InventoryService {
     input: ReserveOrderItemsInput,
     repository: InventoryRepository,
   ) {
-    const totalsByItemKey = new Map<string, { reference: InventoryItemReference; quantity: number }>()
+    const totalsByItemKey = new Map<
+      string,
+      {
+        reference: InventoryItemReference
+        quantity: number
+        requestedItems: Array<{
+          lineItemIndex: number
+          quantity: number
+        }>
+      }
+    >()
 
     for (const item of input.items) {
       const reference = repository.toBalanceReference(item)
@@ -172,10 +203,19 @@ export class InventoryService {
       totalsByItemKey.set(key, {
         reference,
         quantity: (existing?.quantity ?? 0) + item.quantity,
+        requestedItems: [
+          ...(existing?.requestedItems ?? []),
+          {
+            lineItemIndex: item.requestLineItemIndex ?? 0,
+            quantity: item.quantity,
+          },
+        ],
       })
     }
 
-    for (const { reference, quantity } of totalsByItemKey.values()) {
+    const insufficientStockDetails: InventoryReservationInsufficientStockDetail[] = []
+
+    for (const { reference, quantity, requestedItems } of totalsByItemKey.values()) {
       const balance = await repository.getBalanceByItem(reference)
 
       if (!balance) {
@@ -184,9 +224,28 @@ export class InventoryService {
 
       await this.assertTrackedItemIsActive(reference)
 
-      if (balance.onHand - balance.reserved < quantity) {
-        throw new InventoryReservationInsufficientStockError()
+      const availableQuantity = balance.onHand - balance.reserved
+
+      if (availableQuantity < quantity) {
+        const itemLabel = buildInventoryReservationItemLabel(balance)
+
+        insufficientStockDetails.push(
+          ...requestedItems.map(({ lineItemIndex, quantity: requestedQuantity }) => ({
+            lineItemIndex,
+            itemType: reference.itemType,
+            itemId: reference.itemType === "cup" ? reference.cupId : reference.lidId,
+            field: "quantity" as const,
+            itemLabel,
+            requestedQuantity,
+            availableQuantity,
+            message: `Line item ${lineItemIndex + 1} (${itemLabel}) requested ${requestedQuantity} but only ${availableQuantity} is available.`,
+          })),
+        )
       }
+    }
+
+    if (insufficientStockDetails.length > 0) {
+      throw new InventoryReservationInsufficientStockError(insufficientStockDetails)
     }
 
     const movements = []
@@ -252,6 +311,18 @@ export class InventoryService {
       lidId: input.lidId!,
     }
   }
+}
+
+function buildInventoryReservationItemLabel(balance: InventoryBalanceSummary): string {
+  if (balance.itemType === "cup") {
+    return `cup ${balance.cup.sku}`
+  }
+
+  if (balance.lid.sku.trim()) {
+    return `lid ${balance.lid.sku.trim()}`
+  }
+
+  return `lid ${balance.lid.brand} ${balance.lid.diameter} ${balance.lid.shape} ${balance.lid.color}`
 }
 
 function capitalizeInventoryItemType(itemType: "cup" | "lid"): string {

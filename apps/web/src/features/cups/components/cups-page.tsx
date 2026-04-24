@@ -80,7 +80,7 @@ const cupFormSchema = z
       })
     }
 
-    if (!getAllowedCupDiameters(values.type).includes(values.diameter)) {
+    if (!getAllowedCupDiameters(values.type, values.brand).includes(values.diameter)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["diameter"],
@@ -143,7 +143,10 @@ export function CupsPage() {
   const selectedSize = useWatch({ control: form.control, name: "size" })
   const selectedColor = useWatch({ control: form.control, name: "color" })
   const availableBrands = useMemo(() => getAllowedCupBrands(selectedType), [selectedType])
-  const availableDiameters = useMemo(() => getAllowedCupDiameters(selectedType), [selectedType])
+  const availableDiameters = useMemo(
+    () => getAllowedCupDiameters(selectedType, selectedBrand),
+    [selectedType, selectedBrand],
+  )
   const availableSizes = useMemo(() => getAllowedCupSizes(selectedType), [selectedType])
   const availableColors = useMemo(
     () => getAllowedCupColors(selectedType, selectedBrand),
@@ -344,16 +347,16 @@ export function CupsPage() {
                 <SelectFormField
                   control={form.control}
                   disabled={!isAdmin}
-                  label="Diameter"
-                  name="diameter"
-                  options={availableDiameters}
+                  label="Size"
+                  name="size"
+                  options={availableSizes}
                 />
                 <SelectFormField
                   control={form.control}
                   disabled={!isAdmin}
-                  label="Size"
-                  name="size"
-                  options={availableSizes}
+                  label="Diameter"
+                  name="diameter"
+                  options={availableDiameters}
                 />
                 <SelectFormField
                   control={form.control}
@@ -426,7 +429,6 @@ function ReadOnlySkuField({ value }: { value: string }) {
       <FormControl>
         <Input disabled readOnly value={value} />
       </FormControl>
-      <FormDescription>Generated automatically from size, type, brand, and color.</FormDescription>
     </FormItem>
   )
 }

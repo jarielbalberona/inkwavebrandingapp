@@ -17,6 +17,7 @@ import {
   updateCupRequestSchema,
 } from "./cups.schemas.js"
 import {
+  CupPersistenceValidationError,
   CupIdentityLockedError,
   CupNotFoundError,
   CupsService,
@@ -114,8 +115,22 @@ async function withAuthenticatedUser(
 }
 
 function handleCupsError(response: ServerResponse, error: unknown) {
-  if (error instanceof ZodError || error instanceof SyntaxError) {
-    sendJson(response, 400, { error: "Invalid cup request" })
+  if (error instanceof ZodError) {
+    sendJson(response, 400, {
+      error: "Invalid cup request",
+      details: error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      })),
+    })
+    return
+  }
+
+  if (error instanceof SyntaxError) {
+    sendJson(response, 400, {
+      error: "Invalid cup request",
+      details: [{ path: "", message: "Request body must be valid JSON." }],
+    })
     return
   }
 
@@ -124,7 +139,11 @@ function handleCupsError(response: ServerResponse, error: unknown) {
     return
   }
 
-  if (error instanceof CupNotFoundError || error instanceof CupIdentityLockedError) {
+  if (
+    error instanceof CupNotFoundError ||
+    error instanceof CupIdentityLockedError ||
+    error instanceof CupPersistenceValidationError
+  ) {
     sendJson(response, error.statusCode, { error: error.message })
     return
   }

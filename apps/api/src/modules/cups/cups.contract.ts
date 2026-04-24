@@ -31,8 +31,17 @@ export function getAllowedCupBrands(type: CupContractShape["type"]): readonly Cu
 
 export function getAllowedCupDiameters(
   type: CupContractShape["type"],
+  brand: CupContractShape["brand"],
 ): readonly CupContractShape["diameter"][] {
-  return type === "paper" ? ["80mm", "90mm"] : ["95mm", "98mm"]
+  if (type === "paper") {
+    return ["80mm", "90mm"]
+  }
+
+  if (brand === "dabba" || brand === "grecoopack") {
+    return ["95mm"]
+  }
+
+  return ["95mm", "98mm"]
 }
 
 export function getAllowedCupSizes(type: CupContractShape["type"]): readonly CupContractShape["size"][] {
@@ -68,14 +77,16 @@ export function addCupContractIssues(input: CupContractShape, context: z.Refinem
     })
   }
 
-  if (!getAllowedCupDiameters(input.type).includes(input.diameter)) {
+  if (!getAllowedCupDiameters(input.type, input.brand).includes(input.diameter)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["diameter"],
       message:
         input.type === "paper"
           ? "Paper cups must use 80mm or 90mm."
-          : "Plastic cups must use 95mm or 98mm.",
+          : input.brand === "dabba" || input.brand === "grecoopack"
+            ? "Dabba and Grecoopack plastic cups must use 95mm."
+            : "China supplier and other supplier plastic cups must use 95mm or 98mm.",
     })
   }
 

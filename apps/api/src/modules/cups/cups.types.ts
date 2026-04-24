@@ -1,4 +1,5 @@
 import type { Cup } from "../../db/schema/index.js"
+import { generateCupSku } from "../../lib/master-data/sku.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
 
@@ -38,7 +39,7 @@ export function toCupDto(cup: Cup, user: Pick<SafeUser, "role">): CupDto {
 function toAdminCupDto(cup: Cup): AdminCupDto {
   return {
     id: cup.id,
-    sku: cup.sku,
+    sku: resolveCupSku(cup),
     type: cup.type,
     brand: cup.brand,
     diameter: cup.diameter,
@@ -51,6 +52,15 @@ function toAdminCupDto(cup: Cup): AdminCupDto {
     created_at: cup.createdAt.toISOString(),
     updated_at: cup.updatedAt.toISOString(),
   }
+}
+
+function resolveCupSku(cup: Cup): string {
+  return generateCupSku({
+    type: cup.type,
+    brand: cup.brand,
+    size: cup.size,
+    color: cup.color,
+  })
 }
 
 function toStaffCupDto(cup: Cup): StaffCupDto {

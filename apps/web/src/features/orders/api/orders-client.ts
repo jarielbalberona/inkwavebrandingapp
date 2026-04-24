@@ -41,12 +41,18 @@ const orderCupSchema = z.object({
 
 const orderLidSchema = z.object({
   id: z.string().uuid(),
-  sku: z.string(),
+  sku: z.string().default(""),
   type: z.enum(["paper", "plastic"]),
   brand: z.string(),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   shape: z.string(),
   color: z.enum(["transparent", "black", "white"]),
+})
+
+const orderNonStockItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
 })
 
 const orderItemSchema = z.discriminatedUnion("item_type", [
@@ -55,6 +61,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("cup"),
     cup: orderCupSchema,
     lid: z.null(),
+    non_stock_item: z.null(),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -68,6 +75,21 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("lid"),
     cup: z.null(),
     lid: orderLidSchema,
+    non_stock_item: z.null(),
+    description_snapshot: z.string(),
+    quantity: z.number().int().positive(),
+    notes: z.string().nullable(),
+    unit_cost_price: z.string().optional(),
+    unit_sell_price: z.string().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    item_type: z.literal("non_stock_item"),
+    cup: z.null(),
+    lid: z.null(),
+    non_stock_item: orderNonStockItemSchema,
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -81,6 +103,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
 const orderSchema = z.object({
   id: z.string().uuid(),
   order_number: z.string(),
+  priority: z.number().int(),
   status: orderStatusSchema,
   customer: customerSchema,
   items: z.array(orderItemSchema),
@@ -92,7 +115,7 @@ const orderSchema = z.object({
 const invoiceItemSchema = z.object({
   id: z.string().uuid(),
   order_line_item_id: z.string().uuid(),
-  item_type: z.enum(["cup", "lid"]),
+  item_type: z.enum(["cup", "lid", "non_stock_item"]),
   description_snapshot: z.string(),
   quantity: z.number().int().positive(),
   unit_price: z.string(),
@@ -176,6 +199,33 @@ export type ProgressStage = z.infer<typeof progressStageSchema>
 export type ProgressTotals = z.infer<typeof progressTotalsSchema>
 export type ProgressEvent = z.infer<typeof progressEventSchema>
 
+const createOrderLineItemErrorSchema = z.object({
+  line_item_index: z.number().int().nonnegative(),
+  item_type: z.enum(["cup", "lid", "non_stock_item"]),
+  item_id: z.string().uuid(),
+  field: z.enum(["item_id", "quantity"]),
+  item_label: z.string().optional(),
+  requested_quantity: z.number().int().positive().optional(),
+  available_quantity: z.number().int().min(0).optional(),
+  message: z.string(),
+})
+
+const createOrderErrorResponseSchema = z.object({
+  error: z.string(),
+  line_items: z.array(createOrderLineItemErrorSchema).optional(),
+})
+
+export type CreateOrderLineItemError = z.infer<typeof createOrderLineItemErrorSchema>
+
+export class CreateOrderError extends Error {
+  readonly lineItems: CreateOrderLineItemError[]
+
+  constructor(message: string, lineItems: CreateOrderLineItemError[] = []) {
+    super(message)
+    this.lineItems = lineItems
+  }
+}
+
 export interface CreateOrderPayload {
   customer_id: string
   notes?: string
@@ -192,6 +242,12 @@ export interface CreateOrderPayload {
         quantity: number
         notes?: string
       }
+    | {
+        item_type: "non_stock_item"
+        non_stock_item_id: string
+        quantity: number
+        notes?: string
+      }
   >
 }
 
@@ -205,6 +261,14 @@ export interface CreateProgressEventPayload {
 export interface UpdateOrderPayload {
   customer_id?: string
   notes?: string | null
+}
+
+export interface UpdateOrderPrioritiesPayload {
+  order_ids: string[]
+}
+
+function parseCreateOrderApiError(data: unknown) {
+  return createOrderErrorResponseSchema.safeParse(data)
 }
 
 export async function getOrderInvoice(orderId: string): Promise<Invoice> {
@@ -287,17 +351,33 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
     return orderResponseSchema.parse(data).order
   } catch (error) {
     if (error instanceof ApiClientError) {
+      const parsedError = parseCreateOrderApiError(error.data)
+
       if (error.status === 400) {
-        throw new Error("Check the selected customer, items, and quantities.")
+        throw new CreateOrderError(
+          parsedError.success
+            ? parsedError.data.error
+            : "Check the selected customer, items, and quantities.",
+          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+        )
       }
 
       if (error.status === 404) {
-        throw new Error("A selected customer, cup, or lid no longer exists.")
+        throw new CreateOrderError(
+          parsedError.success
+            ? parsedError.data.error
+            : "A selected customer, cup, or lid no longer exists.",
+          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+        )
       }
 
       if (error.status === 409) {
-        throw new Error(
-          "Unable to create order. Check customer/item status, duplicate items, or available stock.",
+        throw new CreateOrderError(
+          parsedError.success
+            ? parsedError.data.error
+            : error.message ||
+                "Unable to create order. Check customer/item status, duplicate items, or available stock.",
+          parsedError.success ? (parsedError.data.line_items ?? []) : [],
         )
       }
 
@@ -350,6 +430,32 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
       }
 
       throw new Error("Unable to update order.")
+    }
+
+    throw error
+  }
+}
+
+export async function updateOrderPriorities(
+  payload: UpdateOrderPrioritiesPayload
+): Promise<Order[]> {
+  try {
+    const data = await api.patch<unknown, UpdateOrderPrioritiesPayload>(
+      "/orders/priorities",
+      payload
+    )
+    return ordersResponseSchema.parse(data).orders
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 400) {
+      throw new Error("Priority update contained invalid or duplicate orders.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Some reordered orders no longer exist.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error("Unable to update order priorities.")
     }
 
     throw error

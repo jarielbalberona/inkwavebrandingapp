@@ -123,6 +123,7 @@ export const reserveOrderItemsSchema = z.object({
     withInventoryItemReferenceValidation(
       inventoryItemReferenceObjectSchema.extend({
         orderItemId: z.string().uuid(),
+        requestLineItemIndex: z.number().int().nonnegative().optional(),
         quantity: z.number().int().positive(),
       }),
     ),
