@@ -40,3 +40,23 @@ services:
         value: "0"
       - key: OPENAI_API_KEY
         sync: false
+      - key: STORAGE_PROVIDER
+        value: none
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: R2_USE_PUBLIC_CDN
+        value: "true"
+      - key: UPLOAD_MAX_FILE_BYTES
+        value: "5242880"
+      - key: UPLOAD_MAX_REQUEST_BYTES
+        value: "52428800"

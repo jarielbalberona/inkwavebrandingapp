@@ -43,6 +43,16 @@ Backend variables must not be exposed to the frontend bundle.
 | `SENTRY_DSN` | no | Empty value disables Sentry initialization. |
 | `SENTRY_TRACES_SAMPLE_RATE` | no | Number from `0` to `1`; default `0`. |
 | `OPENAI_API_KEY` | no | Reserved for future API work. No OpenAI API calls exist yet. |
+| `STORAGE_PROVIDER` | no | `none` or `r2`. Defaults to `none`. Set to `r2` only when R2-backed document storage is intentionally enabled. |
+| `R2_ACCOUNT_ID` | required when `STORAGE_PROVIDER=r2` | Used to derive the default Cloudflare R2 S3-compatible endpoint when `R2_ENDPOINT` is not set. |
+| `R2_ACCESS_KEY_ID` | required when `STORAGE_PROVIDER=r2` | Cloudflare R2 access key ID. Backend-only secret material. |
+| `R2_SECRET_ACCESS_KEY` | required when `STORAGE_PROVIDER=r2` | Cloudflare R2 secret access key. Backend-only secret material. |
+| `R2_BUCKET_NAME` | required when `STORAGE_PROVIDER=r2` | Target bucket for stored assets. |
+| `R2_ENDPOINT` | no | Optional explicit S3-compatible endpoint override. If omitted, the API derives `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`. |
+| `R2_PUBLIC_URL` | required when `STORAGE_PROVIDER=r2` and `R2_USE_PUBLIC_CDN=true` | Public base URL for asset delivery, typically a custom CDN/domain in front of R2. |
+| `R2_USE_PUBLIC_CDN` | no | `true` by default. When `false`, the API treats stored objects as non-public and will not derive public URLs. |
+| `UPLOAD_MAX_FILE_BYTES` | no | Default per-object upload ceiling. Current default is `5242880` (5 MiB). |
+| `UPLOAD_MAX_REQUEST_BYTES` | no | Default total request ceiling for multipart-style upload flows. Current default is `52428800` (50 MiB). |
 | `ADMIN_EMAIL` | seed only | Used by `pnpm --filter @workspace/api seed:admin`; not required for normal runtime. |
 | `ADMIN_PASSWORD` | seed only | Must be a long generated value. Never commit a real password. |
 | `ADMIN_DISPLAY_NAME` | seed only | Optional display name for the bootstrap admin. |
@@ -53,6 +63,13 @@ API variables belong in:
 - Render API service: dashboard-managed environment values
 
 Do not copy API secrets into the repo. Do not mirror API secrets into web variables. Do not put database credentials into shared documentation screenshots or chat snippets.
+
+## Storage Contract Notes
+
+- Storage config is now centralized in `apps/api/src/config/storage.ts`.
+- Feature modules must consume resolved storage config/provider wiring instead of reading raw `process.env` values.
+- If `STORAGE_PROVIDER=r2`, the API fails during startup when required R2 variables are missing. That is intentional. Runtime surprise failures are worse.
+- Ink Wave does not yet claim a generic browser-upload surface. The initial storage integration is for durable invoice document persistence, with generic multipart uploads deferred until the app has a real business need.
 
 ## Local Setup Files
 

@@ -1,5 +1,6 @@
 import { createApiServer } from "./app.js"
 import { loadApiEnv } from "./config/env.js"
+import { loadStorageConfig } from "./config/storage.js"
 import { initSentry } from "./instrumentation/sentry.js"
 import { logInfo } from "./lib/logger.js"
 
@@ -14,6 +15,8 @@ const runtimeEnv = {
   authSessionSecret: env.authSessionSecret,
 }
 
+const storageConfig = loadStorageConfig(env)
+
 initSentry()
 
 const server = createApiServer(runtimeEnv)
@@ -25,6 +28,8 @@ server.listen(env.port, () => {
     port: env.port,
     databaseConfigured: Boolean(env.databaseUrl),
     sentryEnabled: Boolean(env.sentryDsn),
+    storageProvider: storageConfig.provider,
+    storagePublicUrlConfigured: Boolean(storageConfig.r2?.publicUrl),
     webOriginConfigured: Boolean(env.webOrigin),
   })
 })
