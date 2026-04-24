@@ -5,14 +5,27 @@ import { loadDatabaseEnv } from "../config/env.js"
 function buildPoolConfig(): PoolConfig {
   const env = loadDatabaseEnv()
 
+  const ssl =
+    env.databaseSslMode === "require"
+      ? {
+          rejectUnauthorized: false,
+        }
+      : undefined
+
+  if (env.kind === "url") {
+    return {
+      connectionString: env.databaseUrl,
+      ssl,
+    }
+  }
+
   return {
-    connectionString: env.databaseUrl,
-    ssl:
-      env.databaseSslMode === "require"
-        ? {
-            rejectUnauthorized: false,
-          }
-        : undefined,
+    host: env.host,
+    port: env.port,
+    user: env.user,
+    password: env.password,
+    database: env.database,
+    ssl,
   }
 }
 

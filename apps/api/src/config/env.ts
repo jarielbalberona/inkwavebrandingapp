@@ -51,6 +51,18 @@ const optionalDatabaseUrl = z.preprocess(
   z.string().trim().min(1).optional(),
 )
 
+/** Password may contain URL-reserved characters; only trim outer whitespace and stray newlines from paste. */
+const optionalDatabasePassword = z.preprocess((value) => {
+  if (value === undefined || value === null) {
+    return value
+  }
+  if (typeof value !== "string") {
+    return value
+  }
+  const s = value.replaceAll(/\r|\n/g, "").trim()
+  return s === "" ? undefined : s
+}, z.string().min(1).optional())
+
 const optionalSessionSecret = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
   z.string().trim().min(32).optional(),
@@ -62,6 +74,16 @@ export const apiEnvSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: optionalDatabaseUrl,
+  /** When set together with user/password/name, used instead of DATABASE_URL (password can contain @, #, etc.). */
+  DATABASE_HOST: optionalNonEmptyString,
+  DATABASE_USER: optionalNonEmptyString,
+  DATABASE_PASSWORD: optionalDatabasePassword,
+  DATABASE_NAME: optionalNonEmptyString,
+  DATABASE_PORT: z.preprocess(
+    (value) =>
+      value === undefined || value === null || value === "" ? undefined : value,
+    z.coerce.number().int().positive().default(5432),
+  ),
   DATABASE_SSL_MODE: z.enum(["disable", "require"]).default("disable"),
   AUTH_SESSION_SECRET: optionalSessionSecret,
   AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
@@ -88,6 +110,11 @@ export interface ApiEnv {
   nodeEnv: ParsedApiEnv["NODE_ENV"]
   port: number
   databaseUrl?: string
+  databaseHost?: string
+  databaseUser?: string
+  databasePassword?: string
+  databaseName?: string
+  databasePort: number
   databaseSslMode: DatabaseSslMode
   authSessionSecret?: string
   authSessionTtlSeconds: number
@@ -107,10 +134,21 @@ export interface ApiEnv {
   uploadMaxRequestBytes: number
 }
 
-export interface DatabaseEnv {
-  databaseUrl: string
-  databaseSslMode: DatabaseSslMode
-}
+export type DatabaseEnv =
+  | {
+      kind: "url"
+      databaseUrl: string
+      databaseSslMode: DatabaseSslMode
+    }
+  | {
+      kind: "params"
+      host: string
+      port: number
+      user: string
+      password: string
+      database: string
+      databaseSslMode: DatabaseSslMode
+    }
 
 export function parseApiEnv(input: unknown): ApiEnv {
   const result = apiEnvSchema.safeParse(input)
@@ -127,6 +165,11 @@ export function parseApiEnv(input: unknown): ApiEnv {
     nodeEnv: result.data.NODE_ENV,
     port: result.data.PORT,
     databaseUrl: result.data.DATABASE_URL,
+    databaseHost: result.data.DATABASE_HOST,
+    databaseUser: result.data.DATABASE_USER,
+    databasePassword: result.data.DATABASE_PASSWORD,
+    databaseName: result.data.DATABASE_NAME,
+    databasePort: result.data.DATABASE_PORT,
     databaseSslMode: result.data.DATABASE_SSL_MODE,
     authSessionSecret: result.data.AUTH_SESSION_SECRET,
     authSessionTtlSeconds: result.data.AUTH_SESSION_TTL_SECONDS,
@@ -159,8 +202,29 @@ export function loadApiEnv(): ApiEnv {
 export function loadDatabaseEnv(): DatabaseEnv {
   const env = loadApiEnv()
 
+  const paramsComplete = Boolean(
+    env.databaseHost &&
+      env.databaseUser &&
+      env.databasePassword &&
+      env.databaseName,
+  )
+
+  if (paramsComplete) {
+    return {
+      kind: "params",
+      host: env.databaseHost!,
+      port: env.databasePort,
+      user: env.databaseUser!,
+      password: env.databasePassword!,
+      database: env.databaseName!,
+      databaseSslMode: env.databaseSslMode,
+    }
+  }
+
   if (!env.databaseUrl) {
-    throw new Error("Invalid API environment: DATABASE_URL is required")
+    throw new Error(
+      "Invalid API environment: set DATABASE_URL or all of DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME",
+    )
   }
 
   try {
@@ -168,12 +232,12 @@ export function loadDatabaseEnv(): DatabaseEnv {
   } catch {
     throw new Error(
       "Invalid API environment: DATABASE_URL is not a valid PostgreSQL connection URL. " +
-        "Copy the full Internal or External URL from your host (including hostname and database name). " +
-        "If the password contains @, :, #, /, or ?, percent-encode those characters in the URL.",
+        "Set DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME (and optional DATABASE_PORT) instead when the password contains @ or other URL-reserved characters, or percent-encode those characters in DATABASE_URL.",
     )
   }
 
   return {
+    kind: "url",
     databaseUrl: env.databaseUrl,
     databaseSslMode: env.databaseSslMode,
   }

@@ -26,7 +26,13 @@ server.listen(env.port, () => {
     event: "api_server_started",
     nodeEnv: env.nodeEnv,
     port: env.port,
-    databaseConfigured: Boolean(env.databaseUrl),
+    databaseConfigured: Boolean(
+      env.databaseUrl ||
+        (env.databaseHost &&
+          env.databaseUser &&
+          env.databasePassword &&
+          env.databaseName),
+    ),
     sentryEnabled: Boolean(env.sentryDsn),
     storageProvider: storageConfig.provider,
     storagePublicUrlConfigured: Boolean(storageConfig.r2?.publicUrl),

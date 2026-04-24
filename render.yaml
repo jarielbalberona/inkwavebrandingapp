@@ -41,19 +41,19 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: STORAGE_PROVIDER
-        value: none
+        value: r2
       - key: R2_ACCOUNT_ID
-        sync: false
+        sync: true
       - key: R2_ACCESS_KEY_ID
-        sync: false
+        sync: true
       - key: R2_SECRET_ACCESS_KEY
-        sync: false
+        sync: true
       - key: R2_BUCKET_NAME
-        sync: false
+        sync: true
       - key: R2_ENDPOINT
-        sync: false
+        sync: true
       - key: R2_PUBLIC_URL
-        sync: false
+        sync: true
       - key: R2_USE_PUBLIC_CDN
         value: "true"
       - key: UPLOAD_MAX_FILE_BYTES
