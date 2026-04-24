@@ -42,6 +42,14 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
   const [pageSuccess, setPageSuccess] = useState<string | null>(null)
 
   const order = orderQuery.data ?? null
+  const invoiceLockBlocksEdit =
+    orderInvoiceQuery.data?.status === "paid" || orderInvoiceQuery.data?.status === "void"
+  const canOpenEdit =
+    order !== null &&
+    order.status !== "canceled" &&
+    order.status !== "completed" &&
+    order.status !== "partial_released" &&
+    !invoiceLockBlocksEdit
 
   async function handleCancelOrder() {
     setPageError(null)
@@ -108,11 +116,17 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
               </Button>
             ) : null}
             {order ? (
-              <Button asChild variant="outline">
-                <Link to="/orders/$orderId/edit" params={{ orderId: order.id }}>
-                  Edit
-                </Link>
-              </Button>
+              canOpenEdit ? (
+                <Button asChild variant="outline">
+                  <Link to="/orders/$orderId/edit" params={{ orderId: order.id }}>
+                    Edit
+                  </Link>
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" disabled>
+                  Edit locked
+                </Button>
+              )
             ) : null}
           </div>
         </div>
@@ -268,7 +282,7 @@ function InvoicePanel({
   orderStatus: OrderStatus
 }) {
   const hasInvoice = Boolean(invoice)
-  const canGenerate = !hasInvoice && orderStatus === "completed"
+  const canGenerate = !hasInvoice && orderStatus !== "canceled"
   const resolvedInvoice = invoice ?? null
 
   return (
@@ -277,7 +291,7 @@ function InvoicePanel({
         <div className="grid gap-1">
           <p className="font-medium">Invoice</p>
           <p className="text-muted-foreground">
-            Admin-only snapshot generated from completed order line-item prices.
+            Admin-only financial snapshot. While it is unpaid, structural changes must go through the order. Once it is paid or voided, structural edits are locked.
           </p>
         </div>
         {canGenerate ? (
@@ -290,10 +304,16 @@ function InvoicePanel({
       {isLoading ? <p className="text-muted-foreground">Loading invoice state...</p> : null}
 
       {resolvedInvoice ? (
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-4">
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Invoice number</p>
             <p className="font-medium">{resolvedInvoice.invoice_number}</p>
+          </div>
+          <div className="border p-3">
+            <p className="text-xs text-muted-foreground">Status</p>
+            <Badge variant={invoiceStatusVariant(resolvedInvoice.status)}>
+              {formatStatus(resolvedInvoice.status)}
+            </Badge>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Subtotal</p>
@@ -332,9 +352,9 @@ function InvoicePanel({
         </p>
       ) : (
         <p className="text-muted-foreground">
-          {orderStatus === "completed"
-            ? "No invoice generated yet."
-            : "Invoice generation is only allowed after the order is completed."}
+          {orderStatus === "canceled"
+            ? "Canceled orders should not generate a new invoice."
+            : "No invoice snapshot exists yet. Admins can backfill it from the current order state."}
         </p>
       )}
     </div>
@@ -352,6 +372,18 @@ function statusVariant(status: OrderStatus): "default" | "secondary" | "destruct
 
   if (status === "completed" || status === "partial_released") {
     return "default"
+  }
+
+  return "secondary"
+}
+
+function invoiceStatusVariant(status: Invoice["status"]): "default" | "secondary" | "destructive" {
+  if (status === "paid") {
+    return "default"
+  }
+
+  if (status === "void") {
+    return "destructive"
   }
 
   return "secondary"

@@ -29,6 +29,8 @@ export const lineItemStatusSchema = z.enum([
   "completed",
 ])
 
+export const invoiceStatusSchema = z.enum(["pending", "paid", "void"])
+
 const orderCupSchema = z.object({
   id: z.string().uuid(),
   sku: z.string(),
@@ -162,6 +164,7 @@ const invoiceSchema = z.object({
     email: z.string().nullable(),
     address: z.string().nullable(),
   }),
+  status: invoiceStatusSchema,
   subtotal: z.string(),
   items: z.array(invoiceItemSchema),
   created_at: z.string(),
@@ -294,6 +297,38 @@ export interface CreateProgressEventPayload {
 export interface UpdateOrderPayload {
   customer_id?: string
   notes?: string | null
+  line_items?: Array<
+    | {
+        id?: string
+        item_type: "cup"
+        cup_id: string
+        quantity: number
+        notes?: string
+      }
+    | {
+        id?: string
+        item_type: "lid"
+        lid_id: string
+        quantity: number
+        notes?: string
+      }
+    | {
+        id?: string
+        item_type: "non_stock_item"
+        non_stock_item_id: string
+        quantity: number
+        notes?: string
+      }
+    | {
+        id?: string
+        item_type: "custom_charge"
+        description_snapshot: string
+        quantity: number
+        unit_sell_price: string
+        unit_cost_price?: string
+        notes?: string
+      }
+  >
 }
 
 export interface UpdateOrderPrioritiesPayload {
@@ -448,8 +483,15 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
     return orderResponseSchema.parse(data).order
   } catch (error) {
     if (error instanceof ApiClientError) {
+      const parsedError = parseCreateOrderApiError(error.data)
+
       if (error.status === 400) {
-        throw new Error("Only customer and notes can be edited.")
+        throw new CreateOrderError(
+          parsedError.success
+            ? parsedError.data.error
+            : "Order update contained invalid structural data.",
+          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+        )
       }
 
       if (error.status === 404) {
@@ -457,8 +499,11 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
       }
 
       if (error.status === 409) {
-        throw new Error(
-          "Order cannot be edited in its current state, or the selected customer is inactive.",
+        throw new CreateOrderError(
+          parsedError.success
+            ? parsedError.data.error
+            : "Order cannot be edited in its current state.",
+          parsedError.success ? (parsedError.data.line_items ?? []) : [],
         )
       }
 

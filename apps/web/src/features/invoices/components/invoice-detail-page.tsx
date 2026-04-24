@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@workspace/ui/components/item"
@@ -39,7 +40,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
           <div className="grid gap-1">
             <CardTitle>Invoice Detail</CardTitle>
             <CardDescription>
-              Review the persisted invoice snapshot and open the shared PDF rendering path.
+              Review the persisted invoice snapshot. Structural changes do not happen here; unpaid corrections must be made on the linked order, and paid invoices stay locked.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -87,6 +88,14 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                   <div className="grid gap-0.5">
                     <ItemDescription className="text-xs">Order reference</ItemDescription>
                     <span className="text-sm font-medium text-foreground">{invoice.order_number_snapshot}</span>
+                  </div>
+                  <div className="grid gap-0.5">
+                    <ItemDescription className="text-xs">Status</ItemDescription>
+                    <div>
+                      <Badge variant={invoiceStatusVariant(invoice.status)}>
+                        {invoice.status}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="grid gap-0.5">
                     <ItemDescription className="text-xs">Created</ItemDescription>
@@ -145,4 +154,16 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
       </CardContent>
     </Card>
   )
+}
+
+function invoiceStatusVariant(status: "pending" | "paid" | "void"): "default" | "secondary" | "destructive" {
+  if (status === "paid") {
+    return "default"
+  }
+
+  if (status === "void") {
+    return "destructive"
+  }
+
+  return "secondary"
 }

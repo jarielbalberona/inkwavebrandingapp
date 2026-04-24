@@ -2,6 +2,8 @@ import { z } from "zod"
 
 import { ApiClientError, api } from "@/lib/api"
 
+const invoiceStatusSchema = z.enum(["pending", "paid", "void"])
+
 const invoiceListItemSchema = z.object({
   id: z.string().uuid(),
   invoice_number: z.string(),
@@ -12,6 +14,7 @@ const invoiceListItemSchema = z.object({
     customer_code: z.string().nullable(),
     business_name: z.string(),
   }),
+  status: invoiceStatusSchema,
   subtotal: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -42,6 +45,7 @@ const invoiceSchema = z.object({
     email: z.string().nullable(),
     address: z.string().nullable(),
   }),
+  status: invoiceStatusSchema,
   subtotal: z.string(),
   items: z.array(invoiceItemSchema),
   created_at: z.string(),
