@@ -363,6 +363,107 @@ describe("inventory, order, and invoice integration", () => {
     expect(duplicateInvoiceResponse.status).toBe(409)
     expect(duplicateInvoiceResponse.body.error).toBe("Invoice already exists for this order")
   })
+
+  it("keeps custom_charge out of inventory movements and product-oriented reports", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup({
+      defaultSellPrice: "15.00",
+      costPrice: "8.50",
+    })
+    const db = await getIntegrationDb()
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 20,
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        notes: "Custom charge reporting isolation test",
+        line_items: [
+          { item_type: "cup", cup_id: cup.id, quantity: 2 },
+          {
+            item_type: "custom_charge",
+            description_snapshot: "Rush fee",
+            quantity: 1,
+            unit_sell_price: "500.00",
+            unit_cost_price: "120.00",
+          },
+        ],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+    expect(
+      createOrderResponse.body.order.items.map((item: { item_type: string }) => item.item_type),
+    ).toEqual(["cup", "custom_charge"])
+
+    const movementsForOrder = await db.query.inventoryMovements.findMany({
+      where: eq(schema.inventoryMovements.orderId, createOrderResponse.body.order.id),
+      orderBy: (inventoryMovements, { asc }) => [asc(inventoryMovements.createdAt)],
+    })
+
+    expect(movementsForOrder).toHaveLength(1)
+    expect(movementsForOrder[0]).toMatchObject({
+      itemType: "cup",
+      movementType: "reserve",
+      quantity: 2,
+    })
+
+    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+
+    await postProgressEvent(api, adminCookie, cupLineItem.id, "printed", 2)
+    await postProgressEvent(api, adminCookie, cupLineItem.id, "qa_passed", 2)
+    await postProgressEvent(api, adminCookie, cupLineItem.id, "packed", 2)
+    await postProgressEvent(api, adminCookie, cupLineItem.id, "ready_for_release", 2)
+    const releasedResponse = await postProgressEvent(api, adminCookie, cupLineItem.id, "released", 2)
+
+    expect(releasedResponse.status).toBe(201)
+    expect(releasedResponse.body.order_status).toBe("completed")
+
+    const cupUsageResponse = await api
+      .get("/reports/cup-usage")
+      .set("Cookie", adminCookie)
+
+    expect(cupUsageResponse.status).toBe(200)
+    expect(cupUsageResponse.body.report.total_consumed_quantity).toBe(2)
+    expect(cupUsageResponse.body.report.items).toHaveLength(1)
+    expect(cupUsageResponse.body.report.items[0]).toMatchObject({
+      cup: {
+        id: cup.id,
+        sku: cup.sku,
+      },
+      consumed_quantity: 2,
+    })
+
+    const salesCostResponse = await api
+      .get("/reports/sales-cost-visibility")
+      .set("Cookie", adminCookie)
+
+    expect(salesCostResponse.status).toBe(200)
+    expect(salesCostResponse.body.report.totals).toMatchObject({
+      released_quantity: 2,
+      sell_total: "30.00",
+      cost_total: "17.00",
+      gross_profit: "13.00",
+    })
+    expect(salesCostResponse.body.report.items).toHaveLength(1)
+    expect(salesCostResponse.body.report.items[0]).toMatchObject({
+      cup: {
+        id: cup.id,
+        sku: cup.sku,
+      },
+      released_quantity: 2,
+      sell_total: "30.00",
+      cost_total: "17.00",
+      gross_profit: "13.00",
+    })
+  })
 })
 
 async function stockIntake(
@@ -424,7 +525,7 @@ async function getLidBalance(
 
 function findOrderItem(
   items: Array<{ id: string; item_type: string }>,
-  itemType: "cup" | "lid" | "non_stock_item",
+  itemType: "cup" | "lid" | "non_stock_item" | "custom_charge",
 ) {
   const item = items.find((entry) => entry.item_type === itemType)
 
