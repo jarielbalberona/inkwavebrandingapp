@@ -145,6 +145,55 @@ describe("authorization integration", () => {
     expect(staffOrderResponse.body.order.items[0]).not.toHaveProperty("unit_sell_price")
   })
 
+  it("rejects staff when creating orders with custom_charge line items", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const staffCookie = await getStaffSessionCookie()
+    const customer = await seedCustomer({
+      businessName: "Custom Charge Authorization Customer",
+    })
+
+    const staffResponse = await api
+      .post("/orders")
+      .set("Cookie", staffCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [
+          {
+            item_type: "custom_charge",
+            description_snapshot: "Rush fee",
+            quantity: 1,
+            unit_sell_price: "500.00",
+          },
+        ],
+      })
+
+    expect(staffResponse.status).toBe(403)
+    expect(staffResponse.body.error).toBe("Admin role required")
+
+    const adminResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [
+          {
+            item_type: "custom_charge",
+            description_snapshot: "Rush fee",
+            quantity: 1,
+            unit_sell_price: "500.00",
+          },
+        ],
+      })
+
+    expect(adminResponse.status).toBe(201)
+    expect(adminResponse.body.order.items[0]).toMatchObject({
+      item_type: "custom_charge",
+      description_snapshot: "Rush fee",
+      unit_sell_price: "500.00",
+    })
+  })
+
   it("rejects staff on invoice routes while preserving admin access", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()

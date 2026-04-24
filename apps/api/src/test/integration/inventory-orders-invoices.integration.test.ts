@@ -464,6 +464,46 @@ describe("inventory, order, and invoice integration", () => {
       gross_profit: "13.00",
     })
   })
+
+  it("rejects fulfillment progress events for custom_charge line items", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [
+          {
+            item_type: "custom_charge",
+            description_snapshot: "Rush fee",
+            quantity: 1,
+            unit_sell_price: "500.00",
+          },
+        ],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+    expect(createOrderResponse.body.order.status).toBe("completed")
+
+    const customChargeLineItem = findOrderItem(createOrderResponse.body.order.items, "custom_charge")
+
+    const progressResponse = await api
+      .post(`/order-line-items/${customChargeLineItem.id}/progress-events`)
+      .set("Cookie", adminCookie)
+      .send({
+        stage: "printed",
+        quantity: 1,
+        event_date: new Date("2026-04-24T09:00:00.000Z").toISOString(),
+      })
+
+    expect(progressResponse.status).toBe(409)
+    expect(progressResponse.body.error).toBe(
+      "Non-stock and custom charge line items do not support fulfillment progress events",
+    )
+  })
 })
 
 async function stockIntake(
