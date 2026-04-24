@@ -119,8 +119,8 @@ export function toOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto 
 function toAdminOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto {
   return toBaseOrderDto(order, user, (item) => ({
     ...toBaseOrderItemDto(item),
-    unit_cost_price: item.unitCostPrice,
-    unit_sell_price: item.unitSellPrice,
+    unit_cost_price: toMoneyString(item.unitCostPrice),
+    unit_sell_price: toMoneyString(item.unitSellPrice),
   }))
 }
 
@@ -262,4 +262,8 @@ export function toProgressEventDto(
       : null,
     created_at: event.createdAt.toISOString(),
   }
+}
+
+function toMoneyString(value: string): string {
+  return Number(value).toFixed(2)
 }
