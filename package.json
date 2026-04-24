@@ -5,6 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "deploy:check": "pnpm --filter @workspace/api typecheck && pnpm --filter @workspace/api build && pnpm --filter @workspace/api db:drizzle-check && pnpm --filter web typecheck && pnpm --filter web build",
     "lint": "turbo lint",
     "format": "turbo format",
     "test": "turbo test",

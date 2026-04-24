@@ -55,11 +55,13 @@ pnpm --filter web typecheck
 - Deployment/env details live in `docs/deployment/environment.md`.
 - Database provisioning/isolation notes live in `docs/deployment/database.md`.
 - Deployment runbook notes live in `docs/deployment/deploy.md`.
+- Practical rollout checklist lives in `docs/deployment/render-rollout-checklist.md`.
 - Backup/restore notes live in `docs/deployment/recovery.md`.
 - Logging/incident notes live in `docs/deployment/observability.md`.
 - The current Render web service is buildable as a static site.
 - The current Render API service contract targets `pnpm --filter @workspace/api build`, `pnpm --filter @workspace/api start`, and `/health`.
 - Render config is source-controlled, but live deployment still requires dashboard-managed environment values and an actual smoke.
+- `pnpm deploy:check` is the repo-side readiness gate. It proves the local build/typecheck/Drizzle-check path only; it does not prove live Render state.
 
 ## Current proof status
 

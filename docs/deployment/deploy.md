@@ -4,6 +4,8 @@ This repo now has source-controlled Render service definitions. That is not the 
 
 Use this runbook to deploy without guessing.
 
+For the operational step-by-step checklist, use [render-rollout-checklist.md](./render-rollout-checklist.md). This file explains the rollout model; the checklist is the literal operator sequence.
+
 ## Environment Model
 
 The repo supports two deployment environments in principle:
@@ -107,3 +109,23 @@ That means:
 - no live post-deploy smoke automation exists in this repo yet
 
 This is acceptable for an internal MVP. It is not mature operations.
+
+## Repo-Side Verification Command
+
+Before you call the repo rollout-ready, run:
+
+```bash
+pnpm deploy:check
+```
+
+What that proves:
+
+- API typecheck/build still pass
+- checked-in Drizzle artifacts are internally consistent
+- web typecheck/build still pass
+
+What that does not prove:
+
+- live Render dashboard env values
+- live database target correctness
+- live `/health`, login, invoice/PDF/payment browser smoke
