@@ -96,6 +96,9 @@ export function InventoryPage() {
   const stockIntake = useStockIntakeMutation()
   const inventoryAdjustment = useInventoryAdjustmentMutation()
   const [search, setSearch] = useState("")
+  const [brandFilter, setBrandFilter] = useState("all")
+  const [sizeFilter, setSizeFilter] = useState("all")
+  const [colorFilter, setColorFilter] = useState("all")
   const [activeBalanceKey, setActiveBalanceKey] = useState<string | null>(null)
   const [isReceiveStockDialogOpen, setIsReceiveStockDialogOpen] = useState(false)
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false)
@@ -106,6 +109,29 @@ export function InventoryPage() {
   const canAdjustInventory = hasPermission(currentUser.data, appPermissions.inventoryAdjust)
   const canCreateCups = hasPermission(currentUser.data, appPermissions.cupsManage)
   const canCreateLids = hasPermission(currentUser.data, appPermissions.lidsManage)
+
+  const form = useForm<StockIntakeFormValues>({
+    resolver: zodResolver(stockIntakeFormSchema),
+    defaultValues: emptyFormValues,
+  })
+  const adjustmentForm = useForm<AdjustmentFormValues>({
+    resolver: zodResolver(adjustmentFormSchema),
+    defaultValues: emptyAdjustmentValues,
+  })
+
+  const filteredBalances = useMemo(
+    () => filterBalances(balancesQuery.data, { search, brandFilter, sizeFilter, colorFilter }),
+    [balancesQuery.data, brandFilter, colorFilter, search, sizeFilter],
+  )
+  const brandOptions = useMemo(() => getInventoryFilterOptions(balancesQuery.data, "brand"), [balancesQuery.data])
+  const sizeOptions = useMemo(() => getInventoryFilterOptions(balancesQuery.data, "size"), [balancesQuery.data])
+  const colorOptions = useMemo(() => getInventoryFilterOptions(balancesQuery.data, "color"), [balancesQuery.data])
+
+  const selectedBalance = useMemo(
+    () =>
+      balancesQuery.data?.find((balance) => toInventoryItemKey(balance) === activeBalanceKey) ?? null,
+    [activeBalanceKey, balancesQuery.data],
+  )
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -124,26 +150,6 @@ export function InventoryPage() {
       </Alert>
     )
   }
-
-  const form = useForm<StockIntakeFormValues>({
-    resolver: zodResolver(stockIntakeFormSchema),
-    defaultValues: emptyFormValues,
-  })
-  const adjustmentForm = useForm<AdjustmentFormValues>({
-    resolver: zodResolver(adjustmentFormSchema),
-    defaultValues: emptyAdjustmentValues,
-  })
-
-  const filteredBalances = useMemo(
-    () => filterBalances(balancesQuery.data, search),
-    [balancesQuery.data, search],
-  )
-
-  const selectedBalance = useMemo(
-    () =>
-      balancesQuery.data?.find((balance) => toInventoryItemKey(balance) === activeBalanceKey) ?? null,
-    [activeBalanceKey, balancesQuery.data],
-  )
 
   async function onSubmit(values: StockIntakeFormValues) {
     if (!selectedBalance) {
@@ -332,6 +338,27 @@ export function InventoryPage() {
               placeholder="Search cups or lids"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <CatalogFilterSelect
+              label="Brand"
+              value={brandFilter}
+              options={brandOptions}
+              onValueChange={setBrandFilter}
+            />
+            <CatalogFilterSelect
+              label="Size"
+              value={sizeFilter}
+              options={sizeOptions}
+              onValueChange={setSizeFilter}
+            />
+            <CatalogFilterSelect
+              label="Color"
+              value={colorFilter}
+              options={colorOptions}
+              onValueChange={setColorFilter}
             />
           </div>
         </CardHeader>
@@ -687,26 +714,114 @@ function InventoryItemSummary({ balance }: { balance: InventoryBalance }) {
   )
 }
 
+function CatalogFilterSelect({
+  label,
+  value,
+  options,
+  onValueChange,
+}: {
+  label: string
+  value: string
+  options: string[]
+  onValueChange: (value: string) => void
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={`All ${label.toLowerCase()}`} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All {label.toLowerCase()}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 function filterBalances(
   balances: InventoryBalance[] | undefined,
-  search: string,
+  filters: {
+    search: string
+    brandFilter: string
+    sizeFilter: string
+    colorFilter: string
+  },
 ): InventoryBalance[] {
   if (!balances) {
     return []
   }
 
-  const normalizedSearch = search.trim().toLowerCase()
+  const normalizedSearch = filters.search.trim().toLowerCase()
 
-  if (!normalizedSearch) {
-    return balances
-  }
+  return balances.filter((balance) => {
+    if (filters.brandFilter !== "all" && getInventoryFilterValue(balance, "brand") !== filters.brandFilter) {
+      return false
+    }
 
-  return balances.filter((balance) =>
-    [balance.item_type, formatInventoryItemLabel(balance), formatInventoryItemSecondaryLabel(balance)]
+    if (filters.sizeFilter !== "all" && getInventoryFilterValue(balance, "size") !== filters.sizeFilter) {
+      return false
+    }
+
+    if (filters.colorFilter !== "all" && getInventoryFilterValue(balance, "color") !== filters.colorFilter) {
+      return false
+    }
+
+    if (!normalizedSearch) {
+      return true
+    }
+
+    return [balance.item_type, formatInventoryItemLabel(balance), formatInventoryItemSecondaryLabel(balance)]
       .join(" ")
       .toLowerCase()
-      .includes(normalizedSearch),
+      .includes(normalizedSearch)
+  })
+}
+
+function getInventoryFilterOptions(
+  balances: InventoryBalance[] | undefined,
+  field: "brand" | "size" | "color",
+): string[] {
+  if (!balances) {
+    return []
+  }
+
+  return [...new Set(balances.map((balance) => getInventoryFilterValue(balance, field)).filter(Boolean))].sort(
+    (left, right) => left.localeCompare(right, undefined, { numeric: true }),
   )
+}
+
+function getInventoryFilterValue(
+  balance: InventoryBalance,
+  field: "brand" | "size" | "color",
+): string {
+  if (balance.item_type === "cup") {
+    if (field === "brand") {
+      return balance.cup.brand
+    }
+
+    if (field === "size") {
+      return balance.cup.size
+    }
+
+    return balance.cup.color
+  }
+
+  if (field === "brand") {
+    return balance.lid.brand
+  }
+
+  if (field === "size") {
+    return balance.lid.diameter
+  }
+
+  return balance.lid.color
 }
 
 function formatInventoryItemLabel(balance: InventoryBalance): string {
