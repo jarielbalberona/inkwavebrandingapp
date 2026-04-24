@@ -69,6 +69,7 @@ const lidFormSchema = z
     diameter: z.enum(lidDiameters),
     shape: z.enum(lidShapes),
     color: z.enum(lidColors),
+    min_stock: z.number().int().nonnegative(),
     cost_price: z.number().nonnegative(),
     default_sell_price: z.number({
       required_error: "Default sell price is required.",
@@ -118,6 +119,7 @@ const emptyFormValues: DefaultValues<LidFormValues> = {
   diameter: "95mm",
   shape: "dome",
   color: "transparent",
+  min_stock: 0,
   cost_price: 0,
   is_active: true,
 }
@@ -320,6 +322,7 @@ export function LidsPage() {
                   <TableHead>Diameter</TableHead>
                   <TableHead>Shape</TableHead>
                   <TableHead>Color</TableHead>
+                  <TableHead>Min stock</TableHead>
                   <TableHead>Status</TableHead>
                   {hasPricing(lidsQuery.data) ? <TableHead>Sell price</TableHead> : null}
                 </TableRow>
@@ -341,6 +344,7 @@ export function LidsPage() {
                     <TableCell>{lid.diameter}</TableCell>
                     <TableCell>{formatLidContractLabel(lid.shape)}</TableCell>
                     <TableCell>{formatLidContractLabel(lid.color)}</TableCell>
+                    <TableCell>{lid.min_stock}</TableCell>
                     <TableCell>
                       <Badge variant={lid.is_active ? "default" : "secondary"}>
                         {lid.is_active ? "Active" : "Inactive"}
@@ -393,6 +397,7 @@ export function LidsPage() {
                 <SelectFormField control={form.control} disabled={!canManageLids} label="Diameter" name="diameter" options={availableDiameters} />
                 <SelectFormField control={form.control} disabled={!canManageLids} label="Shape" name="shape" options={availableShapes} />
                 <SelectFormField control={form.control} disabled={!canManageLids} label="Color" name="color" options={availableColors} />
+                <NumberFormField control={form.control} disabled={!canManageLids} label="Min stock" name="min_stock" />
                 <CurrencyFormField control={form.control} disabled={!canManageLids} label="Cost price" name="cost_price" />
                 <CurrencyFormField control={form.control} disabled={!canManageLids} label="Default sell price" name="default_sell_price" />
               </div>
@@ -519,6 +524,38 @@ function CurrencyFormField({
   )
 }
 
+function NumberFormField({
+  control,
+  disabled,
+  label,
+  name,
+}: {
+  control: ReturnType<typeof useForm<LidFormValues>>["control"]
+  disabled: boolean
+  label: string
+  name: "min_stock"
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input.Number
+              disabled={disabled}
+              min={0}
+              value={field.value}
+              onChange={(value) => field.onChange(value ?? 0)}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+}
+
 function hasPricing(lids: Lid[] | undefined): boolean {
   return Boolean(lids?.some((lid) => "default_sell_price" in lid))
 }
@@ -611,6 +648,7 @@ function toFormValues(lid: Lid): LidFormValues {
     diameter: lid.diameter,
     shape: lid.shape,
     color: lid.color,
+    min_stock: lid.min_stock,
     cost_price: Number(lid.cost_price ?? 0),
     default_sell_price: Number(lid.default_sell_price ?? 0),
     is_active: lid.is_active,

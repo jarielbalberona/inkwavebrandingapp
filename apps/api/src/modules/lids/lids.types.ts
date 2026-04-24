@@ -11,6 +11,7 @@ export interface AdminLidDto {
   diameter: string
   shape: string
   color: string
+  min_stock: number
   cost_price: string
   default_sell_price: string
   is_active: boolean
@@ -38,6 +39,7 @@ function toAdminLidDto(lid: Lid): AdminLidDto {
     diameter: lid.diameter,
     shape: lid.shape,
     color: lid.color,
+    min_stock: lid.minStock,
     cost_price: lid.costPrice,
     default_sell_price: lid.defaultSellPrice,
     is_active: lid.isActive,

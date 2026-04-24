@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm"
 import {
   boolean,
   check,
+  integer,
   numeric,
   pgEnum,
   pgTable,
@@ -38,6 +39,7 @@ export const lids = pgTable(
     diameter: lidDiameterEnum("diameter").notNull(),
     shape: lidShapeEnum("shape").notNull(),
     color: lidColorEnum("color").notNull(),
+    minStock: integer("min_stock").notNull().default(0),
     costPrice: numeric("cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
     defaultSellPrice: numeric("default_sell_price", { precision: 12, scale: 2 })
       .notNull()
@@ -55,6 +57,7 @@ export const lids = pgTable(
       table.shape,
       table.color,
     ),
+    check("lids_min_stock_non_negative", sql`${table.minStock} >= 0`),
     check("lids_cost_price_non_negative", sql`${table.costPrice} >= 0`),
     check("lids_default_sell_price_non_negative", sql`${table.defaultSellPrice} >= 0`),
     check("lids_sku_not_blank", sql`length(trim(${table.sku})) > 0`),

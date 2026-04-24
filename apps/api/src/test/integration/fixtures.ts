@@ -71,6 +71,7 @@ export async function seedLid(overrides: Partial<typeof schema.lids.$inferInsert
       diameter: "98mm",
       shape: "dome",
       color: "transparent",
+      minStock: 10,
       costPrice: "2.50",
       defaultSellPrice: "5.00",
       isActive: true,

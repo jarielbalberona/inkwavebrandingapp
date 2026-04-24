@@ -384,7 +384,7 @@ export function InventoryPage() {
                     {balance.available}
                   </TableCell>
                   <TableCell>
-                    {balance.item_type === "cup" ? balance.cup.min_stock : "—"}
+                    {balance.item_type === "cup" ? balance.cup.min_stock : balance.lid.min_stock}
                   </TableCell>
                   <TableCell>
                     <Badge variant={stockStateVariant(balance)}>{stockStateLabel(balance)}</Badge>
@@ -746,6 +746,10 @@ function stockStateLabel(balance: InventoryBalance): string {
     return "Low"
   }
 
+  if (balance.item_type === "lid" && balance.available <= balance.lid.min_stock) {
+    return "Low"
+  }
+
   return "Healthy"
 }
 
@@ -755,6 +759,10 @@ function stockStateVariant(balance: InventoryBalance): "default" | "secondary" |
   }
 
   if (balance.item_type === "cup" && balance.available <= balance.cup.min_stock) {
+    return "secondary"
+  }
+
+  if (balance.item_type === "lid" && balance.available <= balance.lid.min_stock) {
     return "secondary"
   }
 

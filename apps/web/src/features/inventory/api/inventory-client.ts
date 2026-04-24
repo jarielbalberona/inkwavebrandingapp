@@ -35,6 +35,7 @@ const lidSchema = z.object({
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   shape: z.string(),
   color: z.enum(["transparent", "black", "white"]),
+  min_stock: z.number(),
   is_active: z.boolean(),
   cost_price: z.string().optional(),
   default_sell_price: z.string().optional(),

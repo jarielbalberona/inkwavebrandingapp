@@ -11,6 +11,7 @@ const lidBaseSchema = z.object({
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   shape: z.enum(["dome", "flat", "strawless", "coffee_lid", "tall_lid"]),
   color: z.enum(["transparent", "black", "white"]),
+  min_stock: z.number(),
   is_active: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -63,6 +64,7 @@ export interface LidPayload {
   diameter: "80mm" | "90mm" | "95mm" | "98mm"
   shape: "dome" | "flat" | "strawless" | "coffee_lid" | "tall_lid"
   color: "transparent" | "black" | "white"
+  min_stock: number
   cost_price: string
   default_sell_price: string
   is_active: boolean

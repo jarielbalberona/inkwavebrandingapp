@@ -169,6 +169,13 @@
       "when": 1777053276394,
       "tag": "0024_familiar_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1777062916955,
+      "tag": "0025_careful_bloodstorm",
+      "breakpoints": true
     }
   ]
 }
