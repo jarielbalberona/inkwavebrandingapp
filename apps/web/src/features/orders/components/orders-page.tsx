@@ -600,35 +600,3 @@ function formatLineItems(order: Order): string {
 
   return  order.items.length.toLocaleString()
 }
-
-function formatOrderItemLabel(item: Order["items"][number]): string {
-  if (item.item_type === "cup") {
-    return item.cup.sku
-  }
-
-  if (item.item_type === "lid") {
-    return item.lid.sku
-  }
-
-  if (item.item_type === "custom_charge") {
-    return item.description_snapshot
-  }
-
-  return item.non_stock_item.name
-}
-
-function formatOrderItemDetails(item: Order["items"][number]): string {
-  if (item.item_type === "cup") {
-    return `${item.cup.type} · ${item.cup.brand} · ${item.cup.size} · ${item.cup.diameter}`
-  }
-
-  if (item.item_type === "lid") {
-    return `${item.lid.type} · ${item.lid.brand} · ${item.lid.color} · ${item.description_snapshot}`
-  }
-
-  if (item.item_type === "custom_charge") {
-    return "Custom charge"
-  }
-
-  return item.non_stock_item.description?.trim() || item.description_snapshot
-}
