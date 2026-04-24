@@ -361,6 +361,21 @@ function parseCreateOrderApiError(data: unknown) {
   return createOrderErrorResponseSchema.safeParse(data)
 }
 
+/** Primary user-facing `error` string from order API error bodies, including DB persistence responses. */
+function orderApiErrorMessage(data: unknown, fallback: string): string {
+  const parsed = parseCreateOrderApiError(data)
+  if (parsed.success) {
+    return parsed.data.error
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    const value = (data as { error: unknown }).error
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value
+    }
+  }
+  return fallback
+}
+
 export async function getOrderInvoice(orderId: string): Promise<Invoice> {
   try {
     const data = await api.get<unknown>(`/orders/${orderId}/invoice`)
@@ -442,32 +457,29 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
   } catch (error) {
     if (error instanceof ApiClientError) {
       const parsedError = parseCreateOrderApiError(error.data)
+      const lineItems = parsedError.success ? (parsedError.data.line_items ?? []) : []
 
       if (error.status === 400) {
         throw new CreateOrderError(
-          parsedError.success
-            ? parsedError.data.error
-            : "Check the selected customer, items, and quantities.",
-          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+          orderApiErrorMessage(error.data, "Check the selected customer, items, and quantities."),
+          lineItems,
         )
       }
 
       if (error.status === 404) {
         throw new CreateOrderError(
-          parsedError.success
-            ? parsedError.data.error
-            : "A selected customer, cup, or lid no longer exists.",
-          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+          orderApiErrorMessage(error.data, "A selected customer, cup, or lid no longer exists."),
+          lineItems,
         )
       }
 
       if (error.status === 409) {
         throw new CreateOrderError(
-          parsedError.success
-            ? parsedError.data.error
-            : error.message ||
-                "Unable to create order. Check customer/item status, duplicate items, or available stock.",
-          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+          orderApiErrorMessage(
+            error.data,
+            "Unable to create order. Check customer/item status, duplicate items, or available stock.",
+          ),
+          lineItems,
         )
       }
 
@@ -475,7 +487,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
         throw new Error("You do not have permission to record fulfillment.")
       }
 
-      throw new Error("Unable to create order.")
+      throw new CreateOrderError(orderApiErrorMessage(error.data, "Unable to create order."), lineItems)
     }
 
     throw error
@@ -541,7 +553,7 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
         throw new Error("You do not have permission to manage orders.")
       }
 
-      throw new Error("Unable to update order.")
+      throw new CreateOrderError(orderApiErrorMessage(error.data, "Unable to update order."), [])
     }
 
     throw error

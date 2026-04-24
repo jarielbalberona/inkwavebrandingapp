@@ -293,6 +293,92 @@ interface OrderPersistenceErrorResponse {
   detail?: string
 }
 
+/**
+ * Turn Postgres error metadata into a short message operators can act on
+ * (refresh, re-pick customer/items, fix quantities, or retry).
+ */
+function userMessageForOrderDbError(
+  code: string,
+  constraint: string | undefined,
+  detail: string | undefined,
+): string {
+  const c = (constraint ?? "").toLowerCase()
+  const d = (detail ?? "").toLowerCase()
+
+  if (code === "23503") {
+    if (c.includes("customer_id") || d.includes("customers")) {
+      return "The customer on this order is no longer in the system. Refresh the page and select an active customer."
+    }
+    if (c.includes("cup_id") || d.includes('table "cups"') || d.includes("table 'cups'")) {
+      return "A selected cup is no longer in the catalog. Refresh the page, remove that line, or pick another cup."
+    }
+    if (c.includes("lid_id") || d.includes('table "lids"') || d.includes("table 'lids'")) {
+      return "A selected lid is no longer in the catalog. Refresh the page, remove that line, or pick another lid."
+    }
+    if (c.includes("non_stock_item") || d.includes("non_stock_items")) {
+      return "A selected general item is no longer available. Refresh the page, remove that line, or pick another item."
+    }
+    if (c.includes("created_by_user")) {
+      return "Your user account could not be linked to this order. Sign out and back in, or ask an admin to check your account."
+    }
+    return "Something on this order points to a record that was removed. Refresh the page, then re-select the customer and every line item."
+  }
+
+  if (code === "23505") {
+    if (c.includes("order_number") || c.includes("orders_order_number")) {
+      return "We could not save this order because the order number collided. Please try again."
+    }
+    return "This order could not be saved because it conflicts with existing data. Change the line items or try again."
+  }
+
+  if (code === "23514") {
+    if (c.includes("order_items_quantity_positive")) {
+      return "Each line must have a quantity of at least 1."
+    }
+    if (c.includes("order_items_unit_sell_price") || c.includes("order_items_unit_cost_price")) {
+      return "A line has an invalid price. Check sell and cost prices on custom charges and try again."
+    }
+    if (c.includes("order_items_description_snapshot")) {
+      return "A line is missing a description. Add a name or description for that line and try again."
+    }
+    if (c.includes("order_items_exactly_one_item")) {
+      return "Each stock line must be either a cup, a lid, or a general item — not a mix on one line. Adjust the line and try again."
+    }
+    if (c.includes("order_items_item_type_matches_reference")) {
+      return "A line’s type does not match the product you selected. Refresh the page and re-add that line, or pick a product that matches the line type."
+    }
+    if (c.includes("orders_order_number")) {
+      return "The order number is not valid. Please try again or contact support if this keeps happening."
+    }
+    return "Some order details did not pass validation. Check line types, products, quantities, and prices, then try again."
+  }
+
+  if (code === "23502") {
+    return "A required value is missing on the order. Fill in the highlighted fields and try again."
+  }
+
+  if (code === "22P02") {
+    if (d.includes("uuid") || c.includes("uuid")) {
+      return "The form contains an invalid id. Refresh the page and re-select the customer and products."
+    }
+    return "The order contains a value the system cannot read. Check quantities and prices, or refresh the page and try again."
+  }
+
+  if (code === "42703" || code === "42P01") {
+    return "The app could not save this order because the server is missing a required update. Refresh and try again, or ask an admin to run the latest database migration."
+  }
+
+  if (code === "40001" || code === "40P01") {
+    return "The system was busy and could not finish saving. Please try again in a moment."
+  }
+
+  if (code === "57014") {
+    return "Saving the order took too long. Try again with fewer line items, or wait and retry."
+  }
+
+  return "The order could not be saved. Check your network, refresh the form, and try again. If a customer or product was deleted while you were working, re-select it."
+}
+
 function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse | null {
   const code = getDbErrorCode(error)
 
@@ -306,7 +392,7 @@ function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse 
   if (code === "23503") {
     return {
       statusCode: 409,
-      error: "Order references a record that no longer exists.",
+      error: userMessageForOrderDbError(code, constraint, detail),
       code,
       constraint,
       detail,
@@ -316,7 +402,7 @@ function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse 
   if (code === "23505") {
     return {
       statusCode: 409,
-      error: "Order conflicts with an existing record.",
+      error: userMessageForOrderDbError(code, constraint, detail),
       code,
       constraint,
       detail,
@@ -326,7 +412,17 @@ function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse 
   if (code === "23514" || code === "23502" || code === "22P02") {
     return {
       statusCode: 400,
-      error: "Order request violates a database constraint.",
+      error: userMessageForOrderDbError(code, constraint, detail),
+      code,
+      constraint,
+      detail,
+    }
+  }
+
+  if (code === "42703" || code === "42P01" || code === "40001" || code === "40P01" || code === "57014") {
+    return {
+      statusCode: 500,
+      error: userMessageForOrderDbError(code, constraint, detail),
       code,
       constraint,
       detail,
@@ -335,7 +431,7 @@ function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse 
 
   return {
     statusCode: 500,
-    error: "Order request failed while writing to the database.",
+    error: userMessageForOrderDbError(code, constraint, detail),
     code,
     constraint,
     detail,
