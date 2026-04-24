@@ -3,7 +3,13 @@ import { randomUUID } from "node:crypto"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertAdmin } from "../auth/authorization.js"
 import { OrdersRepository } from "../orders/orders.repository.js"
-import { toInvoiceDto, type InvoiceDto } from "./invoices.types.js"
+import type { InvoicesListQuery } from "./invoices.schemas.js"
+import {
+  toInvoiceDto,
+  toInvoiceListItemDto,
+  type InvoiceDto,
+  type InvoiceListItemDto,
+} from "./invoices.types.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 
 export class InvoiceNotFoundError extends Error {
@@ -44,6 +50,14 @@ export class InvoicesService {
     private readonly ordersRepository: OrdersRepository,
   ) {}
 
+  async list(query: InvoicesListQuery, user: SafeUser): Promise<InvoiceListItemDto[]> {
+    assertAdmin(user)
+
+    const invoices = await this.invoicesRepository.list(query)
+
+    return invoices.map((invoice) => toInvoiceListItemDto(invoice, user))
+  }
+
   async getById(invoiceId: string, user: SafeUser): Promise<InvoiceDto> {
     assertAdmin(user)
 
@@ -70,6 +84,8 @@ export class InvoicesService {
 
   async generateForOrder(orderId: string, user: SafeUser): Promise<InvoiceDto> {
     assertAdmin(user)
+
+    // MVP invoices are immutable snapshots, so there is no separate status lifecycle yet.
 
     const existingInvoice = await this.invoicesRepository.findByOrderId(orderId)
 

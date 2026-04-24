@@ -12,6 +12,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core"
 
+import { customers } from "./customers.js"
 import { orderItems, orderLineItemTypeEnum, orders } from "./orders.js"
 import { users } from "./users.js"
 
@@ -24,7 +25,9 @@ export const invoices = pgTable(
       .notNull()
       .references(() => orders.id, { onDelete: "restrict" }),
     orderNumberSnapshot: varchar("order_number_snapshot", { length: 80 }).notNull(),
-    customerId: uuid("customer_id").notNull(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
     customerCodeSnapshot: varchar("customer_code_snapshot", { length: 80 }),
     customerBusinessNameSnapshot: varchar("customer_business_name_snapshot", { length: 160 }).notNull(),
     customerContactPersonSnapshot: varchar("customer_contact_person_snapshot", { length: 160 }),
@@ -87,6 +90,10 @@ export const invoicesRelations = relations(invoices, ({ many, one }) => ({
   order: one(orders, {
     fields: [invoices.orderId],
     references: [orders.id],
+  }),
+  customer: one(customers, {
+    fields: [invoices.customerId],
+    references: [customers.id],
   }),
   createdByUser: one(users, {
     fields: [invoices.createdByUserId],

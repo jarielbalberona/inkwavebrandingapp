@@ -11,6 +11,7 @@ import { AuthorizationError, sendForbidden } from "../auth/authorization.js"
 import { AuthService } from "../auth/auth.service.js"
 import { OrdersRepository } from "../orders/orders.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
+import { invoicesListQuerySchema } from "./invoices.schemas.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 import {
   InvoiceAlreadyExistsError,
@@ -30,6 +31,17 @@ export async function handleInvoicesRoute(
   context: InvoicesRouteContext,
 ): Promise<boolean> {
   const path = getRequestPath(request)
+
+  if (path === "/invoices" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const query = invoicesListQuerySchema.parse(
+        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
+      )
+
+      sendJson(response, 200, { invoices: await service.list(query, user) })
+    })
+    return true
+  }
 
   const orderInvoiceMatch = path.match(/^\/orders\/([^/]+)\/invoice$/)
 

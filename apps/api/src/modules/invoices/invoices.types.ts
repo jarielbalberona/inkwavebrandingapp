@@ -1,6 +1,22 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertAdmin } from "../auth/authorization.js"
 import type { InvoiceWithRelations } from "./invoices.repository.js"
+import type { Invoice } from "../../db/schema/index.js"
+
+export interface InvoiceListItemDto {
+  id: string
+  invoice_number: string
+  order_id: string
+  order_number_snapshot: string
+  customer: {
+    id: string
+    customer_code: string | null
+    business_name: string
+  }
+  subtotal: string
+  created_at: string
+  updated_at: string
+}
 
 export interface InvoiceItemDto {
   id: string
@@ -31,6 +47,25 @@ export interface InvoiceDto {
   items: InvoiceItemDto[]
   created_at: string
   updated_at: string
+}
+
+export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceListItemDto {
+  assertAdmin(user)
+
+  return {
+    id: invoice.id,
+    invoice_number: invoice.invoiceNumber,
+    order_id: invoice.orderId,
+    order_number_snapshot: invoice.orderNumberSnapshot,
+    customer: {
+      id: invoice.customerId,
+      customer_code: invoice.customerCodeSnapshot ?? null,
+      business_name: invoice.customerBusinessNameSnapshot,
+    },
+    subtotal: invoice.subtotal,
+    created_at: invoice.createdAt.toISOString(),
+    updated_at: invoice.updatedAt.toISOString(),
+  }
 }
 
 export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): InvoiceDto {

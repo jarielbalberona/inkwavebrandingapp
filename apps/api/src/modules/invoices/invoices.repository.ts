@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm"
+import { and, desc, eq, gte, ilike, lte, or } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
@@ -7,6 +7,7 @@ import {
   type NewInvoice,
   type NewInvoiceItem,
 } from "../../db/schema/index.js"
+import type { InvoicesListQuery } from "./invoices.schemas.js"
 
 export type InvoiceWithRelations = NonNullable<
   Awaited<ReturnType<InvoicesRepository["findByIdWithRelations"]>>
@@ -14,6 +15,29 @@ export type InvoiceWithRelations = NonNullable<
 
 export class InvoicesRepository {
   constructor(private readonly db: DatabaseClient) {}
+
+  async list(query: InvoicesListQuery) {
+    const conditions = [
+      query.search
+        ? or(
+            ilike(invoices.invoiceNumber, `%${query.search}%`),
+            ilike(invoices.orderNumberSnapshot, `%${query.search}%`),
+            ilike(invoices.customerBusinessNameSnapshot, `%${query.search}%`),
+            ilike(invoices.customerCodeSnapshot, `%${query.search}%`),
+          )
+        : undefined,
+      query.customer_id ? eq(invoices.customerId, query.customer_id) : undefined,
+      query.order_id ? eq(invoices.orderId, query.order_id) : undefined,
+      query.start_date ? gte(invoices.createdAt, query.start_date) : undefined,
+      query.end_date ? lte(invoices.createdAt, query.end_date) : undefined,
+    ].filter(Boolean)
+
+    return this.db
+      .select()
+      .from(invoices)
+      .where(and(...conditions))
+      .orderBy(desc(invoices.createdAt))
+  }
 
   async createInvoiceWithItems(input: {
     invoice: NewInvoice
