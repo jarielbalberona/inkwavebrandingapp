@@ -27,12 +27,14 @@ Do not call a direct production push “staging by confidence.” That is lazy a
    - `pnpm --filter @workspace/api build`
 4. Confirm the web build still passes locally:
    - `pnpm --filter web build`
-5. Run migrations against the target database:
+5. Deploy the API service.
+6. Render runs the API `preDeployCommand` before switching traffic:
    - `pnpm --filter @workspace/api db:migrate`
-6. Deploy the API service.
 7. Wait for the API health check at `/health` to return `200`.
 8. Deploy the web service.
-9. Run the smoke checks below.
+9. If this is a brand-new database, seed the bootstrap admin after the first successful API deploy:
+   - `pnpm --filter @workspace/api seed:admin`
+10. Run the smoke checks below.
 
 If step 2 is skipped, the rest of this runbook is worthless.
 
@@ -93,6 +95,8 @@ That means:
 ## Known Manual Work
 
 - Render environment values are still dashboard-managed
+- API database migrations are now expected to run through the Render `preDeployCommand`
+- bootstrap admin seeding is still a deliberate post-deploy operator step
 - no CI/CD pipeline is handling promotion automatically
 - no live post-deploy smoke automation exists in this repo yet
 
