@@ -29,7 +29,7 @@ export function ProductsPage() {
       }
 
       if (hasPermission(currentUser.data, appPermissions.nonStockItemsView)) {
-        tabs.push({ value: "general-items", label: "General Items", content: <GeneralItemsPage /> })
+        tabs.push({ value: "general-items", label: "General", content: <GeneralItemsPage /> })
       }
 
       return tabs
