@@ -476,9 +476,33 @@ export class OrdersService {
     assertPermission(user, "orders.view")
 
     const parsedQuery = orderListQuerySchema.parse(query)
-    const orders = await this.ordersRepository.listWithRelations(parsedQuery)
+    const orders = await this.listOrdersWithEmptyStateFallback(parsedQuery)
 
     return orders.map((order) => toOrderDto(order, user))
+  }
+
+  private async listOrdersWithEmptyStateFallback(query: OrderListQuery) {
+    try {
+      return await this.ordersRepository.listWithRelations(query)
+    } catch (error) {
+      if (!(await this.shouldReturnEmptyOrderList(error))) {
+        throw error
+      }
+
+      return []
+    }
+  }
+
+  private async shouldReturnEmptyOrderList(error: unknown): Promise<boolean> {
+    if (!isRecoverableOrderListSchemaError(error)) {
+      return false
+    }
+
+    try {
+      return !(await this.ordersRepository.hasAnyOrders())
+    } catch {
+      return false
+    }
   }
 
   async getById(orderId: string, user: SafeUser): Promise<OrderDto> {
@@ -1197,6 +1221,28 @@ export class OrdersService {
       return reorderedOrders.map((order) => toOrderDto(order, user))
     })
   }
+}
+
+function isRecoverableOrderListSchemaError(error: unknown): boolean {
+  const code = getDbErrorCode(error)
+
+  return code === "42P01" || code === "42703"
+}
+
+function getDbErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null
+  }
+
+  if ("code" in error && typeof (error as { code?: unknown }).code === "string") {
+    return (error as { code: string }).code
+  }
+
+  if ("cause" in error) {
+    return getDbErrorCode((error as { cause?: unknown }).cause)
+  }
+
+  return null
 }
 
 function createOrderNumber(): string {

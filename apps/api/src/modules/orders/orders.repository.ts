@@ -105,6 +105,12 @@ export class OrdersRepository {
     })
   }
 
+  async hasAnyOrders(): Promise<boolean> {
+    const rows = await this.db.select({ id: orders.id }).from(orders).limit(1)
+
+    return rows.length > 0
+  }
+
   async getMinimumPriority(): Promise<number | null> {
     const result = await this.db
       .select({ value: sql<number | null>`min(${orders.priority})` })
