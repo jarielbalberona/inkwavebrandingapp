@@ -1,155 +1,125 @@
 import {
   Document,
-  Page,
-  StyleSheet,
   Text,
   View,
 } from "@react-pdf/renderer"
 
 import { formatMoney } from "../shared/format.js"
+import {
+  PdfHeader,
+  PdfMetaGrid,
+  PdfPageShell,
+  PdfPartiesBlock,
+  PdfSection,
+  PdfStatusBadge,
+  PdfSummaryBlock,
+  PdfTable,
+  sharedStyles,
+} from "../shared/index.js"
 import type { InvoicePdfData } from "../shared/types/index.js"
-
-const styles = StyleSheet.create({
-  page: {
-    padding: 32,
-    fontSize: 11,
-    fontFamily: "Helvetica",
-    color: "#111827",
-  },
-  header: {
-    marginBottom: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 700,
-    marginBottom: 4,
-  },
-  label: {
-    fontSize: 9,
-    color: "#6b7280",
-    marginBottom: 2,
-    textTransform: "uppercase",
-  },
-  block: {
-    marginBottom: 12,
-  },
-  row: {
-    flexDirection: "row",
-  },
-  tableHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#d1d5db",
-    paddingBottom: 8,
-    marginBottom: 8,
-    fontSize: 9,
-    color: "#6b7280",
-    textTransform: "uppercase",
-  },
-  tableRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    paddingVertical: 8,
-  },
-  colDescription: {
-    width: "46%",
-    paddingRight: 8,
-  },
-  colType: {
-    width: "12%",
-    paddingRight: 8,
-  },
-  colQty: {
-    width: "12%",
-    textAlign: "right",
-    paddingRight: 8,
-  },
-  colUnit: {
-    width: "15%",
-    textAlign: "right",
-    paddingRight: 8,
-  },
-  colLine: {
-    width: "15%",
-    textAlign: "right",
-  },
-  totalWrap: {
-    marginTop: 18,
-    alignSelf: "flex-end",
-    width: 220,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    padding: 12,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  totalLabel: {
-    fontSize: 10,
-    color: "#6b7280",
-    textTransform: "uppercase",
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: 700,
-  },
-})
 
 export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Ink Wave Invoice</Text>
-            <Text>{invoice.invoice_number}</Text>
-            <Text>Order: {invoice.order_number_snapshot}</Text>
-          </View>
-
-          <View>
-            <Text style={styles.label}>Generated</Text>
-            <Text>{new Date(invoice.created_at).toLocaleDateString("en-PH")}</Text>
-          </View>
+      <PdfPageShell
+        header={
+          <PdfHeader
+            brand={<Text style={sharedStyles.hero}>Ink Wave</Text>}
+            title="Invoice"
+            reference={invoice.invoice_number}
+            subtitle={invoice.order_number_snapshot}
+            status={<PdfStatusBadge label="Pending" tone="warning" />}
+          />
+        }
+        footerLeft={`Generated ${new Date(invoice.created_at).toLocaleDateString("en-PH")}`}
+        footerCenter="Ink Wave Branding App"
+      >
+        <View style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Text style={sharedStyles.invoiceRef}>{invoice.invoice_number}</Text>
+          <Text style={sharedStyles.muted}>Print order invoice</Text>
         </View>
 
-        <View style={styles.block}>
-          <Text style={styles.label}>Bill To</Text>
-          <Text>{invoice.customer.business_name}</Text>
-          {invoice.customer.customer_code ? <Text>Code: {invoice.customer.customer_code}</Text> : null}
-          {invoice.customer.contact_person ? <Text>Contact: {invoice.customer.contact_person}</Text> : null}
-          {invoice.customer.contact_number ? <Text>Phone: {invoice.customer.contact_number}</Text> : null}
-          {invoice.customer.email ? <Text>Email: {invoice.customer.email}</Text> : null}
-          {invoice.customer.address ? <Text>Address: {invoice.customer.address}</Text> : null}
-        </View>
+        <PdfSection>
+          <PdfPartiesBlock
+            left={{
+              label: "From",
+              name: "Ink Wave Branding App",
+              lines: ["Cup printing operations"],
+            }}
+            right={{
+              label: "To",
+              name: invoice.customer.business_name,
+              lines: getCustomerLines(invoice),
+            }}
+          />
+        </PdfSection>
 
-        <View style={[styles.row, styles.tableHeader]}>
-          <Text style={styles.colDescription}>Description</Text>
-          <Text style={styles.colType}>Type</Text>
-          <Text style={styles.colQty}>Qty</Text>
-          <Text style={styles.colUnit}>Unit Price</Text>
-          <Text style={styles.colLine}>Line Total</Text>
-        </View>
+        <PdfSection>
+          <PdfMetaGrid
+            leftTitle="Invoice details"
+            leftItems={[
+              { label: "Invoice number", value: invoice.invoice_number },
+              { label: "Generated", value: new Date(invoice.created_at).toLocaleDateString("en-PH") },
+            ]}
+            rightTitle="Order details"
+            rightItems={[
+              { label: "Order reference", value: invoice.order_number_snapshot },
+              { label: "Line items", value: invoice.items.length.toLocaleString() },
+            ]}
+          />
+        </PdfSection>
 
-        {invoice.items.map((item) => (
-          <View key={item.id} style={[styles.row, styles.tableRow]}>
-            <Text style={styles.colDescription}>{item.description_snapshot}</Text>
-            <Text style={styles.colType}>{formatInvoiceItemType(item.item_type)}</Text>
-            <Text style={styles.colQty}>{item.quantity.toLocaleString()}</Text>
-            <Text style={styles.colUnit}>{formatMoney(item.unit_price)}</Text>
-            <Text style={styles.colLine}>{formatMoney(item.line_total)}</Text>
-          </View>
-        ))}
+        <PdfSection title="Charges">
+          <PdfTable
+            columns={[
+              {
+                key: "item",
+                title: "Item",
+                width: "26%",
+                render: (item) => item.description_snapshot,
+              },
+              {
+                key: "specs",
+                title: "Specs",
+                width: "28%",
+                render: (item) => formatInvoiceItemType(item.item_type),
+              },
+              {
+                key: "quantity",
+                title: "Quantity",
+                width: "12%",
+                align: "right",
+                render: (item) => item.quantity.toLocaleString(),
+              },
+              {
+                key: "unitPrice",
+                title: "Unit Price",
+                width: "17%",
+                align: "right",
+                render: (item) => formatMoney(item.unit_price),
+              },
+              {
+                key: "total",
+                title: "Total",
+                width: "17%",
+                align: "right",
+                render: (item) => formatMoney(item.line_total),
+              },
+            ]}
+            rows={invoice.items}
+          />
 
-        <View style={styles.totalWrap}>
-          <Text style={styles.totalLabel}>Subtotal</Text>
-          <View style={styles.totalRow}>
-            <Text>PHP</Text>
-            <Text style={styles.totalValue}>{formatMoney(invoice.subtotal)}</Text>
-          </View>
-        </View>
-      </Page>
+          <PdfSummaryBlock
+            rows={[
+              {
+                label: "Subtotal",
+                value: formatMoney(invoice.subtotal),
+                emphasis: true,
+              },
+            ]}
+          />
+        </PdfSection>
+      </PdfPageShell>
     </Document>
   )
 }
@@ -165,4 +135,14 @@ function formatInvoiceItemType(itemType: InvoicePdfData["items"][number]["item_t
     case "custom_charge":
       return "Charge"
   }
+}
+
+function getCustomerLines(invoice: InvoicePdfData) {
+  return [
+    invoice.customer.contact_person,
+    invoice.customer.contact_number,
+    invoice.customer.email,
+    invoice.customer.address,
+    invoice.customer.customer_code ? `Code: ${invoice.customer.customer_code}` : null,
+  ].filter((line): line is string => Boolean(line))
 }

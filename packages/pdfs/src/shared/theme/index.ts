@@ -1,53 +1,201 @@
-export interface PdfSpacingScale {
-  xs: number
-  sm: number
-  md: number
-  lg: number
-  xl: number
-  xxl: number
-}
+import { StyleSheet } from "@react-pdf/renderer"
 
-export interface PdfTypographyScale {
-  caption: number
-  body: number
-  label: number
-  title: number
-}
+export const invoiceTokens = {
+  spacing: {
+    1: 4,
+    2: 8,
+    3: 12,
+    4: 16,
+    5: 20,
+    6: 24,
+    8: 32,
+  },
+  type: {
+    xs: 7,
+    sm: 8,
+    md: 9,
+    base: 10,
+    lg: 11,
+    xl: 12,
+    xxl: 14,
+    hero: 18,
+  },
+  radius: {
+    sm: 8,
+    md: 12,
+  },
+  colors: {
+    page: "#ffffff",
+    textPrimary: "#1f2933",
+    textMuted: "#667085",
+    textSoft: "#8b98a8",
+    borderDefault: "#e7e1da",
+    borderStrong: "#d8d2cb",
+    borderFooter: "#efe7de",
+    brand: "#111827",
+    brandWash: "#f3f4f6",
+    success: "#1f8f61",
+    successWash: "#eaf8f1",
+    warning: "#b97316",
+    warningWash: "#fff5df",
+    danger: "#b42318",
+    dangerWash: "#feefee",
+  },
+  fonts: {
+    regular: "Helvetica",
+    bold: "Helvetica-Bold",
+  },
+} as const
 
-export interface PdfPalette {
-  text: string
-  mutedText: string
-  border: string
-  panel: string
-  accent: string
-  accentSoft: string
-  success: string
-  danger: string
-}
-
-export const pdfSpacing: PdfSpacingScale = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-}
-
-export const pdfTypography: PdfTypographyScale = {
-  caption: 8,
-  body: 10,
-  label: 9,
-  title: 22,
-}
-
-export const pdfPalette: PdfPalette = {
-  text: "#111827",
-  mutedText: "#6b7280",
-  border: "#d1d5db",
-  panel: "#f9fafb",
-  accent: "#1f2937",
-  accentSoft: "#e5e7eb",
-  success: "#166534",
-  danger: "#991b1b",
-}
+export const sharedStyles = StyleSheet.create({
+  page: {
+    backgroundColor: invoiceTokens.colors.page,
+    color: invoiceTokens.colors.textPrimary,
+    fontFamily: invoiceTokens.fonts.regular,
+    fontSize: invoiceTokens.type.base,
+    lineHeight: 1.45,
+    paddingTop: 80,
+    paddingBottom: 48,
+    paddingHorizontal: 32,
+  },
+  content: {
+    marginTop: 16,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  fixedHeader: {
+    position: "absolute",
+    top: 0,
+    left: 32,
+    right: 32,
+    paddingTop: 24,
+    paddingBottom: 8,
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: invoiceTokens.colors.borderStrong,
+    backgroundColor: invoiceTokens.colors.page,
+  },
+  fixedFooter: {
+    position: "absolute",
+    bottom: 24,
+    left: 32,
+    right: 32,
+    paddingTop: 8,
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: invoiceTokens.colors.borderFooter,
+  },
+  splitRow: {
+    display: "flex",
+    flexDirection: "row",
+    gap: 18,
+  },
+  column: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+  },
+  overline: {
+    color: invoiceTokens.colors.textSoft,
+    fontSize: invoiceTokens.type.xs,
+    textTransform: "uppercase",
+  },
+  title: {
+    color: invoiceTokens.colors.textPrimary,
+    fontFamily: invoiceTokens.fonts.bold,
+    fontSize: invoiceTokens.type.xl,
+    textAlign: "right",
+  },
+  hero: {
+    color: invoiceTokens.colors.textPrimary,
+    fontFamily: invoiceTokens.fonts.bold,
+    fontSize: invoiceTokens.type.hero,
+  },
+  invoiceRef: {
+    color: invoiceTokens.colors.textPrimary,
+    fontFamily: invoiceTokens.fonts.bold,
+    fontSize: invoiceTokens.type.xxl,
+  },
+  muted: {
+    color: invoiceTokens.colors.textMuted,
+    fontSize: invoiceTokens.type.sm,
+  },
+  body: {
+    color: invoiceTokens.colors.textPrimary,
+    fontSize: invoiceTokens.type.md,
+  },
+  bodyBold: {
+    color: invoiceTokens.colors.textPrimary,
+    fontFamily: invoiceTokens.fonts.bold,
+    fontSize: invoiceTokens.type.md,
+  },
+  section: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  sectionTitle: {
+    color: invoiceTokens.colors.textPrimary,
+    fontFamily: invoiceTokens.fonts.bold,
+    fontSize: invoiceTokens.type.lg,
+  },
+  metaStack: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+  },
+  metaRow: {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  table: {
+    display: "flex",
+    flexDirection: "column",
+  },
+  tableHeader: {
+    display: "flex",
+    flexDirection: "row",
+    paddingTop: 4,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: invoiceTokens.colors.borderStrong,
+  },
+  tableRow: {
+    display: "flex",
+    flexDirection: "row",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: invoiceTokens.colors.borderDefault,
+  },
+  cell: {
+    paddingHorizontal: 6,
+    justifyContent: "flex-start",
+  },
+  summaryWrap: {
+    display: "flex",
+    alignItems: "flex-end",
+    paddingTop: 4,
+  },
+  summaryBox: {
+    width: "44%",
+    display: "flex",
+    flexDirection: "column",
+  },
+  summaryRow: {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  footerBlock: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+})
