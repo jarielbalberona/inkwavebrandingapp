@@ -16,6 +16,7 @@ export const appPermissions = {
   inventoryAdjust: "inventory.adjust",
   ordersView: "orders.view",
   ordersManage: "orders.manage",
+  ordersFulfillmentRecord: "orders.fulfillment.record",
   ordersCustomChargesManage: "orders.custom_charges.manage",
   ordersPricingView: "orders.pricing.view",
   invoicesView: "invoices.view",

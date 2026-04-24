@@ -637,7 +637,7 @@ export class OrdersService {
     input: CreateOrderLineItemProgressEventInput,
     user: SafeUser,
   ) {
-    assertPermission(user, "orders.manage")
+    assertPermission(user, "orders.fulfillment.record")
 
     const parsedInput = createOrderLineItemProgressEventSchema.parse(input)
 

@@ -100,7 +100,13 @@ export const permissionDefinitions = [
   {
     key: "orders.manage",
     label: "Manage orders",
-    description: "Create, edit, cancel, reprioritize, and record fulfillment progress on orders.",
+    description: "Create, edit, cancel, and reprioritize orders.",
+    group: "orders",
+  },
+  {
+    key: "orders.fulfillment.record",
+    label: "Record order fulfillment",
+    description: "Record fulfillment progress events on order line items.",
     group: "orders",
   },
   {
@@ -228,6 +234,14 @@ export function resolveEffectivePermissions(
 
   if (effective.has("orders.manage")) {
     effective.add("orders.view")
+  }
+
+  if (effective.has("orders.fulfillment.record")) {
+    effective.add("orders.view")
+  }
+
+  if (effective.has("orders.manage")) {
+    effective.add("orders.fulfillment.record")
   }
 
   if (effective.has("orders.custom_charges.manage")) {

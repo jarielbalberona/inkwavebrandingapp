@@ -21,6 +21,7 @@ const appPermissionSchema = z.enum([
   appPermissions.inventoryAdjust,
   appPermissions.ordersView,
   appPermissions.ordersManage,
+  appPermissions.ordersFulfillmentRecord,
   appPermissions.ordersCustomChargesManage,
   appPermissions.ordersPricingView,
   appPermissions.invoicesView,

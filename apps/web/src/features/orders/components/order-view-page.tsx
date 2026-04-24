@@ -47,6 +47,10 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
   const canViewOrders = hasPermission(currentUser.data, appPermissions.ordersView)
   const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
+  const canRecordFulfillment = hasPermission(
+    currentUser.data,
+    appPermissions.ordersFulfillmentRecord,
+  )
   const orderQuery = useOrderQuery(orderId)
   const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
   const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
@@ -139,7 +143,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
               <Link to="/orders">Back to orders</Link>
             </Button>
             {order ? (
-              canManageOrders ? (
+              canRecordFulfillment ? (
                 <Button asChild variant="outline">
                   <Link to="/orders/$orderId/fulfillment" params={{ orderId: order.id }}>
                     Fulfillment

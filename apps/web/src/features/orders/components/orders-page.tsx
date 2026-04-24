@@ -79,6 +79,10 @@ export function OrdersPage() {
   const navigate = useNavigate()
   const canViewOrders = hasPermission(currentUser.data, appPermissions.ordersView)
   const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
+  const canRecordFulfillment = hasPermission(
+    currentUser.data,
+    appPermissions.ordersFulfillmentRecord,
+  )
   const [status, setStatus] = useState<OrderStatus | "all">("all")
   const [customerFilterId, setCustomerFilterId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<OrdersSortOption>("priority")
@@ -343,26 +347,28 @@ export function OrdersPage() {
                               onKeyDown={(event) => event.stopPropagation()}
                             >
                               <div className="flex flex-wrap gap-2">
-                                <Button
-                                  asChild
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={
-                                    !order.items.some(
-                                      (item) =>
-                                        item.item_type !== "non_stock_item" &&
-                                        item.item_type !== "custom_charge",
-                                    )
-                                  }
-                                >
-                                  <Link
-                                    to="/orders/$orderId/fulfillment"
-                                    params={{ orderId: order.id }}
+                                {canRecordFulfillment ? (
+                                  <Button
+                                    asChild
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={
+                                      !order.items.some(
+                                        (item) =>
+                                          item.item_type !== "non_stock_item" &&
+                                          item.item_type !== "custom_charge",
+                                      )
+                                    }
                                   >
-                                    Fulfillment Progress
-                                  </Link>
-                                </Button>
+                                    <Link
+                                      to="/orders/$orderId/fulfillment"
+                                      params={{ orderId: order.id }}
+                                    >
+                                      Fulfillment Progress
+                                    </Link>
+                                  </Button>
+                                ) : null}
                                 <Button
                                   asChild
                                   type="button"
@@ -376,19 +382,21 @@ export function OrdersPage() {
                                     View
                                   </Link>
                                 </Button>
-                                <Button
-                                  asChild
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                >
-                                  <Link
-                                    to="/orders/$orderId/edit"
-                                    params={{ orderId: order.id }}
+                                {canManageOrders ? (
+                                  <Button
+                                    asChild
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
                                   >
-                                    Edit
-                                  </Link>
-                                </Button>
+                                    <Link
+                                      to="/orders/$orderId/edit"
+                                      params={{ orderId: order.id }}
+                                    >
+                                      Edit
+                                    </Link>
+                                  </Button>
+                                ) : null}
                               </div>
                             </TableCell>
                           </TableRow>

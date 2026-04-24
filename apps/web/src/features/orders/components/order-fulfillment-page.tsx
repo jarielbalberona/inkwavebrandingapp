@@ -50,7 +50,10 @@ import {
 export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
   const orderQuery = useOrderQuery(orderId)
-  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
+  const canRecordFulfillment = hasPermission(
+    currentUser.data,
+    appPermissions.ordersFulfillmentRecord,
+  )
   const createProgressEventMutation = useCreateProgressEventMutation()
   const [selectedLineItemId, setSelectedLineItemId] = useState<string | null>(null)
   const [progressStage, setProgressStage] = useState<ProgressStage>("printed")
@@ -76,7 +79,7 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
   }
 
-  if (!canManageOrders) {
+  if (!canRecordFulfillment) {
     const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
 
     if (fallbackRoute && fallbackRoute !== `/orders/${orderId}/fulfillment`) {
@@ -85,7 +88,7 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
 
     return (
       <Alert>
-        <AlertDescription>Fulfillment updates require order-management permission.</AlertDescription>
+        <AlertDescription>Fulfillment updates require fulfillment-record permission.</AlertDescription>
       </Alert>
     )
   }

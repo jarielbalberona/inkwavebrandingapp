@@ -472,7 +472,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
       }
 
       if (error.status === 403) {
-        throw new Error("You do not have permission to manage orders.")
+        throw new Error("You do not have permission to record fulfillment.")
       }
 
       throw new Error("Unable to create order.")
