@@ -375,7 +375,7 @@ export function LidsPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{selectedLid ? "Lid Detail" : "Create Lid"}</DialogTitle>
             <DialogDescription>

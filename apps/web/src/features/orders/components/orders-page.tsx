@@ -152,14 +152,7 @@ export function OrdersPage() {
       <Card>
         <CardHeader className="gap-3">
           <div className="flex items-start justify-between gap-3">
-            <div className="grid gap-1">
-              <CardTitle>Orders</CardTitle>
-              <CardDescription>
-                Order creation and editing now live on dedicated pages. This
-                screen stays focused on list visibility and fulfillment
-                operations.
-              </CardDescription>
-            </div>
+          <CardTitle>Orders</CardTitle>
             {canManageOrders ? (
               <Button asChild>
                 <Link to="/orders/new">Create Order</Link>

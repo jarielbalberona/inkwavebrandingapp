@@ -50,7 +50,7 @@ import {
   useInventoryBalancesQuery,
   useStockIntakeMutation,
 } from "@/features/inventory/hooks/use-inventory"
-import { PackageSearchIcon, PlusIcon } from "lucide-react"
+import { EyeIcon, PackageSearchIcon, PlusIcon } from "lucide-react"
 
 import {
   Empty,
@@ -287,20 +287,22 @@ export function InventoryPage() {
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button asChild type="button" variant="outline">
-                <Link to="/inventory-history">View movement history</Link>
+              <Button asChild type="button" size="sm" variant="outline">
+                <Link to="/inventory-history">
+                  <EyeIcon className="size-4" /> History
+                </Link>
               </Button>
               {canCreateCups || canCreateLids ? (
                 <>
                   {canCreateCups ? (
-                    <Button asChild type="button" variant="outline">
+                    <Button asChild type="button" size="sm" variant="outline">
                       <Link to="/cups">
                         <PlusIcon className="size-4" /> Cup
                       </Link>
                     </Button>
                   ) : null}
                   {canCreateLids ? (
-                    <Button asChild type="button" variant="outline">
+                    <Button asChild type="button"  size="sm" variant="outline">
                       <Link to="/lids">
                         <PlusIcon className="size-4" /> Lid
                       </Link>
@@ -441,7 +443,7 @@ export function InventoryPage() {
                             Receive
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-lg">
+                        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
                           <DialogHeader>
                             <DialogTitle>Receive Stock</DialogTitle>
                             <DialogDescription>
@@ -540,7 +542,7 @@ export function InventoryPage() {
                             Adjust
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-lg">
+                        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
                           <DialogHeader>
                             <DialogTitle>Manual Adjustment</DialogTitle>
                             <DialogDescription>

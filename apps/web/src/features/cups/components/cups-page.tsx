@@ -385,7 +385,7 @@ export function CupsPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{selectedCup ? "Cup Detail" : "Create Cup"}</DialogTitle>
             <DialogDescription>

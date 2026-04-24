@@ -356,7 +356,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                       Payment actions
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-3xl">
+                  <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
                     <DialogHeader>
                       <DialogTitle>Payment actions</DialogTitle>
                       <DialogDescription>

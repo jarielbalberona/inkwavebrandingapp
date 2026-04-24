@@ -264,5 +264,113 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     return
   }
 
+  const persistenceError = toOrderPersistenceError(error)
+  if (persistenceError) {
+    sendJson(response, persistenceError.statusCode, {
+      error: persistenceError.error,
+      code: persistenceError.code,
+      constraint: persistenceError.constraint,
+      detail: persistenceError.detail,
+    })
+    return
+  }
+
+  if (error instanceof Error && isKnownOrderInvariantError(error)) {
+    sendJson(response, 500, {
+      error: error.message,
+    })
+    return
+  }
+
   throw error
+}
+
+interface OrderPersistenceErrorResponse {
+  statusCode: number
+  error: string
+  code: string
+  constraint?: string
+  detail?: string
+}
+
+function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse | null {
+  const code = getDbErrorCode(error)
+
+  if (!code) {
+    return null
+  }
+
+  const constraint = getDbErrorString(error, "constraint")
+  const detail = getDbErrorString(error, "detail")
+
+  if (code === "23503") {
+    return {
+      statusCode: 409,
+      error: "Order references a record that no longer exists.",
+      code,
+      constraint,
+      detail,
+    }
+  }
+
+  if (code === "23505") {
+    return {
+      statusCode: 409,
+      error: "Order conflicts with an existing record.",
+      code,
+      constraint,
+      detail,
+    }
+  }
+
+  if (code === "23514" || code === "23502" || code === "22P02") {
+    return {
+      statusCode: 400,
+      error: "Order request violates a database constraint.",
+      code,
+      constraint,
+      detail,
+    }
+  }
+
+  return {
+    statusCode: 500,
+    error: "Order request failed while writing to the database.",
+    code,
+    constraint,
+    detail,
+  }
+}
+
+function getDbErrorCode(error: unknown): string | undefined {
+  return getDbErrorString(error, "code")
+}
+
+function getDbErrorString(error: unknown, key: "code" | "constraint" | "detail"): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined
+  }
+
+  if (key in error && typeof (error as Record<string, unknown>)[key] === "string") {
+    return (error as Record<string, string>)[key]
+  }
+
+  if ("cause" in error) {
+    return getDbErrorString((error as { cause?: unknown }).cause, key)
+  }
+
+  return undefined
+}
+
+function isKnownOrderInvariantError(error: Error): boolean {
+  return [
+    "Failed to create order",
+    "Failed to load created order",
+    "Failed to match created order item to reservation request",
+    "Failed to match updated order item to reservation request",
+    "Resolved order line item missing",
+    "Failed to create invoice",
+    "Failed to load created invoice",
+    "Failed to load replaced invoice",
+  ].includes(error.message)
 }

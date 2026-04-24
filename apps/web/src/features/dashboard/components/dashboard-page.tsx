@@ -47,22 +47,7 @@ export function DashboardPage() {
     <div className="grid gap-3">
       <Card>
         <CardHeader className="gap-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="grid gap-1">
-              <CardTitle>Dashboard</CardTitle>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <Link to="/inventory">Inventory</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/orders">Orders</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/reports">Reports</Link>
-              </Button>
-            </div>
-          </div>
+          <CardTitle>Dashboard</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
           {summaryQuery.isError ? (

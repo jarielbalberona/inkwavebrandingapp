@@ -57,9 +57,6 @@ export function InvoicesPage() {
       <CardHeader className="gap-4">
         <div className="grid gap-1">
           <CardTitle>Invoices</CardTitle>
-          <CardDescription>
-            Track billed revenue, collections, and outstanding balances from the full invoice ledger. Search only filters the table below.
-          </CardDescription>
         </div>
 
         {invoicesOverviewQuery.isError ? (

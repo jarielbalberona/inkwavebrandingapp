@@ -92,11 +92,6 @@ export function ReportsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Reports</CardTitle>
-          <CardDescription>
-            Inventory summary now reflects tracked cups and lids. Low-stock remains cup-threshold
-            only because lids do not have reorder thresholds in schema. Usage and financial views
-            remain explicitly cup-based.
-          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <Tabs
@@ -113,13 +108,27 @@ export function ReportsPage() {
               }
             }}
           >
-            <TabsList>
-              <TabsTrigger value="inventory-summary">Inventory Summary</TabsTrigger>
-              <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
-              <TabsTrigger value="order-status">Order Status</TabsTrigger>
-              <TabsTrigger value="cup-usage">Cup Usage</TabsTrigger>
-              {canViewFinancialReports ? <TabsTrigger value="sales-cost">Sales & Cost</TabsTrigger> : null}
-            </TabsList>
+            <div className="-mx-1 min-w-0 touch-pan-x overflow-x-auto px-1 pb-0.5 [scrollbar-gutter:stable]">
+              <TabsList className="w-max min-w-0 max-w-none flex-nowrap justify-start">
+                <TabsTrigger className="shrink-0 flex-none" value="inventory-summary">
+                  Summary
+                </TabsTrigger>
+                <TabsTrigger className="shrink-0 flex-none" value="low-stock">
+                  Low Stock
+                </TabsTrigger>
+                <TabsTrigger className="shrink-0 flex-none" value="order-status">
+                  Orders
+                </TabsTrigger>
+                <TabsTrigger className="shrink-0 flex-none" value="cup-usage">
+                  Cups
+                </TabsTrigger>
+                {canViewFinancialReports ? (
+                  <TabsTrigger className="shrink-0 flex-none" value="sales-cost">
+                    Financial
+                  </TabsTrigger>
+                ) : null}
+              </TabsList>
+            </div>
           </Tabs>
 
           {activeTab === "order-status" ? (

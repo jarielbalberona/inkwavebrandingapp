@@ -257,7 +257,7 @@ export function GeneralItemsPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{selectedItem ? "Edit General Item" : "Create General Item"}</DialogTitle>
             <DialogDescription>

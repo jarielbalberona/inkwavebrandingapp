@@ -232,7 +232,7 @@ export function CustomersPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{selectedCustomer ? "Customer Detail" : "Create Customer"}</DialogTitle>
             <DialogDescription>

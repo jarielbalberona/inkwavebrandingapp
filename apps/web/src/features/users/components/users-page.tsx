@@ -296,7 +296,7 @@ export function UsersPage() {
           }
         }}
       >
-        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Staff Permissions</DialogTitle>
             <DialogDescription>

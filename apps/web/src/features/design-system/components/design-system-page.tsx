@@ -1205,7 +1205,7 @@ export function DesignSystemPage() {
                         Open dialog
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[420px]">
+                    <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
                       <DialogHeader>
                         <DialogTitle>Publish release notes</DialogTitle>
                         <DialogDescription>
