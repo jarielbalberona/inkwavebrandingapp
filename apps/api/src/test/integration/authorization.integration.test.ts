@@ -233,6 +233,7 @@ describe("authorization integration", () => {
       .set("Cookie", adminCookie)
 
     expect(adminGenerateResponse.status).toBe(201)
+    expect(adminGenerateResponse.body.invoice.status).toBe("pending")
 
     const invoiceId = adminGenerateResponse.body.invoice.id as string
 
@@ -277,5 +278,6 @@ describe("authorization integration", () => {
 
     expect(adminDetailResponse.status).toBe(200)
     expect(adminDetailResponse.body.invoice.id).toBe(invoiceId)
+    expect(adminDetailResponse.body.invoice.status).toBe("pending")
   })
 })

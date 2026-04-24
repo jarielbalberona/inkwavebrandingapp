@@ -4,6 +4,7 @@ import {
   index,
   integer,
   numeric,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -15,6 +16,8 @@ import {
 import { customers } from "./customers.js"
 import { orderItems, orderLineItemTypeEnum, orders } from "./orders.js"
 import { users } from "./users.js"
+
+export const invoiceStatusEnum = pgEnum("invoice_status", ["pending", "paid", "void"])
 
 export const invoices = pgTable(
   "invoices",
@@ -34,6 +37,7 @@ export const invoices = pgTable(
     customerContactNumberSnapshot: varchar("customer_contact_number_snapshot", { length: 40 }),
     customerEmailSnapshot: varchar("customer_email_snapshot", { length: 320 }),
     customerAddressSnapshot: varchar("customer_address_snapshot", { length: 500 }),
+    status: invoiceStatusEnum("status").notNull().default("pending"),
     subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -45,6 +49,7 @@ export const invoices = pgTable(
     uniqueIndex("invoices_invoice_number_unique_idx").on(sql`lower(${table.invoiceNumber})`),
     uniqueIndex("invoices_order_id_unique_idx").on(table.orderId),
     index("invoices_customer_id_idx").on(table.customerId),
+    index("invoices_status_idx").on(table.status),
     index("invoices_created_at_idx").on(table.createdAt),
     check("invoices_invoice_number_not_blank", sql`length(trim(${table.invoiceNumber})) > 0`),
     check(

@@ -9,6 +9,7 @@ import {
   toInvoiceListItemDto,
   type InvoiceDto,
   type InvoiceListItemDto,
+  type InvoiceStatus,
 } from "./invoices.types.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 
@@ -41,6 +42,32 @@ export class InvoiceOrderNotCompletedError extends Error {
 
   constructor() {
     super("Invoice generation is only allowed for completed orders")
+  }
+}
+
+export class InvoicePaidLockError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Invoice is locked because it has been paid")
+  }
+}
+
+export class InvoiceVoidLockError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Invoice is locked because it has been voided")
+  }
+}
+
+export function assertInvoiceAllowsStructuralChanges(status: InvoiceStatus) {
+  if (status === "paid") {
+    throw new InvoicePaidLockError()
+  }
+
+  if (status === "void") {
+    throw new InvoiceVoidLockError()
   }
 }
 
@@ -131,6 +158,7 @@ export class InvoicesService {
         customerContactNumberSnapshot: order.customer.contactNumber,
         customerEmailSnapshot: order.customer.email,
         customerAddressSnapshot: order.customer.address,
+        status: "pending",
         subtotal,
         createdByUserId: user.id,
       },

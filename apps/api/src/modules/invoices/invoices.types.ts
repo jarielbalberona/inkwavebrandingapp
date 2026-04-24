@@ -3,6 +3,8 @@ import { assertAdmin } from "../auth/authorization.js"
 import type { InvoiceWithRelations } from "./invoices.repository.js"
 import type { Invoice } from "../../db/schema/index.js"
 
+export type InvoiceStatus = Invoice["status"]
+
 export interface InvoiceListItemDto {
   id: string
   invoice_number: string
@@ -13,6 +15,7 @@ export interface InvoiceListItemDto {
     customer_code: string | null
     business_name: string
   }
+  status: InvoiceStatus
   subtotal: string
   created_at: string
   updated_at: string
@@ -43,6 +46,7 @@ export interface InvoiceDto {
     email: string | null
     address: string | null
   }
+  status: InvoiceStatus
   subtotal: string
   items: InvoiceItemDto[]
   created_at: string
@@ -62,6 +66,7 @@ export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceL
       customer_code: invoice.customerCodeSnapshot ?? null,
       business_name: invoice.customerBusinessNameSnapshot,
     },
+    status: invoice.status,
     subtotal: toMoneyString(invoice.subtotal),
     created_at: invoice.createdAt.toISOString(),
     updated_at: invoice.updatedAt.toISOString(),
@@ -85,6 +90,7 @@ export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): Inv
       email: invoice.customerEmailSnapshot ?? null,
       address: invoice.customerAddressSnapshot ?? null,
     },
+    status: invoice.status,
     subtotal: toMoneyString(invoice.subtotal),
     items: invoice.items.map((item) => ({
       id: item.id,

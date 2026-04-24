@@ -3,8 +3,11 @@ import assert from "node:assert/strict"
 
 import { AuthorizationError } from "../auth/authorization.js"
 import {
+  assertInvoiceAllowsStructuralChanges,
   InvoiceAlreadyExistsError,
+  InvoicePaidLockError,
   InvoiceOrderNotCompletedError,
+  InvoiceVoidLockError,
   InvoicesService,
 } from "./invoices.service.js"
 
@@ -87,6 +90,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
           customerContactNumberSnapshot: "09170000000",
           customerEmailSnapshot: "jane@example.com",
           customerAddressSnapshot: "Manila",
+          status: "pending",
           subtotal: "2400.00",
           createdAt: new Date("2026-04-24T00:00:00.000Z"),
           updatedAt: new Date("2026-04-24T00:00:00.000Z"),
@@ -166,6 +170,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       customerContactNumberSnapshot: string
       customerEmailSnapshot: string
       customerAddressSnapshot: string
+      status: "pending" | "paid" | "void"
       subtotal: string
       createdByUserId: string
     }
@@ -201,6 +206,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       customerContactNumberSnapshot: "09170000000",
       customerEmailSnapshot: "jane@example.com",
       customerAddressSnapshot: "Manila",
+      status: "pending",
       subtotal: "2400.00",
       createdByUserId: adminUser.id,
     },
@@ -226,6 +232,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
   )
 
   assert.equal(dto.subtotal, "2400.00")
+  assert.equal(dto.status, "pending")
   assert.equal(dto.items[0]?.line_total, "1500.00")
   assert.equal(dto.items[1]?.line_total, "900.00")
 })
@@ -251,6 +258,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
           customerContactNumberSnapshot: "09170000000",
           customerEmailSnapshot: "jane@example.com",
           customerAddressSnapshot: "Manila",
+          status: "pending",
           subtotal: "1150.00",
           createdAt: new Date("2026-04-24T00:00:00.000Z"),
           updatedAt: new Date("2026-04-24T00:00:00.000Z"),
@@ -325,6 +333,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
       lineTotal: string
     }>
     invoice: {
+      status: "pending" | "paid" | "void"
       subtotal: string
     }
   }
@@ -347,9 +356,23 @@ test("generateForOrder includes custom_charge lines without any master-data depe
       lineTotal: "650.00",
     },
   ])
+  assert.equal(createInput.invoice.status, "pending")
   assert.equal(createInput.invoice.subtotal, "1150.00")
   assert.equal(dto.items[0]?.item_type, "custom_charge")
   assert.equal(dto.items[0]?.description_snapshot, "Rush fee")
   assert.equal(dto.items[0]?.line_total, "500.00")
   assert.equal(dto.subtotal, "1150.00")
+  assert.equal(dto.status, "pending")
+})
+
+test("assertInvoiceAllowsStructuralChanges allows pending invoices", () => {
+  assert.doesNotThrow(() => assertInvoiceAllowsStructuralChanges("pending"))
+})
+
+test("assertInvoiceAllowsStructuralChanges rejects paid invoices", () => {
+  assert.throws(() => assertInvoiceAllowsStructuralChanges("paid"), InvoicePaidLockError)
+})
+
+test("assertInvoiceAllowsStructuralChanges rejects void invoices", () => {
+  assert.throws(() => assertInvoiceAllowsStructuralChanges("void"), InvoiceVoidLockError)
 })

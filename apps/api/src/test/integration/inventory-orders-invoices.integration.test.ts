@@ -298,6 +298,7 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
 
     expect(invoiceResponse.status).toBe(201)
+    expect(invoiceResponse.body.invoice.status).toBe("pending")
     expect(invoiceResponse.body.invoice.subtotal).toBe("52.50")
     expect(
       invoiceResponse.body.invoice.items.map((item: { item_type: string }) => item.item_type),
@@ -328,6 +329,7 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
 
     expect(invoiceDetailResponse.status).toBe(200)
+    expect(invoiceDetailResponse.body.invoice.status).toBe("pending")
     expect(invoiceDetailResponse.body.invoice.customer.business_name).toBe("Snapshot Customer")
     expect(
       invoiceDetailResponse.body.invoice.items.find(
