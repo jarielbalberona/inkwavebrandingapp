@@ -173,6 +173,9 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       customerAddressSnapshot: string
       status: "pending" | "paid" | "void"
       subtotal: string
+      totalAmount: string
+      paidAmount: string
+      remainingBalance: string
       createdByUserId: string
     }
     items: Array<{
@@ -209,6 +212,9 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       customerAddressSnapshot: "Manila",
       status: "pending",
       subtotal: "2400.00",
+      totalAmount: "2400.00",
+      paidAmount: "0.00",
+      remainingBalance: "2400.00",
       createdByUserId: adminUser.id,
     },
     items: [
@@ -336,6 +342,9 @@ test("generateForOrder includes custom_charge lines without any master-data depe
     invoice: {
       status: "pending" | "paid" | "void"
       subtotal: string
+      totalAmount: string
+      paidAmount: string
+      remainingBalance: string
     }
   }
 
@@ -359,6 +368,9 @@ test("generateForOrder includes custom_charge lines without any master-data depe
   ])
   assert.equal(createInput.invoice.status, "pending")
   assert.equal(createInput.invoice.subtotal, "1150.00")
+  assert.equal(createInput.invoice.totalAmount, "1150.00")
+  assert.equal(createInput.invoice.paidAmount, "0.00")
+  assert.equal(createInput.invoice.remainingBalance, "1150.00")
   assert.equal(dto.items[0]?.item_type, "custom_charge")
   assert.equal(dto.items[0]?.description_snapshot, "Rush fee")
   assert.equal(dto.items[0]?.line_total, "500.00")
@@ -441,6 +453,9 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
       status: "pending" | "paid" | "void"
       createdByUserId: string
       subtotal: string
+      totalAmount: string
+      paidAmount: string
+      remainingBalance: string
     }
   }
 
@@ -448,6 +463,9 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
   assert.equal(createInput.invoice.status, "pending")
   assert.equal(createInput.invoice.createdByUserId, adminUser.id)
   assert.equal(createInput.invoice.subtotal, "240.00")
+  assert.equal(createInput.invoice.totalAmount, "240.00")
+  assert.equal(createInput.invoice.paidAmount, "0.00")
+  assert.equal(createInput.invoice.remainingBalance, "240.00")
   assert.equal(invoice.id, "invoice-1")
 })
 
@@ -515,6 +533,8 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
     invoiceId: string
     invoice: {
       subtotal: string
+      totalAmount: string
+      remainingBalance: string
       customerAddressSnapshot: string | null
     }
     items: Array<{
@@ -525,6 +545,8 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
 
   assert.equal(replaceInput.invoiceId, "invoice-existing")
   assert.equal(replaceInput.invoice.subtotal, "325.00")
+  assert.equal(replaceInput.invoice.totalAmount, "325.00")
+  assert.equal(replaceInput.invoice.remainingBalance, "325.00")
   assert.equal(replaceInput.invoice.customerAddressSnapshot, "Updated Address")
   assert.deepEqual(replaceInput.items, [
     {

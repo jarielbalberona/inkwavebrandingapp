@@ -40,6 +40,11 @@ export const invoices = pgTable(
     customerAddressSnapshot: varchar("customer_address_snapshot", { length: 500 }),
     status: invoiceStatusEnum("status").notNull().default("pending"),
     subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
+    totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+    paidAmount: numeric("paid_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+    remainingBalance: numeric("remaining_balance", { precision: 12, scale: 2 }).notNull().default("0"),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    notes: text("notes"),
     documentAssetId: uuid("document_asset_id").references(() => assets.id, {
       onDelete: "set null",
     }),
@@ -65,6 +70,15 @@ export const invoices = pgTable(
       sql`length(trim(${table.customerBusinessNameSnapshot})) > 0`,
     ),
     check("invoices_subtotal_non_negative", sql`${table.subtotal} >= 0`),
+    check("invoices_total_amount_non_negative", sql`${table.totalAmount} >= 0`),
+    check("invoices_paid_amount_non_negative", sql`${table.paidAmount} >= 0`),
+    check("invoices_remaining_balance_non_negative", sql`${table.remainingBalance} >= 0`),
+    check("invoices_paid_amount_not_greater_than_total", sql`${table.paidAmount} <= ${table.totalAmount}`),
+    check(
+      "invoices_remaining_balance_matches_totals",
+      sql`${table.remainingBalance} = ${table.totalAmount} - ${table.paidAmount}`,
+    ),
+    check("invoices_notes_not_blank", sql`${table.notes} is null or length(trim(${table.notes})) > 0`),
   ],
 )
 
@@ -95,6 +109,31 @@ export const invoiceItems = pgTable(
   ],
 )
 
+export const invoicePayments = pgTable(
+  "invoice_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull().default("0"),
+    paymentDate: timestamp("payment_date", { withTimezone: true }).notNull(),
+    note: text("note"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("invoice_payments_invoice_id_idx").on(table.invoiceId),
+    index("invoice_payments_payment_date_idx").on(table.paymentDate),
+    index("invoice_payments_created_by_user_id_idx").on(table.createdByUserId),
+    check("invoice_payments_amount_positive", sql`${table.amount} > 0`),
+    check("invoice_payments_note_not_blank", sql`${table.note} is null or length(trim(${table.note})) > 0`),
+  ],
+)
+
 export const invoicesRelations = relations(invoices, ({ many, one }) => ({
   order: one(orders, {
     fields: [invoices.orderId],
@@ -113,6 +152,7 @@ export const invoicesRelations = relations(invoices, ({ many, one }) => ({
     references: [assets.id],
   }),
   items: many(invoiceItems),
+  payments: many(invoicePayments),
 }))
 
 export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
@@ -126,7 +166,20 @@ export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
   }),
 }))
 
+export const invoicePaymentsRelations = relations(invoicePayments, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [invoicePayments.invoiceId],
+    references: [invoices.id],
+  }),
+  createdByUser: one(users, {
+    fields: [invoicePayments.createdByUserId],
+    references: [users.id],
+  }),
+}))
+
 export type Invoice = typeof invoices.$inferSelect
 export type NewInvoice = typeof invoices.$inferInsert
 export type InvoiceItem = typeof invoiceItems.$inferSelect
 export type NewInvoiceItem = typeof invoiceItems.$inferInsert
+export type InvoicePayment = typeof invoicePayments.$inferSelect
+export type NewInvoicePayment = typeof invoicePayments.$inferInsert

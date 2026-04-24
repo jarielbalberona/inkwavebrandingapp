@@ -78,6 +78,8 @@ export class InvoicesRepository {
       | "customerEmailSnapshot"
       | "customerAddressSnapshot"
       | "subtotal"
+      | "totalAmount"
+      | "remainingBalance"
     >
     items: Omit<NewInvoiceItem, "invoiceId">[]
   }): Promise<InvoiceWithRelations> {

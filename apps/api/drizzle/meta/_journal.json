@@ -141,6 +141,13 @@
       "when": 1777031166440,
       "tag": "0019_fine_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1777043709518,
+      "tag": "0020_burly_jean_grey",
+      "breakpoints": true
     }
   ]
 }

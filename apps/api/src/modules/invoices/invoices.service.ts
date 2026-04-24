@@ -107,6 +107,8 @@ function buildInvoiceSnapshotInput(order: InvoiceSnapshotOrder) {
     }
   })
 
+  const totalAmount = sumMoney(items.map((item) => item.lineTotal))
+
   return {
     invoice: {
       orderNumberSnapshot: order.orderNumber,
@@ -117,7 +119,9 @@ function buildInvoiceSnapshotInput(order: InvoiceSnapshotOrder) {
       customerContactNumberSnapshot: order.customer.contactNumber,
       customerEmailSnapshot: order.customer.email,
       customerAddressSnapshot: order.customer.address,
-      subtotal: sumMoney(items.map((item) => item.lineTotal)),
+      subtotal: totalAmount,
+      totalAmount,
+      remainingBalance: totalAmount,
     },
     items,
   }
@@ -140,6 +144,7 @@ export async function syncInvoiceSnapshotForOrder(
         invoiceNumber: createInvoiceNumber(),
         orderId: order.id,
         status: "pending",
+        paidAmount: "0.00",
         createdByUserId,
         ...snapshot.invoice,
       },
