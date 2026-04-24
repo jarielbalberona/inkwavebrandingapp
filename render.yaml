@@ -19,7 +19,7 @@ services:
     runtime: node
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/pdfs build && pnpm --filter @workspace/api build
-    preDeployCommand: pnpm --filter @workspace/api db:migrate
+    preDeployCommand: pnpm --filter @workspace/api db:migrate:deploy
     startCommand: pnpm --filter @workspace/api start
     healthCheckPath: /health
     # DB connection uses split vars (passwords with @/# are safe). Set these in the dashboard; do not commit values.

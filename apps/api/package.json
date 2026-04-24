@@ -15,6 +15,7 @@
     "db:check": "node --import tsx src/db/check.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:deploy": "node --import tsx src/db/migrate-deploy.ts",
     "db:studio": "drizzle-kit studio",
     "db:drizzle-check": "drizzle-kit check",
     "seed:admin": "node --import tsx src/modules/users/seed-admin.ts"

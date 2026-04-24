@@ -29,7 +29,8 @@ Do not call a direct production push “staging by confidence.” That is lazy a
    - `pnpm --filter web build`
 5. Deploy the API service.
 6. Render runs the API `preDeployCommand` before switching traffic:
-   - `pnpm --filter @workspace/api db:migrate`
+   - `pnpm --filter @workspace/api db:migrate:deploy`
+   - this fails early if the database already contains app tables but Drizzle has no `__drizzle_migrations` history
 7. Wait for the API health check at `/health` to return `200`.
 8. Deploy the web service.
 9. If this is a brand-new database, seed the bootstrap admin after the first successful API deploy:
