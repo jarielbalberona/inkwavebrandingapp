@@ -58,6 +58,7 @@ import {
   useVoidInvoiceMutation,
 } from "@/features/invoices/hooks/use-invoices"
 import { apiBaseUrl } from "@/lib/api"
+import { formatMoneyValue } from "@/lib/money"
 
 const paymentFormSchema = z.object({
   amount: z
@@ -492,7 +493,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                     {invoice.payments.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell>{new Date(payment.payment_date).toLocaleString()}</TableCell>
-                        <TableCell className="font-medium">{payment.amount}</TableCell>
+                        <TableCell className="font-medium">{formatMoneyValue(payment.amount)}</TableCell>
                         <TableCell>{payment.created_by?.display_name ?? payment.created_by?.email ?? "Unknown user"}</TableCell>
                         <TableCell>{payment.note?.trim() ? payment.note : "—"}</TableCell>
                       </TableRow>
@@ -522,8 +523,8 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                       <TableCell className="font-medium">{item.description_snapshot}</TableCell>
                       <TableCell>{item.item_type}</TableCell>
                       <TableCell>{item.quantity.toLocaleString()}</TableCell>
-                      <TableCell>{item.unit_price}</TableCell>
-                      <TableCell>{item.line_total}</TableCell>
+                      <TableCell>{formatMoneyValue(item.unit_price)}</TableCell>
+                      <TableCell>{formatMoneyValue(item.line_total)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -573,7 +574,7 @@ function FinancialRow({
     <div className="flex items-center justify-between gap-3">
       <ItemDescription className="text-xs">{label}</ItemDescription>
       <span className={emphasized ? "text-sm font-semibold text-foreground" : "text-sm font-medium text-foreground"}>
-        {value}
+        {formatMoneyValue(value)}
       </span>
     </div>
   )

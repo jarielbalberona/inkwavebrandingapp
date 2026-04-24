@@ -41,6 +41,7 @@ import {
   useOrderQuery,
 } from "@/features/orders/hooks/use-orders"
 import { apiBaseUrl } from "@/lib/api"
+import { formatMoneyValue } from "@/lib/money"
 
 export function OrderViewPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
@@ -376,15 +377,15 @@ function InvoicePanel({
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Subtotal</p>
-            <p className="font-medium">{resolvedInvoice.subtotal}</p>
+            <p className="font-medium">{formatMoneyValue(resolvedInvoice.subtotal)}</p>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Paid</p>
-            <p className="font-medium">{resolvedInvoice.paid_amount}</p>
+            <p className="font-medium">{formatMoneyValue(resolvedInvoice.paid_amount)}</p>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Remaining</p>
-            <p className="font-medium">{resolvedInvoice.remaining_balance}</p>
+            <p className="font-medium">{formatMoneyValue(resolvedInvoice.remaining_balance)}</p>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Generated</p>

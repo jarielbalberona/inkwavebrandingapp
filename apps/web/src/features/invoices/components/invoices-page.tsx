@@ -22,6 +22,7 @@ import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type { InvoiceListItem } from "@/features/invoices/api/invoices-client"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import { useInvoicesQuery } from "@/features/invoices/hooks/use-invoices"
+import { formatMoneyValue } from "@/lib/money"
 
 export function InvoicesPage() {
   const currentUser = useCurrentUser()
@@ -126,6 +127,8 @@ export function InvoicesPage() {
               <TableHead>Order</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Subtotal</TableHead>
+              <TableHead>Paid</TableHead>
+              <TableHead>Balance</TableHead>
               <TableHead>Created</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -136,7 +139,9 @@ export function InvoicesPage() {
                 <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                 <TableCell>{invoice.order_number_snapshot}</TableCell>
                 <TableCell>{invoice.customer.business_name}</TableCell>
-                <TableCell>{invoice.subtotal}</TableCell>
+                <TableCell>{formatMoneyValue(invoice.subtotal)}</TableCell>
+                <TableCell>{formatMoneyValue(invoice.paid_amount)}</TableCell>
+                <TableCell>{formatMoneyValue(invoice.remaining_balance)}</TableCell>
                 <TableCell>{new Date(invoice.created_at).toLocaleString()}</TableCell>
                 <TableCell className="text-right">
                   <Button asChild type="button" variant="outline" size="sm">

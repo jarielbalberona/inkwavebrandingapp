@@ -65,11 +65,11 @@ import {
 import { cn } from "@workspace/ui/lib/utils"
 
 const priorityRowClasses = [
-  "bg-rose-400/90 hover:bg-rose-400/90",
-  "bg-rose-300/90 hover:bg-rose-300/90",
-  "bg-rose-200/90 hover:bg-rose-200/90",
-  "bg-rose-100/90 hover:bg-rose-100/90",
-  "bg-rose-50 hover:bg-rose-50",
+  "bg-red-500/90 hover:bg-red-500/80",
+  "bg-red-400/90 hover:bg-red-400/80",
+  "bg-red-300/90 hover:bg-red-300/80",
+  "bg-red-200/90 hover:bg-red-200/80",
+  "bg-red-100/90 hover:bg-red-100/80",
 ] as const
 
 type OrdersSortOption = "priority" | "created_at"
