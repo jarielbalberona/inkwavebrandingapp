@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Text, View } from "@react-pdf/renderer"
+import { Image, Text, View } from "@react-pdf/renderer"
 
 import { sharedStyles } from "../theme/index.js"
 
@@ -14,18 +14,29 @@ export function PdfHeader({
   reference,
   subtitle,
   status,
+  logoSrc,
 }: {
   brand: ReactNode
   title: string
   reference: string
   subtitle?: string
   status?: ReactNode
+  /** File path, URL, or data URI for @react-pdf `Image` */
+  logoSrc?: string
 }) {
   return (
     <View fixed style={sharedStyles.fixedHeader}>
-      <View style={sharedStyles.column}>
-        {brand}
-        <Text style={{...sharedStyles.muted, paddingTop: 4}}>{reference}</Text>
+      <View style={sharedStyles.headerBrandRow}>
+        {logoSrc ? (
+          <Image
+            src={logoSrc}
+            style={sharedStyles.headerLogo}
+          />
+        ) : null}
+        <View style={sharedStyles.headerBrandText}>
+          {brand}
+          <Text style={{ ...sharedStyles.muted, paddingTop: 6 }}>Highlighting your brand through print and packaging.</Text>
+        </View>
       </View>
 
       <View style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>

@@ -14,7 +14,6 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
       label: "From",
       name: "Ink Wave Branding",
       lines: [
-        "Highlighting your brand through print and packaging.",
         "hello@inkwavebrand.ing",
         "+63 917 7755 537",
       ],
@@ -103,8 +102,8 @@ function toInvoicePdfPaymentInstructions(status: ReturnType<typeof toInvoiceDto>
       return [
         "Send payment to:",
         "Aiko Kitane / InkWaveBranding Digital Printing Services",
-        "BDO",
-        "006670290348",
+        "Bank: BDO",
+        "Account Number: 006670290348",
       ]
   }
 }

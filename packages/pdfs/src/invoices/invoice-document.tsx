@@ -5,6 +5,7 @@ import {
 } from "@react-pdf/renderer"
 
 import { formatMoney } from "../shared/format.js"
+import { IW_LOGO_PATH } from "../iw-logo-path.js"
 import {
   PdfHeader,
   PdfMetaGrid,
@@ -25,6 +26,7 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
         header={
           <PdfHeader
             brand={<Text style={sharedStyles.hero}>{invoice.brand_name}</Text>}
+            logoSrc={IW_LOGO_PATH}
             title={invoice.document_title}
             reference={invoice.invoice_number}
             subtitle={invoice.order_reference}

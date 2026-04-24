@@ -34,13 +34,13 @@ import {
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Invoice, Order, OrderStatus } from "@/features/orders/api/orders-client"
+import { openInvoicePdfInNewTab } from "@/features/invoices/api/invoices-client"
 import {
   useCancelOrderMutation,
   useGenerateOrderInvoiceMutation,
   useOrderInvoiceQuery,
   useOrderQuery,
 } from "@/features/orders/hooks/use-orders"
-import { apiBaseUrl } from "@/lib/api"
 import { formatMoneyValue } from "@/lib/money"
 
 export function OrderViewPage({ orderId }: { orderId: string }) {
@@ -345,6 +345,7 @@ function InvoicePanel({
   onGenerate: () => Promise<void>
   orderStatus: OrderStatus
 }) {
+  const [pdfOpenError, setPdfOpenError] = useState<string | null>(null)
   const hasInvoice = Boolean(invoice)
   const canGenerate = !hasInvoice && orderStatus !== "canceled"
   const resolvedInvoice = invoice ?? null
@@ -398,6 +399,8 @@ function InvoicePanel({
         </div>
       ) : null}
 
+      {pdfOpenError ? <p className="text-sm text-destructive">{pdfOpenError}</p> : null}
+
       {resolvedInvoice ? (
         <div className="flex flex-wrap gap-2">
           <Button asChild type="button" size="sm" variant="outline">
@@ -410,7 +413,12 @@ function InvoicePanel({
             size="sm"
             variant="outline"
             onClick={() => {
-              window.open(`${apiBaseUrl}/invoices/${resolvedInvoice.id}/pdf`, "_blank", "noopener,noreferrer")
+              setPdfOpenError(null)
+              void openInvoicePdfInNewTab(resolvedInvoice.id).catch((error) => {
+                setPdfOpenError(
+                  error instanceof Error ? error.message : "Unable to open the PDF.",
+                )
+              })
             }}
           >
             Open PDF

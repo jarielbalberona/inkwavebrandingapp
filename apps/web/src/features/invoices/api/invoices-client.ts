@@ -215,3 +215,50 @@ export async function voidInvoice(invoiceId: string): Promise<Invoice> {
     throw error
   }
 }
+
+/**
+ * Fetches the invoice PDF with the same credentialed client as the rest of the app.
+ * Use this (or `openInvoicePdfInNewTab`) instead of navigating to the raw API URL, which
+ * often omits the session cookie when the web app and API are on different origins.
+ */
+export async function fetchInvoicePdfBlob(invoiceId: string): Promise<Blob> {
+  const response = await api.client.get<Blob>(`/invoices/${invoiceId}/pdf`, {
+    responseType: "blob",
+    validateStatus: () => true,
+  })
+
+  if (response.status === 200) {
+    return response.data
+  }
+
+  const text = await (response.data as Blob).text()
+  let message = "Unable to open the invoice PDF."
+  try {
+    const data = JSON.parse(text) as { error?: string }
+    if (data.error) {
+      message =
+        data.error === "Unauthenticated"
+          ? "Session expired. Sign in again, then try opening the PDF."
+          : data.error
+    }
+  } catch {
+    // leave generic message
+  }
+  throw new Error(message)
+}
+
+/**
+ * Opens the PDF in a new tab using a blob URL so the request uses the authenticated API client.
+ */
+export async function openInvoicePdfInNewTab(invoiceId: string): Promise<void> {
+  const blob = await fetchInvoicePdfBlob(invoiceId)
+  const url = URL.createObjectURL(blob)
+  const child = window.open(url, "_blank", "noopener")
+  if (!child) {
+    URL.revokeObjectURL(url)
+    throw new Error("Your browser blocked opening the PDF. Allow pop-ups for this site.")
+  }
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url)
+  }, 300_000)
+}

@@ -51,13 +51,12 @@ import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
-import { getInvoiceShareLink } from "@/features/invoices/api/invoices-client"
+import { getInvoiceShareLink, openInvoicePdfInNewTab } from "@/features/invoices/api/invoices-client"
 import {
   useInvoiceQuery,
   useRecordInvoicePaymentMutation,
   useVoidInvoiceMutation,
 } from "@/features/invoices/hooks/use-invoices"
-import { apiBaseUrl } from "@/lib/api"
 import { formatMoneyValue } from "@/lib/money"
 
 const paymentFormSchema = z.object({
@@ -225,7 +224,11 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  window.open(`${apiBaseUrl}/invoices/${invoice.id}/pdf`, "_blank", "noopener,noreferrer")
+                  setActionError(null)
+                  setActionMessage(null)
+                  void openInvoicePdfInNewTab(invoice.id).catch((error) => {
+                    setActionError(error instanceof Error ? error.message : "Unable to open the PDF.")
+                  })
                 }}
               >
                 Open PDF

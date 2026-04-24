@@ -100,6 +100,23 @@ export const sharedStyles = StyleSheet.create({
     display: "flex",
     flexDirection: "column",
   },
+  headerBrandRow: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  headerBrandText: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+  },
+  headerLogo: {
+    height: 32,
+    width: 32,
+    objectFit: "contain" as const,
+  },
   overline: {
     color: invoiceTokens.colors.textSoft,
     fontSize: invoiceTokens.type.xs,

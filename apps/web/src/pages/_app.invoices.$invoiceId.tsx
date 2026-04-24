@@ -1,13 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router"
-
-import { InvoiceDetailPage } from "@/features/invoices/components/invoice-detail-page"
+import { Outlet, createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_app/invoices/$invoiceId")({
-  component: InvoiceDetailRoute,
+  component: () => <Outlet />,
 })
-
-function InvoiceDetailRoute() {
-  const { invoiceId } = Route.useParams()
-
-  return <InvoiceDetailPage invoiceId={invoiceId} />
-}
