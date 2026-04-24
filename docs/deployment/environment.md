@@ -49,6 +49,10 @@ Backend variables must not be exposed to the frontend bundle.
 | `SENTRY_DSN` | no | Empty value disables Sentry initialization. |
 | `SENTRY_TRACES_SAMPLE_RATE` | no | Number from `0` to `1`; default `0`. |
 | `OPENAI_API_KEY` | no | Reserved for future API work. No OpenAI API calls exist yet. |
+| `EMAIL_PROVIDER` | no | `none` or `resend`. Defaults to `none`. Set to `resend` only when email delivery is intentionally enabled. |
+| `RESEND_API_KEY` | required when `EMAIL_PROVIDER=resend` | Backend-only provider secret for Resend. |
+| `RESEND_FROM_EMAIL` | required when `EMAIL_PROVIDER=resend` | Verified sender identity used for notification emails. |
+| `RESEND_REPLY_TO_EMAIL` | no | Optional reply-to override for notification emails. |
 | `STORAGE_PROVIDER` | no | `none` or `r2`. Defaults to `none`. Set to `r2` only when R2-backed document storage is intentionally enabled. |
 | `R2_ACCOUNT_ID` | required when `STORAGE_PROVIDER=r2` | Used to derive the default Cloudflare R2 S3-compatible endpoint when `R2_ENDPOINT` is not set. |
 | `R2_ACCESS_KEY_ID` | required when `STORAGE_PROVIDER=r2` | Cloudflare R2 access key ID. Backend-only secret material. |
@@ -82,6 +86,22 @@ Do not copy API secrets into the repo. Do not mirror API secrets into web variab
 - Feature modules must consume resolved storage config/provider wiring instead of reading raw `process.env` values.
 - If `STORAGE_PROVIDER=r2`, the API fails during startup when required R2 variables are missing. That is intentional. Runtime surprise failures are worse.
 - Ink Wave does not yet claim a generic browser-upload surface. The initial storage integration is for durable invoice document persistence, with generic multipart uploads deferred until the app has a real business need.
+
+## Email Contract Notes
+
+- Email delivery config is centralized in `apps/api/src/config/env.ts` and the app-side seam under `apps/api/src/lib/email`.
+- `EMAIL_PROVIDER=none` keeps the provider disabled by default.
+- `EMAIL_PROVIDER=resend` is rejected at startup unless `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are both present.
+- The current repo truth now includes:
+  - shared email package under `packages/emails`
+  - API provider seam under `apps/api/src/lib/email`
+  - digest run/delivery/attempt persistence
+  - scheduled digest runner entrypoints under `apps/api/src/modules/notifications`
+- The weekday digest schedule is fixed at **5:30 PM Asia/Manila**, which is **09:30 UTC** and is source-controlled in `render.yaml` as `30 9 * * 1-5`.
+- Local/manual runner commands:
+  - `pnpm --filter @workspace/api exec node --import tsx src/modules/notifications/run-daily-digest.ts --business-date=YYYY-MM-DD`
+  - `pnpm --filter @workspace/api exec node --import tsx src/modules/notifications/run-scheduled-daily-digest.ts`
+- The repo still does **not** prove live Render cron execution or live Resend delivery. That needs post-deploy operator proof.
 
 ## Local Setup Files
 

@@ -47,6 +47,10 @@ Optional but expected in this app:
 - `SENTRY_DSN`
 - `SENTRY_TRACES_SAMPLE_RATE`
 - `OPENAI_API_KEY`
+- `EMAIL_PROVIDER`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
+- `RESEND_REPLY_TO_EMAIL`
 - `STORAGE_PROVIDER`
 - `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
@@ -63,6 +67,30 @@ Bootstrap-only, not steady-state runtime:
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 - `ADMIN_DISPLAY_NAME`
+
+## 2.5. Render Daily Digest Cron Env
+
+Confirm the `ink-wave-branding-daily-digest` cron service has:
+
+- `NODE_ENV=production`
+- split DB vars:
+  - `DATABASE_HOST`
+  - `DATABASE_PORT`
+  - `DATABASE_USER`
+  - `DATABASE_PASSWORD`
+  - `DATABASE_NAME`
+- `DATABASE_SSL_MODE=require`
+- `WEB_ORIGIN`
+- `EMAIL_PROVIDER=resend`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
+- `RESEND_REPLY_TO_EMAIL` if reply-to behavior is required
+
+Schedule truth:
+
+- Render cron expression: `30 9 * * 1-5`
+- Business meaning: **5:30 PM Asia/Manila**, Monday to Friday only
+- Manila has no DST, so this UTC conversion is stable year-round
 
 ## 3. Render Web Service Env
 
@@ -94,7 +122,7 @@ Deploy the API service first.
 
 Expected Render behavior from `render.yaml`:
 
-- build command installs dependencies and builds `@workspace/pdfs` and `@workspace/api`
+- build command installs dependencies and builds `@workspace/emails`, `@workspace/pdfs`, and `@workspace/api`
 - predeploy runs `pnpm --filter @workspace/api db:migrate:deploy`
 - start command runs `pnpm --filter @workspace/api start`
 - health check is `/health`
@@ -160,6 +188,27 @@ Minimum live checks:
 - invoice payment actions still work
 - invoice totals/status remain truthful after payment activity
 
+### Email Setup Smoke
+
+- `EMAIL_PROVIDER=none` boots cleanly without requiring Resend secrets
+- `EMAIL_PROVIDER=resend` is not enabled unless `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set
+- `pnpm --filter @workspace/emails build`
+- `pnpm --filter @workspace/emails typecheck`
+- `pnpm --filter @workspace/emails test`
+- `pnpm --filter @workspace/emails render DailyBusinessDigestEmail`
+- `pnpm --filter @workspace/emails render LowStockAlertEmail`
+- preview HTML reflects Ink Wave terminology and current order/invoice model
+
+### Daily Digest Scheduler Smoke
+
+- `pnpm --filter @workspace/api exec node --import tsx src/modules/notifications/run-daily-digest.ts --business-date=YYYY-MM-DD` runs the digest for an explicit Manila business date
+- `pnpm --filter @workspace/api exec node --import tsx src/modules/notifications/run-scheduled-daily-digest.ts` uses the current Manila business date and skips weekends
+- verify the digest runner writes `notification_digest_runs`, `notification_digest_deliveries`, and `notification_digest_delivery_attempts`
+- verify rerunning the same business date does not create a second successful send for the same recipient
+- after deploy, confirm the Render cron service last-run history matches weekday-only expectations
+
+This proves the package/seam, scheduler path, and digest delivery logic are real in the repo. It does **not** prove live Render env correctness or live Resend delivery until an operator checks the deployed service.
+
 ## 9. What Still Requires Human/Live Proof
 
 This repo cannot prove these from local code alone:
@@ -169,5 +218,7 @@ This repo cannot prove these from local code alone:
 - the actual deployed URL health
 - browser behavior against the deployed services
 - live R2 credentials/CDN behavior
+- live Resend acceptance and sender-domain status
+- live Render cron execution history for the digest service
 
 If those checks were not done, say so explicitly. Do not mark rollout verified from repo work alone.
