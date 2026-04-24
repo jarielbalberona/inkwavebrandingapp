@@ -2,10 +2,21 @@ import { useMemo, useState } from "react"
 
 import { Navigate } from "@tanstack/react-router"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { Eye, EyeOff } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -41,6 +52,7 @@ import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, hasPermission } from "@/features/auth/permissions"
 import {
   useCreateUserMutation,
+  useArchiveUserMutation,
   useUpdateUserPermissionsMutation,
   useUsersQuery,
 } from "@/features/users/hooks/use-users"
@@ -67,6 +79,7 @@ export function UsersPage() {
   const canManageUsers = hasPermission(currentUser.data, appPermissions.usersManage)
   const usersQuery = useUsersQuery(canManageUsers)
   const createUser = useCreateUserMutation()
+  const archiveUser = useArchiveUserMutation()
   const updatePermissions = useUpdateUserPermissionsMutation()
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -74,6 +87,8 @@ export function UsersPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [permissionUpdateError, setPermissionUpdateError] = useState<string | null>(null)
   const [permissionUpdateSuccess, setPermissionUpdateSuccess] = useState<string | null>(null)
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
+  const [isCreatePasswordVisible, setIsCreatePasswordVisible] = useState(false)
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserFormSchema),
     defaultValues,
@@ -112,19 +127,41 @@ export function UsersPage() {
     }
   }
 
-  async function handlePermissionUpdate(user: User, permissions: string[]) {
+  async function handleStaffUpdate(user: User, displayName: string, permissions: string[]) {
     setPermissionUpdateError(null)
     setPermissionUpdateSuccess(null)
 
     try {
-      await updatePermissions.mutateAsync({
+      const updatedUser = await updatePermissions.mutateAsync({
         id: user.id,
-        payload: { permissions },
+        payload: {
+          displayName,
+          permissions,
+        },
       })
-      setPermissionUpdateSuccess(`Updated permissions for ${user.display_name || user.email}.`)
+      setPermissionUpdateSuccess(
+        `Updated ${updatedUser.display_name || updatedUser.email}.`,
+      )
     } catch (error) {
       setPermissionUpdateError(
-        error instanceof Error ? error.message : "Unable to update assigned permissions.",
+        error instanceof Error ? error.message : "Unable to update staff account.",
+      )
+    }
+  }
+
+  async function handleArchiveUser(user: User) {
+    setPermissionUpdateError(null)
+    setPermissionUpdateSuccess(null)
+
+    try {
+      const archivedUser = await archiveUser.mutateAsync(user.id)
+      setIsArchiveDialogOpen(false)
+      setPermissionUpdateSuccess(
+        `Archived ${archivedUser.display_name || archivedUser.email}.`,
+      )
+    } catch (error) {
+      setPermissionUpdateError(
+        error instanceof Error ? error.message : "Unable to archive user.",
       )
     }
   }
@@ -137,6 +174,7 @@ export function UsersPage() {
           setCreateDialogOpen(open)
           if (!open) {
             setSubmitError(null)
+            setIsCreatePasswordVisible(false)
           }
         }}
       >
@@ -185,7 +223,28 @@ export function UsersPage() {
                   <FormItem>
                     <FormLabel>Temporary Password</FormLabel>
                     <FormControl>
-                      <Input autoComplete="new-password" type="password" {...field} />
+                      <div className="relative">
+                        <Input
+                          autoComplete="new-password"
+                          type={isCreatePasswordVisible ? "text" : "password"}
+                          className="pr-12"
+                          {...field}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2"
+                          aria-label={isCreatePasswordVisible ? "Hide password" : "Show password"}
+                          onClick={() => setIsCreatePasswordVisible((current) => !current)}
+                        >
+                          {isCreatePasswordVisible ? (
+                            <EyeOff className="size-4" />
+                          ) : (
+                            <Eye className="size-4" />
+                          )}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormDescription>Minimum 12 characters. Hand it to staff securely.</FormDescription>
                     <FormMessage />
@@ -263,8 +322,10 @@ export function UsersPage() {
               key={selectedUser.id}
               user={selectedUser}
               permissionCatalog={permissionCatalog}
-              onSave={handlePermissionUpdate}
+              onSave={handleStaffUpdate}
+              isArchiving={archiveUser.isPending}
               isSaving={updatePermissions.isPending}
+              onOpenArchiveDialog={() => setIsArchiveDialogOpen(true)}
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -273,6 +334,33 @@ export function UsersPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive staff account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedUser
+                ? `Archive ${selectedUser.display_name || selectedUser.email}? They will no longer be able to sign in.`
+                : "Archive this staff account? They will no longer be able to sign in."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveUser.isPending}>Keep active</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={archiveUser.isPending || !selectedUser}
+              onClick={() => {
+                if (selectedUser) {
+                  void handleArchiveUser(selectedUser)
+                }
+              }}
+            >
+              {archiveUser.isPending ? "Archiving..." : "Archive user"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -360,13 +448,18 @@ function PermissionEditor({
   user,
   permissionCatalog,
   onSave,
+  isArchiving,
   isSaving,
+  onOpenArchiveDialog,
 }: {
   user: User
   permissionCatalog: PermissionDefinition[]
-  onSave: (user: User, permissions: string[]) => Promise<void>
+  onSave: (user: User, displayName: string, permissions: string[]) => Promise<void>
+  isArchiving: boolean
   isSaving: boolean
+  onOpenArchiveDialog: () => void
 }) {
+  const [displayName, setDisplayName] = useState(user.display_name ?? "")
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>(user.permissions)
 
   return (
@@ -379,19 +472,41 @@ function PermissionEditor({
         </p>
       </div>
 
+      <div className="grid gap-2">
+        <Label htmlFor={`display-name-${user.id}`}>Display Name</Label>
+        <Input
+          id={`display-name-${user.id}`}
+          value={displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          placeholder="Production Staff"
+        />
+      </div>
+
       <PermissionChecklist
         definitions={permissionCatalog}
         selectedPermissions={selectedPermissions}
         onChange={setSelectedPermissions}
       />
 
-      <Button
-        type="button"
-        disabled={isSaving}
-        onClick={() => void onSave(user, selectedPermissions)}
-      >
-        {isSaving ? "Saving permissions..." : "Save Permissions"}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          disabled={isSaving}
+          onClick={() => void onSave(user, displayName, selectedPermissions)}
+        >
+          {isSaving ? "Saving staff account..." : "Save Changes"}
+        </Button>
+        {user.is_active ? (
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={isArchiving}
+            onClick={onOpenArchiveDialog}
+          >
+            {isArchiving ? "Archiving..." : "Archive User"}
+          </Button>
+        ) : null}
+      </div>
     </div>
   )
 }

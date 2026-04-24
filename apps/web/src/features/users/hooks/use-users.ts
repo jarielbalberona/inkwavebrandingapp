@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
+  archiveUser,
   createUser,
   listUsers,
   updateUserPermissions,
@@ -35,6 +36,17 @@ export function useUpdateUserPermissionsMutation() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateUserPermissionsPayload }) =>
       updateUserPermissions(id, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey })
+    },
+  })
+}
+
+export function useArchiveUserMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => archiveUser(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: usersQueryKey })
     },

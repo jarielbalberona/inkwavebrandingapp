@@ -5,7 +5,7 @@ import { users, type User } from "../../db/schema/index.js"
 import type {
   BootstrapAdminInput,
   CreateUserInput,
-  UpdateUserPermissionsInput,
+  UpdateStaffUserInput,
 } from "./users.schemas.js"
 
 export class UsersRepository {
@@ -65,11 +65,25 @@ export class UsersRepository {
     return user
   }
 
-  async updatePermissions(id: string, input: UpdateUserPermissionsInput): Promise<User | undefined> {
+  async updateStaffUser(id: string, input: UpdateStaffUserInput): Promise<User | undefined> {
     const rows = await this.db
       .update(users)
       .set({
+        displayName: input.displayName?.trim() ? input.displayName.trim() : null,
         permissions: input.permissions,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning()
+
+    return rows[0]
+  }
+
+  async archiveUser(id: string): Promise<User | undefined> {
+    const rows = await this.db
+      .update(users)
+      .set({
+        isActive: false,
         updatedAt: new Date(),
       })
       .where(eq(users.id, id))

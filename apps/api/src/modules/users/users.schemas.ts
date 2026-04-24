@@ -30,8 +30,14 @@ export const updateUserPermissionsSchema = z.object({
   permissions: z.array(appPermissionSchema),
 })
 
+export const updateStaffUserSchema = z.object({
+  displayName: z.string().trim().max(160).optional(),
+  permissions: z.array(appPermissionSchema),
+})
+
 export type UserRole = z.infer<typeof userRoleSchema>
 export type AppPermissionInput = z.infer<typeof appPermissionSchema>
 export type BootstrapAdminInput = z.infer<typeof bootstrapAdminSchema>
 export type CreateUserInput = z.infer<typeof createUserSchema>
 export type UpdateUserPermissionsInput = z.infer<typeof updateUserPermissionsSchema>
+export type UpdateStaffUserInput = z.infer<typeof updateStaffUserSchema>

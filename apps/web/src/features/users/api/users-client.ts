@@ -43,6 +43,7 @@ export interface CreateUserPayload {
 }
 
 export interface UpdateUserPermissionsPayload {
+  displayName?: string
   permissions: string[]
 }
 
@@ -93,7 +94,16 @@ export async function updateUserPermissions(
   }
 }
 
-function mapUsersApiError(error: unknown, action: "create" | "update"): Error {
+export async function archiveUser(id: string): Promise<User> {
+  try {
+    const response = await api.post<unknown, Record<string, never>>(`/users/${id}/archive`, {})
+    return userResponseSchema.parse(response).user
+  } catch (error) {
+    throw mapUsersApiError(error, "archive")
+  }
+}
+
+function mapUsersApiError(error: unknown, action: "create" | "update" | "archive"): Error {
   if (error instanceof ApiClientError && error.status === 400) {
     return new UsersApiError("Check the user permission fields and try again.", error.status)
   }
@@ -110,14 +120,21 @@ function mapUsersApiError(error: unknown, action: "create" | "update"): Error {
     return new UsersApiError(
       action === "create"
         ? "That email is already in use."
-        : error.message || "This user cannot receive that permission update.",
+        : error.message ||
+            (action === "archive"
+              ? "This user cannot be archived."
+              : "This user cannot receive that permission update."),
       error.status,
     )
   }
 
   if (error instanceof ApiClientError) {
     return new UsersApiError(
-      action === "create" ? "Unable to create user." : "Unable to update user permissions.",
+      action === "create"
+        ? "Unable to create user."
+        : action === "archive"
+          ? "Unable to archive user."
+          : "Unable to update user permissions.",
       error.status,
     )
   }

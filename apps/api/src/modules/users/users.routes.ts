@@ -10,7 +10,7 @@ import { AuthorizationError, sendForbidden } from "../auth/authorization.js"
 import { AuthService } from "../auth/auth.service.js"
 import {
   createUserSchema,
-  updateUserPermissionsSchema,
+  updateStaffUserSchema,
 } from "./users.schemas.js"
 import { UsersRepository } from "./users.repository.js"
 import {
@@ -51,10 +51,21 @@ export async function handleUsersRoute(
 
   if (permissionsMatch && request.method === "PATCH") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const input = updateUserPermissionsSchema.parse(await readJsonBody(request))
+      const input = updateStaffUserSchema.parse(await readJsonBody(request))
 
       sendJson(response, 200, {
         user: await service.updatePermissions(permissionsMatch[1]!, input, user),
+      })
+    })
+    return true
+  }
+
+  const archiveMatch = path.match(/^\/users\/([^/]+)\/archive$/)
+
+  if (archiveMatch && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, {
+        user: await service.archive(archiveMatch[1]!, user),
       })
     })
     return true

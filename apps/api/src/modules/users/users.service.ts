@@ -2,7 +2,7 @@ import type { SafeUser } from "../auth/auth.schemas.js"
 import { listPermissionDefinitions } from "../auth/permissions.js"
 import { assertPermission } from "../auth/authorization.js"
 import { hashPassword } from "./passwords.js"
-import type { CreateUserInput, UpdateUserPermissionsInput } from "./users.schemas.js"
+import type { CreateUserInput, UpdateStaffUserInput } from "./users.schemas.js"
 import { UsersRepository } from "./users.repository.js"
 import { toUserDto, type UserDto, type UsersListDto } from "./users.types.js"
 
@@ -65,7 +65,7 @@ export class UsersService {
 
   async updatePermissions(
     userId: string,
-    input: UpdateUserPermissionsInput,
+    input: UpdateStaffUserInput,
     user: SafeUser,
   ): Promise<UserDto> {
     assertPermission(user, "users.manage")
@@ -80,13 +80,39 @@ export class UsersService {
       throw new UserPermissionAssignmentError("Admin users already receive the full permission set")
     }
 
-    const updatedUser = await this.usersRepository.updatePermissions(userId, input)
+    const updatedUser = await this.usersRepository.updateStaffUser(userId, input)
 
     if (!updatedUser) {
       throw new UserNotFoundError()
     }
 
     return toUserDto(updatedUser)
+  }
+
+  async archive(userId: string, user: SafeUser): Promise<UserDto> {
+    assertPermission(user, "users.manage")
+
+    const existingUser = await this.usersRepository.findById(userId)
+
+    if (!existingUser) {
+      throw new UserNotFoundError()
+    }
+
+    if (existingUser.role === "admin") {
+      throw new UserPermissionAssignmentError("Admin users cannot be archived from this screen")
+    }
+
+    if (!existingUser.isActive) {
+      throw new UserPermissionAssignmentError("User is already archived")
+    }
+
+    const archivedUser = await this.usersRepository.archiveUser(userId)
+
+    if (!archivedUser) {
+      throw new UserNotFoundError()
+    }
+
+    return toUserDto(archivedUser)
   }
 }
 
