@@ -162,6 +162,13 @@
       "when": 1777045383618,
       "tag": "0023_free_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1777053276394,
+      "tag": "0024_familiar_living_lightning",
+      "breakpoints": true
     }
   ]
 }
