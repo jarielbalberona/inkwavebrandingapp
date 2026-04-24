@@ -1,5 +1,5 @@
-ALTER TYPE "public"."order_line_item_type" ADD VALUE 'non_stock_item';--> statement-breakpoint
-ALTER TYPE "public"."order_line_item_type" ADD VALUE 'custom_charge';--> statement-breakpoint
+ALTER TYPE "public"."order_line_item_type" ADD VALUE IF NOT EXISTS 'non_stock_item';--> statement-breakpoint
+ALTER TYPE "public"."order_line_item_type" ADD VALUE IF NOT EXISTS 'custom_charge';--> statement-breakpoint
 ALTER TABLE "order_items" DROP CONSTRAINT "order_items_exactly_one_item";--> statement-breakpoint
 ALTER TABLE "order_items" DROP CONSTRAINT "order_items_item_type_matches_reference";--> statement-breakpoint
 ALTER TABLE "order_items" ADD COLUMN "non_stock_item_id" uuid;--> statement-breakpoint

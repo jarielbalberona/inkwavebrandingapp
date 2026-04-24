@@ -31,7 +31,7 @@ async function assertMigrationStateIsSafe(pool: Pool): Promise<void> {
 
   try {
     const migrationTableResult = await client.query<{ exists: string | null }>(
-      "select to_regclass('public.__drizzle_migrations') as exists",
+      "select to_regclass('drizzle.__drizzle_migrations') as exists",
     )
     const appTablesResult = await client.query<{ table_name: string }>(
       `
@@ -91,6 +91,12 @@ function previewStatement(statement: string): string {
   return statement.replaceAll(/\s+/g, " ").trim().slice(0, 240)
 }
 
+function migrationRequiresAutocommit(migration: ParsedMigration): boolean {
+  return migration.statements.some((statement) =>
+    /^\s*ALTER\s+TYPE\s+.+\s+ADD\s+VALUE\b/i.test(statement),
+  )
+}
+
 async function runDeployMigrations(pool: Pool): Promise<void> {
   const migrations = await readMigrations()
   const client = await pool.connect()
@@ -119,7 +125,10 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
       }
 
       console.log(`Applying migration ${migration.tag}.sql`)
-      await client.query("BEGIN")
+      const useTransaction = !migrationRequiresAutocommit(migration)
+      if (useTransaction) {
+        await client.query("BEGIN")
+      }
       let failedStatement = ""
 
       try {
@@ -138,9 +147,13 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
           `,
           [migration.hash, migration.folderMillis],
         )
-        await client.query("COMMIT")
+        if (useTransaction) {
+          await client.query("COMMIT")
+        }
       } catch (error) {
-        await client.query("ROLLBACK")
+        if (useTransaction) {
+          await client.query("ROLLBACK")
+        }
 
         const errorMessage =
           error instanceof Error ? error.message : "Unknown migration error"
