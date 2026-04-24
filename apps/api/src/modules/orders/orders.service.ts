@@ -3,15 +3,13 @@ import { randomUUID } from "node:crypto"
 import type { DatabaseClient } from "../../db/client.js"
 import type { Cup, Lid, NonStockItem } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin } from "../auth/authorization.js"
+import { assertPermission } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
 import { InventoryService } from "../inventory/inventory.service.js"
 import { InvoicesRepository } from "../invoices/invoices.repository.js"
 import {
-  InvoicePaidLockError,
-  InvoiceVoidLockError,
   assertInvoiceAllowsStructuralChanges,
   syncInvoiceSnapshotForOrder,
 } from "../invoices/invoices.service.js"
@@ -506,7 +504,7 @@ export class OrdersService {
     const includesCustomCharge = parsedInput.line_items.some((item) => item.item_type === "custom_charge")
 
     if (includesCustomCharge) {
-      assertAdmin(user)
+      assertPermission(user, "orders.custom_charges.manage")
     }
 
     const resolvedItems = await resolveOrderLineItems(parsedInput.line_items, {
@@ -831,7 +829,10 @@ export class OrdersService {
       const existingInvoice = await invoicesRepository.findByOrderId(order.id)
 
       if (hasStructuralChanges && existingInvoice) {
-        assertInvoiceAllowsStructuralChanges(existingInvoice.status)
+        assertInvoiceAllowsStructuralChanges({
+          status: existingInvoice.status,
+          paidAmount: existingInvoice.paidAmount,
+        })
       }
 
       if (parsedInput.customer_id && parsedInput.customer_id !== order.customerId) {
@@ -856,7 +857,7 @@ export class OrdersService {
         const includesCustomCharge = parsedInput.line_items.some((item) => item.item_type === "custom_charge")
 
         if (includesCustomCharge) {
-          assertAdmin(user)
+          assertPermission(user, "orders.custom_charges.manage")
         }
 
         const resolvedItems = await resolveOrderLineItems(parsedInput.line_items, {

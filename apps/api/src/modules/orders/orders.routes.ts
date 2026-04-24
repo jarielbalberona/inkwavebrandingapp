@@ -20,7 +20,11 @@ import {
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
-import { InvoicePaidLockError, InvoiceVoidLockError } from "../invoices/invoices.service.js"
+import {
+  InvoicePaidLockError,
+  InvoicePaymentLockError,
+  InvoiceVoidLockError,
+} from "../invoices/invoices.service.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
@@ -219,6 +223,7 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||
     error instanceof InvoicePaidLockError ||
+    error instanceof InvoicePaymentLockError ||
     error instanceof InvoiceVoidLockError ||
     error instanceof InventoryBalanceItemNotFoundError ||
     error instanceof InventoryItemInactiveError ||

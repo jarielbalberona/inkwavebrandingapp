@@ -642,6 +642,68 @@ describe("inventory, order, and invoice integration", () => {
     expect(updateResponse.body.error).toBe("Invoice is locked because it has been paid")
   })
 
+  it("rejects structural edits when the linked invoice has any recorded payment", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup()
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 20,
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "cup", cup_id: cup.id, quantity: 10 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const invoiceId = invoiceResponse.body.invoice.id as string
+    const paymentResponse = await api
+      .post(`/invoices/${invoiceId}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "10.00",
+        payment_date: "2026-04-24T08:00:00.000Z",
+        note: "Deposit received",
+      })
+
+    expect(paymentResponse.status).toBe(201)
+    expect(paymentResponse.body.invoice.status).toBe("pending")
+    expect(paymentResponse.body.invoice.paid_amount).toBe("10.00")
+
+    const updateResponse = await api
+      .patch(`/orders/${orderId}`)
+      .set("Cookie", adminCookie)
+      .send({
+        line_items: [
+          {
+            id: cupLineItem.id,
+            item_type: "cup",
+            cup_id: cup.id,
+            quantity: 8,
+          },
+        ],
+      })
+
+    expect(updateResponse.status).toBe(409)
+    expect(updateResponse.body.error).toBe("Invoice is locked because payments have already been recorded")
+  })
+
   it("does not expose an invoice structural edit route", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()

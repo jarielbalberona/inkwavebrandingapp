@@ -7,6 +7,7 @@ import {
   InvoiceAlreadyExistsError,
   InvoiceAlreadyPaidError,
   InvoiceOrderCanceledError,
+  InvoicePaymentLockError,
   InvoicePaymentOverpaymentError,
   InvoicePaymentVoidError,
   InvoicePaidLockError,
@@ -21,6 +22,7 @@ const adminUser = {
   email: "admin@example.com",
   displayName: "Admin",
   role: "admin",
+  permissions: [],
 } as const
 
 const staffUser = {
@@ -28,6 +30,7 @@ const staffUser = {
   email: "staff@example.com",
   displayName: "Staff",
   role: "staff",
+  permissions: [],
 } as const
 
 test("generateForOrder rejects staff access", async () => {
@@ -389,15 +392,28 @@ test("generateForOrder includes custom_charge lines without any master-data depe
 })
 
 test("assertInvoiceAllowsStructuralChanges allows pending invoices", () => {
-  assert.doesNotThrow(() => assertInvoiceAllowsStructuralChanges("pending"))
+  assert.doesNotThrow(() => assertInvoiceAllowsStructuralChanges({ status: "pending", paidAmount: "0.00" }))
 })
 
 test("assertInvoiceAllowsStructuralChanges rejects paid invoices", () => {
-  assert.throws(() => assertInvoiceAllowsStructuralChanges("paid"), InvoicePaidLockError)
+  assert.throws(
+    () => assertInvoiceAllowsStructuralChanges({ status: "paid", paidAmount: "100.00" }),
+    InvoicePaidLockError,
+  )
 })
 
 test("assertInvoiceAllowsStructuralChanges rejects void invoices", () => {
-  assert.throws(() => assertInvoiceAllowsStructuralChanges("void"), InvoiceVoidLockError)
+  assert.throws(
+    () => assertInvoiceAllowsStructuralChanges({ status: "void", paidAmount: "0.00" }),
+    InvoiceVoidLockError,
+  )
+})
+
+test("assertInvoiceAllowsStructuralChanges rejects invoices with recorded payments", () => {
+  assert.throws(
+    () => assertInvoiceAllowsStructuralChanges({ status: "pending", paidAmount: "1.00" }),
+    InvoicePaymentLockError,
+  )
 })
 
 test("recordPayment persists a partial payment and keeps the invoice pending", async () => {

@@ -61,6 +61,14 @@ export class InvoiceVoidLockError extends Error {
   }
 }
 
+export class InvoicePaymentLockError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Invoice is locked because payments have already been recorded")
+  }
+}
+
 export class InvoiceAlreadyPaidError extends Error {
   readonly statusCode = 409
 
@@ -101,13 +109,20 @@ export class InvoiceAlreadyVoidError extends Error {
   }
 }
 
-export function assertInvoiceAllowsStructuralChanges(status: InvoiceStatus) {
-  if (status === "paid") {
+export function assertInvoiceAllowsStructuralChanges(input: {
+  status: InvoiceStatus
+  paidAmount?: string | null
+}) {
+  if (input.status === "paid") {
     throw new InvoicePaidLockError()
   }
 
-  if (status === "void") {
+  if (input.status === "void") {
     throw new InvoiceVoidLockError()
+  }
+
+  if (input.paidAmount && moneyToCents(input.paidAmount) > 0n) {
+    throw new InvoicePaymentLockError()
   }
 }
 
@@ -192,7 +207,10 @@ export async function syncInvoiceSnapshotForOrder(
     })
   }
 
-  assertInvoiceAllowsStructuralChanges(existingInvoice.status)
+  assertInvoiceAllowsStructuralChanges({
+    status: existingInvoice.status,
+    paidAmount: existingInvoice.paidAmount,
+  })
 
   return invoicesRepository.replaceInvoiceSnapshotWithItems({
     invoiceId: existingInvoice.id,
