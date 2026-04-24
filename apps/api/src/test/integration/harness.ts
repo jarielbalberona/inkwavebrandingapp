@@ -64,6 +64,34 @@ export async function getIntegrationRequest() {
   return request(createApiServer(harness.env))
 }
 
+export async function getIntegrationDb() {
+  const harness = await getIntegrationHarness()
+
+  return harness.db
+}
+
+export async function getAdminSessionCookie(): Promise<string[]> {
+  const response = await loginAsAdmin()
+  const cookie = response.headers["set-cookie"]
+
+  if (!cookie) {
+    throw new Error("Admin login did not return a session cookie")
+  }
+
+  return Array.isArray(cookie) ? cookie : [cookie]
+}
+
+export async function getStaffSessionCookie(): Promise<string[]> {
+  const response = await loginAsStaff()
+  const cookie = response.headers["set-cookie"]
+
+  if (!cookie) {
+    throw new Error("Staff login did not return a session cookie")
+  }
+
+  return Array.isArray(cookie) ? cookie : [cookie]
+}
+
 export async function loginAsAdmin() {
   const api = await getIntegrationRequest()
 

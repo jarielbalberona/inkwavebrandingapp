@@ -21,7 +21,7 @@ export interface InvoiceListItemDto {
 export interface InvoiceItemDto {
   id: string
   order_line_item_id: string
-  item_type: "cup" | "lid" | "non_stock_item"
+  item_type: "cup" | "lid" | "non_stock_item" | "custom_charge"
   description_snapshot: string
   quantity: number
   unit_price: string
@@ -62,7 +62,7 @@ export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceL
       customer_code: invoice.customerCodeSnapshot ?? null,
       business_name: invoice.customerBusinessNameSnapshot,
     },
-    subtotal: invoice.subtotal,
+    subtotal: toMoneyString(invoice.subtotal),
     created_at: invoice.createdAt.toISOString(),
     updated_at: invoice.updatedAt.toISOString(),
   }
@@ -85,18 +85,22 @@ export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): Inv
       email: invoice.customerEmailSnapshot ?? null,
       address: invoice.customerAddressSnapshot ?? null,
     },
-    subtotal: invoice.subtotal,
+    subtotal: toMoneyString(invoice.subtotal),
     items: invoice.items.map((item) => ({
       id: item.id,
       order_line_item_id: item.orderItemId,
       item_type: item.itemType,
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
-      unit_price: item.unitPrice,
-      line_total: item.lineTotal,
+      unit_price: toMoneyString(item.unitPrice),
+      line_total: toMoneyString(item.lineTotal),
       created_at: item.createdAt.toISOString(),
     })),
     created_at: invoice.createdAt.toISOString(),
     updated_at: invoice.updatedAt.toISOString(),
   }
+}
+
+function toMoneyString(value: string): string {
+  return Number(value).toFixed(2)
 }
