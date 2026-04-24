@@ -9,9 +9,11 @@
     "format": "turbo format",
     "test": "turbo test",
     "test:integration": "pnpm --filter @workspace/api test:integration",
+    "test:e2e": "VITE_API_BASE_URL=http://127.0.0.1:3100 pnpm build && playwright test",
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "turbo": "^2.8.17",
