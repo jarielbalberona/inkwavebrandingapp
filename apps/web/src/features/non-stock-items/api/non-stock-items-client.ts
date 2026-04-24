@@ -126,7 +126,7 @@ async function sendNonStockItemRequest(
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new NonStockItemsApiError("Only admins can change general item records.", error.status)
+      throw new NonStockItemsApiError("You do not have permission to change general item records.", error.status)
     }
 
     if (error instanceof ApiClientError && error.status === 404) {

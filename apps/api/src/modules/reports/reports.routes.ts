@@ -30,33 +30,33 @@ export async function handleReportsRoute(
   const path = getRequestPath(request)
 
   if (path === "/reports/inventory-summary" && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service) => {
-      sendJson(response, 200, { report: await service.getInventorySummary() })
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { report: await service.getInventorySummary(user) })
     })
     return true
   }
 
   if (path === "/reports/low-stock" && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service) => {
-      sendJson(response, 200, { report: await service.getLowStock() })
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { report: await service.getLowStock(user) })
     })
     return true
   }
 
   if (path === "/reports/order-status" && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service) => {
-      sendJson(response, 200, { report: await service.getOrderStatusReport() })
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { report: await service.getOrderStatusReport(user) })
     })
     return true
   }
 
   if (path === "/reports/cup-usage" && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service) => {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
       const query = cupUsageReportQuerySchema.parse(
         Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
       )
 
-      sendJson(response, 200, { report: await service.getCupUsageReport(query) })
+      sendJson(response, 200, { report: await service.getCupUsageReport(query, user) })
     })
     return true
   }

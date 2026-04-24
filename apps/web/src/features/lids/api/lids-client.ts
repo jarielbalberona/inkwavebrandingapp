@@ -136,7 +136,7 @@ async function sendLidRequest(
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new LidsApiError("Only admins can change lid records.", error.status)
+      throw new LidsApiError("You do not have permission to change lid records.", error.status)
     }
 
     if (error instanceof ApiClientError && error.status === 404) {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { Link } from "@tanstack/react-router"
+import { Link, Navigate } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
@@ -32,6 +32,8 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type {
   Order,
   ProgressEvent,
@@ -46,7 +48,9 @@ import {
 } from "@/features/orders/hooks/use-orders"
 
 export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
+  const currentUser = useCurrentUser()
   const orderQuery = useOrderQuery(orderId)
+  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
   const createProgressEventMutation = useCreateProgressEventMutation()
   const [selectedLineItemId, setSelectedLineItemId] = useState<string | null>(null)
   const [progressStage, setProgressStage] = useState<ProgressStage>("printed")
@@ -67,6 +71,24 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
       ) ?? [],
     [order]
   )
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canManageOrders) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== `/orders/${orderId}/fulfillment`) {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Fulfillment updates require order-management permission.</AlertDescription>
+      </Alert>
+    )
+  }
   const selectedLineItem =
     trackedLineItems.find((item) => item.id === selectedLineItemId) ??
     trackedLineItems[0] ??

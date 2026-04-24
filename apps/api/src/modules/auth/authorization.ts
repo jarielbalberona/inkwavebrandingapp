@@ -1,6 +1,11 @@
 import type { ServerResponse } from "node:http"
 
 import { sendJson } from "../../http/json.js"
+import {
+  type AppPermission,
+  hasPermission,
+  permissionDefinitions,
+} from "./permissions.js"
 import type { UserRole } from "../users/users.schemas.js"
 import type { SafeUser } from "./auth.schemas.js"
 
@@ -27,19 +32,35 @@ export function isAdmin(user: Pick<SafeUser, "role">): boolean {
   return user.role === "admin"
 }
 
-export function canViewConfidentialFields(user: Pick<SafeUser, "role">): boolean {
-  return isAdmin(user)
+export function canViewConfidentialFields(user: Pick<SafeUser, "role" | "permissions">): boolean {
+  return (
+    hasPermission(user, "customers.confidential.view") ||
+    hasPermission(user, "catalog.pricing.view") ||
+    hasPermission(user, "orders.pricing.view") ||
+    hasPermission(user, "reports.financial.view") ||
+    isAdmin(user)
+  )
 }
 
-export function assertAdmin(user: Pick<SafeUser, "role">): asserts user is SafeUser & { role: "admin" } {
-  if (!isAdmin(user)) {
-    throw new AuthorizationError("Admin role required")
+export function assertPermission(
+  user: Pick<SafeUser, "role" | "permissions">,
+  permission: AppPermission,
+): void {
+  if (!hasPermission(user, permission)) {
+    const definition = permissionDefinitions.find((entry) => entry.key === permission)
+    throw new AuthorizationError(
+      definition ? `${definition.label} permission required` : "Permission required",
+    )
   }
 }
 
-export function assertCanViewConfidentialFields(user: Pick<SafeUser, "role">) {
+export function assertAdmin(user: Pick<SafeUser, "role" | "permissions">): asserts user is SafeUser & { role: "admin" } {
+  assertPermission(user, "users.manage")
+}
+
+export function assertCanViewConfidentialFields(user: Pick<SafeUser, "role" | "permissions">) {
   if (!canViewConfidentialFields(user)) {
-    throw new AuthorizationError("Confidential fields require admin role")
+    throw new AuthorizationError("Confidential-view permission required")
   }
 }
 

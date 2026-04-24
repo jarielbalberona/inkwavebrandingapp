@@ -233,7 +233,7 @@ export async function createStockIntake(payload: StockIntakePayload): Promise<In
   } catch (error) {
     if (error instanceof ApiClientError) {
       if (error.status === 403) {
-        throw new Error("Only admins can receive stock into inventory.")
+        throw new Error("You do not have permission to receive stock into inventory.")
       }
 
       if (error.status === 404) {
@@ -276,7 +276,7 @@ export async function createInventoryAdjustment(
   } catch (error) {
     if (error instanceof ApiClientError) {
       if (error.status === 403) {
-        throw new Error("Only admins can record manual inventory adjustments.")
+        throw new Error("You do not have permission to record manual inventory adjustments.")
       }
 
       if (error.status === 404) {

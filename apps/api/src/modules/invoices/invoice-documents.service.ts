@@ -6,7 +6,7 @@ import { buildInvoicePdfObjectKey } from "../../lib/storage/object-keys.js"
 import { logError, serializeError } from "../../lib/logger.js"
 import type { ObjectStorageProvider } from "../../lib/storage/object-storage.types.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin } from "../auth/authorization.js"
+import { assertPermission } from "../auth/authorization.js"
 import { AssetsRepository } from "../assets/assets.repository.js"
 import { InvoiceNotFoundError } from "./invoices.service.js"
 import { toInvoicePdfData } from "./invoice-pdf.mapper.js"
@@ -38,7 +38,7 @@ export class InvoiceDocumentsService {
   }
 
   async getPdfDocument(invoiceId: string, user: SafeUser) {
-    assertAdmin(user)
+    assertPermission(user, "invoices.view")
 
     const invoice = await this.invoicesRepository.findByIdWithRelations(invoiceId)
 
@@ -150,7 +150,7 @@ export class InvoiceDocumentsService {
   }
 
   async getShareablePdfLink(invoiceId: string, user: SafeUser) {
-    assertAdmin(user)
+    assertPermission(user, "invoices.view")
 
     if (!this.storageProvider || !this.storageConfig.r2?.usePublicCdn) {
       throw new InvoiceShareLinkUnavailableError()

@@ -10,6 +10,7 @@ import { UsersRepository } from "../users/users.repository.js"
 import { AUTH_SESSION_COOKIE } from "./auth.constants.js"
 import { requireAuthenticatedRequest } from "./auth.middleware.js"
 import { AuthService, AuthenticationError } from "./auth.service.js"
+import { authSessionCookieOptions } from "./auth-session-cookie.js"
 import { loginRequestSchema } from "./auth.schemas.js"
 import { createSessionToken } from "./sessions.js"
 
@@ -60,7 +61,11 @@ async function handleLogin(
     })
 
     sendJson(response, 200, { user }, {
-      "Set-Cookie": createSessionCookie(token, context),
+      "Set-Cookie": serializeCookie(
+        AUTH_SESSION_COOKIE,
+        token,
+        authSessionCookieOptions(context.env, context.env.authSessionTtlSeconds),
+      ),
     })
   } catch (error) {
     if (error instanceof ZodError || error instanceof SyntaxError) {
@@ -79,13 +84,7 @@ async function handleLogin(
 
 function handleLogout(response: ServerResponse, context: AuthRouteContext) {
   sendJson(response, 200, { ok: true }, {
-    "Set-Cookie": serializeCookie(AUTH_SESSION_COOKIE, "", {
-      httpOnly: true,
-      maxAgeSeconds: 0,
-      path: "/",
-      sameSite: "Lax",
-      secure: context.env.nodeEnv === "production",
-    }),
+    "Set-Cookie": serializeCookie(AUTH_SESSION_COOKIE, "", authSessionCookieOptions(context.env, 0)),
   })
 }
 
@@ -104,14 +103,4 @@ async function handleMe(
   }
 
   sendJson(response, 200, { user: authContext.user })
-}
-
-function createSessionCookie(token: string, context: AuthRouteContext): string {
-  return serializeCookie(AUTH_SESSION_COOKIE, token, {
-    httpOnly: true,
-    maxAgeSeconds: context.env.authSessionTtlSeconds,
-    path: "/",
-    sameSite: "Lax",
-    secure: context.env.nodeEnv === "production",
-  })
 }

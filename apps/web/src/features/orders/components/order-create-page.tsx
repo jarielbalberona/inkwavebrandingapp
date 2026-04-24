@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, Navigate, useNavigate } from "@tanstack/react-router"
 import { GripVertical, TrashIcon } from "lucide-react"
 import {
   useFieldArray,
@@ -44,6 +44,7 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { formatCurrency } from "@workspace/ui/lib/number"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Cup } from "@/features/cups/api/cups-client"
 import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import type { Customer } from "@/features/customers/api/customers-client"
@@ -317,7 +318,7 @@ function OrderCreateLineItemFields({
   cupsLoading,
   lidsLoading,
   nonStockItemsLoading,
-  isAdmin,
+  canManageCustomCharges,
 }: {
   index: number
   fieldId: string
@@ -327,7 +328,7 @@ function OrderCreateLineItemFields({
   cupsLoading: boolean
   lidsLoading: boolean
   nonStockItemsLoading: boolean
-  isAdmin: boolean
+  canManageCustomCharges: boolean
 }) {
   const { control, setValue, getValues } = useFormContext<OrderCreateValues>()
   const itemType =
@@ -399,7 +400,7 @@ function OrderCreateLineItemFields({
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
-                <SelectItem value="custom_charge" disabled={!isAdmin}>
+                <SelectItem value="custom_charge" disabled={!canManageCustomCharges}>
                   Custom Charge
                 </SelectItem>
               </SelectContent>
@@ -595,12 +596,16 @@ function OrderCreateLineItemFields({
 export function OrderCreatePage() {
   const navigate = useNavigate()
   const currentUser = useCurrentUser()
+  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
   const createOrderMutation = useCreateOrderMutation()
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const isAdmin = currentUser.data?.role === "admin"
+  const canManageCustomCharges = hasPermission(
+    currentUser.data,
+    appPermissions.ordersCustomChargesManage,
+  )
   const activeCups = useMemo(
     () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
     [cupsQuery.data],
@@ -613,6 +618,24 @@ export function OrderCreatePage() {
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
     [nonStockItemsQuery.data],
   )
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canManageOrders) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/orders/new") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Order creation requires order-management permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   const form = useForm<OrderCreateValues>({
     resolver: zodResolver(orderCreateSchema),
@@ -827,7 +850,7 @@ export function OrderCreatePage() {
                                 cupsLoading={cupsQuery.isLoading}
                                 lidsLoading={lidsQuery.isLoading}
                                 nonStockItemsLoading={nonStockItemsQuery.isLoading}
-                                isAdmin={isAdmin}
+                                canManageCustomCharges={canManageCustomCharges}
                               />
                             </div>
                           )}

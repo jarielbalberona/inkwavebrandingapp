@@ -15,6 +15,7 @@ import { handleLidsRoute } from "./modules/lids/lids.routes.js"
 import { handleNonStockItemsRoute } from "./modules/non-stock-items/non-stock-items.routes.js"
 import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
 import { handleReportsRoute } from "./modules/reports/reports.routes.js"
+import { handleUsersRoute } from "./modules/users/users.routes.js"
 
 export interface RuntimeApiEnv extends ApiEnv {
   authSessionSecret: string
@@ -66,6 +67,7 @@ export async function handleApiRequest(
     if (await handleInvoicesRoute(request, response, { env })) return
     if (await handleOrdersRoute(request, response, { env })) return
     if (await handleReportsRoute(request, response, { env })) return
+    if (await handleUsersRoute(request, response, { env })) return
 
     if (isPublicRoute(request.method, path) && request.method === "GET" && path === "/health") {
       sendJson(response, 200, { ok: true })

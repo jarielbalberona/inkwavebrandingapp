@@ -1,5 +1,5 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin, AuthorizationError } from "../auth/authorization.js"
+import { assertPermission, AuthorizationError } from "../auth/authorization.js"
 import { CupsRepository } from "./cups.repository.js"
 import type { CupListQuery, CreateCupInput, UpdateCupInput } from "./cups.schemas.js"
 import { toCupDto, type CupDto } from "./cups.types.js"
@@ -41,6 +41,8 @@ export class CupsService {
   constructor(private readonly cupsRepository: CupsRepository) {}
 
   async list(query: CupListQuery, user: SafeUser): Promise<CupDto[]> {
+    assertPermission(user, "cups.view")
+
     const cups = query.sku
       ? await this.cupsRepository.listBySkuSearch(query.sku, {
           includeInactive: query.include_inactive,
@@ -53,6 +55,8 @@ export class CupsService {
   }
 
   async getById(id: string, user: SafeUser): Promise<CupDto> {
+    assertPermission(user, "cups.view")
+
     const cup = await this.cupsRepository.findById(id)
 
     if (!cup) {
@@ -63,6 +67,8 @@ export class CupsService {
   }
 
   async getBySku(sku: string, user: SafeUser): Promise<CupDto> {
+    assertPermission(user, "cups.view")
+
     const cup = await this.cupsRepository.findBySku(sku)
 
     if (!cup) {
@@ -73,7 +79,7 @@ export class CupsService {
   }
 
   async create(input: CreateCupInput, user: SafeUser): Promise<CupDto> {
-    assertAdmin(user)
+    assertPermission(user, "cups.manage")
 
     try {
       const sku = generateCupSku(input)
@@ -100,7 +106,7 @@ export class CupsService {
   }
 
   async update(id: string, input: UpdateCupInput, user: SafeUser): Promise<CupDto> {
-    assertAdmin(user)
+    assertPermission(user, "cups.manage")
 
     try {
       const existingCup = await this.cupsRepository.findById(id)

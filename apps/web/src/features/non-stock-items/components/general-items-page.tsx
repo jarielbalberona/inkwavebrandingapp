@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
+import { Navigate } from "@tanstack/react-router"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useWatch, type DefaultValues } from "react-hook-form"
 import { z } from "zod"
@@ -37,6 +38,7 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type {
   NonStockItem,
   NonStockItemPayload,
@@ -77,7 +79,8 @@ export function GeneralItemsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const isAdmin = currentUser.data?.role === "admin"
+  const canViewGeneralItems = hasPermission(currentUser.data, appPermissions.nonStockItemsView)
+  const canManageGeneralItems = hasPermission(currentUser.data, appPermissions.nonStockItemsManage)
   const selectedItem = useMemo(
     () => nonStockItemsQuery.data?.find((item) => item.id === selectedItemId) ?? null,
     [nonStockItemsQuery.data, selectedItemId],
@@ -89,6 +92,24 @@ export function GeneralItemsPage() {
   })
 
   const hasCostPrice = useWatch({ control: form.control, name: "has_cost_price" })
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewGeneralItems) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/products" && fallbackRoute !== "/general-items") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>General-item visibility requires general-item-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   useEffect(() => {
     if (!dialogOpen) {
@@ -144,7 +165,7 @@ export function GeneralItemsPage() {
               Managed chargeable master data for non-inventory items such as molds, fees, and setup work.
             </CardDescription>
           </div>
-          {isAdmin ? <Button onClick={openCreateDialog}>Create General Item</Button> : null}
+          {canManageGeneralItems ? <Button onClick={openCreateDialog}>Create General Item</Button> : null}
         </CardHeader>
         <CardContent className="grid gap-4">
           {nonStockItemsQuery.isLoading ? (
@@ -169,8 +190,8 @@ export function GeneralItemsPage() {
             </TableHeader>
             <TableBody>
               {nonStockItemsQuery.data?.map((item) => (
-                <TableRow key={item.id} className={isAdmin ? "cursor-pointer" : undefined} onClick={() => {
-                  if (isAdmin) {
+                <TableRow key={item.id} className={canManageGeneralItems ? "cursor-pointer" : undefined} onClick={() => {
+                  if (canManageGeneralItems) {
                     openDetailDialog(item)
                   }
                 }}>

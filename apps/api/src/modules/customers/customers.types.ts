@@ -1,6 +1,6 @@
 import type { Customer } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
+import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 
 export interface AdminCustomerDto {
   id: string
@@ -23,17 +23,11 @@ export type StaffCustomerDto = Pick<
 
 export type CustomerDto = AdminCustomerDto | StaffCustomerDto
 
-export function toCustomerDto(customer: Customer, user: Pick<SafeUser, "role">): CustomerDto {
-  const dto = shapeRoleAwareResponse(user, {
-    admin: () => toAdminCustomerDto(customer),
-    staff: () => toStaffCustomerDto(customer),
+export function toCustomerDto(customer: Customer, user: Pick<SafeUser, "role" | "permissions">): CustomerDto {
+  return shapePermissionAwareResponse(user, "customers.confidential.view", {
+    allowed: () => toAdminCustomerDto(customer),
+    restricted: () => toStaffCustomerDto(customer),
   })
-
-  if (user.role === "staff") {
-    assertNoStaffRestrictedKeys(dto)
-  }
-
-  return dto
 }
 
 function toAdminCustomerDto(customer: Customer): AdminCustomerDto {

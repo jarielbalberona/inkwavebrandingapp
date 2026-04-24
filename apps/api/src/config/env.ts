@@ -86,6 +86,8 @@ export const apiEnvSchema = z.object({
   ),
   DATABASE_SSL_MODE: z.enum(["disable", "require"]).default("disable"),
   AUTH_SESSION_SECRET: optionalSessionSecret,
+  /** `lax` (default in dev) or `none`+Secure for credentialed cross-origin (typical production SPA on another host). */
+  AUTH_SESSION_SAME_SITE: z.enum(["lax", "strict", "none"]).optional(),
   AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
   WEB_ORIGIN: optionalNonEmptyString,
   SENTRY_DSN: optionalNonEmptyString,
@@ -106,6 +108,24 @@ export const apiEnvSchema = z.object({
 export type ParsedApiEnv = z.output<typeof apiEnvSchema>
 export type DatabaseSslMode = ParsedApiEnv["DATABASE_SSL_MODE"]
 
+export type AuthSessionSameSite = "Lax" | "Strict" | "None"
+
+function mapAuthSessionSameSite(
+  raw: ParsedApiEnv["AUTH_SESSION_SAME_SITE"],
+  nodeEnv: ParsedApiEnv["NODE_ENV"],
+): AuthSessionSameSite {
+  if (raw === "lax") {
+    return "Lax"
+  }
+  if (raw === "strict") {
+    return "Strict"
+  }
+  if (raw === "none") {
+    return "None"
+  }
+  return nodeEnv === "production" ? "None" : "Lax"
+}
+
 export interface ApiEnv {
   nodeEnv: ParsedApiEnv["NODE_ENV"]
   port: number
@@ -117,6 +137,7 @@ export interface ApiEnv {
   databasePort: number
   databaseSslMode: DatabaseSslMode
   authSessionSecret?: string
+  authSessionSameSite: AuthSessionSameSite
   authSessionTtlSeconds: number
   webOrigin?: string
   sentryDsn?: string
@@ -172,6 +193,10 @@ export function parseApiEnv(input: unknown): ApiEnv {
     databasePort: result.data.DATABASE_PORT,
     databaseSslMode: result.data.DATABASE_SSL_MODE,
     authSessionSecret: result.data.AUTH_SESSION_SECRET,
+    authSessionSameSite: mapAuthSessionSameSite(
+      result.data.AUTH_SESSION_SAME_SITE,
+      result.data.NODE_ENV,
+    ),
     authSessionTtlSeconds: result.data.AUTH_SESSION_TTL_SECONDS,
     webOrigin: result.data.WEB_ORIGIN,
     sentryDsn: result.data.SENTRY_DSN,

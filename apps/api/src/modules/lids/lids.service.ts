@@ -1,5 +1,5 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin, AuthorizationError } from "../auth/authorization.js"
+import { assertPermission, AuthorizationError } from "../auth/authorization.js"
 import { LidsRepository } from "./lids.repository.js"
 import type { CreateLidInput, LidListQuery, UpdateLidInput } from "./lids.schemas.js"
 import { toLidDto, type LidDto } from "./lids.types.js"
@@ -41,6 +41,8 @@ export class LidsService {
   constructor(private readonly lidsRepository: LidsRepository) {}
 
   async list(query: LidListQuery, user: SafeUser): Promise<LidDto[]> {
+    assertPermission(user, "lids.view")
+
     const lids = await this.lidsRepository.list({
       includeInactive: query.include_inactive,
     })
@@ -49,6 +51,8 @@ export class LidsService {
   }
 
   async getById(id: string, user: SafeUser): Promise<LidDto> {
+    assertPermission(user, "lids.view")
+
     const lid = await this.lidsRepository.findById(id)
 
     if (!lid) {
@@ -59,7 +63,7 @@ export class LidsService {
   }
 
   async create(input: CreateLidInput, user: SafeUser): Promise<LidDto> {
-    assertAdmin(user)
+    assertPermission(user, "lids.manage")
 
     try {
       const sku = generateLidSku(input)
@@ -86,7 +90,7 @@ export class LidsService {
   }
 
   async update(id: string, input: UpdateLidInput, user: SafeUser): Promise<LidDto> {
-    assertAdmin(user)
+    assertPermission(user, "lids.manage")
 
     try {
       const existingLid = await this.lidsRepository.findById(id)

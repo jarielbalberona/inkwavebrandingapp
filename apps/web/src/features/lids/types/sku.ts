@@ -1,10 +1,3 @@
-const lidDiameterCodes = {
-  "80mm": "80",
-  "90mm": "90",
-  "95mm": "95",
-  "98mm": "98",
-} as const
-
 const lidBrandCodes = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
@@ -19,7 +12,7 @@ const lidColorCodes = {
 } as const
 
 export interface LidSkuPreviewInput {
-  diameter: keyof typeof lidDiameterCodes
+  diameter: "80mm" | "90mm" | "95mm" | "98mm"
   brand: keyof typeof lidBrandCodes
   shape: "dome" | "flat" | "strawless" | "coffee_lid" | "tall_lid"
   color: keyof typeof lidColorCodes
@@ -27,7 +20,7 @@ export interface LidSkuPreviewInput {
 
 export function generateLidSkuPreview(input: LidSkuPreviewInput): string {
   const segments: string[] = [
-    lidDiameterCodes[input.diameter],
+    input.diameter,
     lidBrandCodes[input.brand],
     input.shape,
   ]

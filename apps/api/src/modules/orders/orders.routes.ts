@@ -131,8 +131,8 @@ export async function handleOrdersRoute(
   const progressEventsMatch = path.match(/^\/order-line-items\/([^/]+)\/progress-events$/)
 
   if (progressEventsMatch && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service) => {
-      sendJson(response, 200, await service.listProgressEvents(progressEventsMatch[1] ?? ""))
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, await service.listProgressEvents(progressEventsMatch[1] ?? "", user))
     })
     return true
   }

@@ -18,6 +18,7 @@ export {
 export type { AuthenticatedRequestContext } from "./modules/auth/auth.middleware.js"
 export {
   AuthorizationError,
+  assertPermission,
   assertAdmin,
   assertCanViewConfidentialFields,
   canViewConfidentialFields,
@@ -28,9 +29,20 @@ export {
 } from "./modules/auth/authorization.js"
 export type { ConfidentialFieldCategory } from "./modules/auth/authorization.js"
 export {
+  hasPermission,
+  isPermission,
+  listPermissionDefinitions,
+  normalizeAssignedPermissions,
+  permissionDefinitions,
+  permissionKeys,
+  resolveEffectivePermissions,
+  rolePermissionPresets,
+} from "./modules/auth/permissions.js"
+export type { AppPermission, PermissionDefinition } from "./modules/auth/permissions.js"
+export {
   assertNoStaffRestrictedKeys,
   findStaffRestrictedKeys,
-  shapeRoleAwareResponse,
+  shapePermissionAwareResponse,
   staffRestrictedResponseKeys,
 } from "./modules/auth/role-safe-response.js"
 export type { StaffRestrictedResponseKey } from "./modules/auth/role-safe-response.js"

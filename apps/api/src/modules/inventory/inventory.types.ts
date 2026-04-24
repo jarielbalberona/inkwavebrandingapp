@@ -24,7 +24,7 @@ export type InventoryBalanceDto =
 
 export function toInventoryBalanceDto(
   balance: InventoryBalanceSummary,
-  user: Pick<SafeUser, "role">,
+  user: Pick<SafeUser, "role" | "permissions">,
 ): InventoryBalanceDto {
   if (balance.itemType === "cup") {
     return {

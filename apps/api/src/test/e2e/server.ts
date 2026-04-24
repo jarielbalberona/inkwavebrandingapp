@@ -10,6 +10,7 @@ import { resetDatabaseClient } from "../../db/client.js"
 import { resetDatabasePool } from "../../db/pool.js"
 import * as schema from "../../db/schema/index.js"
 import { logError, logInfo, serializeError } from "../../lib/logger.js"
+import type { SafeUser } from "../../modules/auth/auth.schemas.js"
 import { CustomersRepository } from "../../modules/customers/customers.repository.js"
 import { InvoicesRepository } from "../../modules/invoices/invoices.repository.js"
 import { InvoicesService } from "../../modules/invoices/invoices.service.js"
@@ -164,7 +165,7 @@ async function main() {
 
 async function seedUsers(
   db: ReturnType<typeof drizzle<typeof schema>>,
-) {
+): Promise<SafeUser> {
   const [adminPasswordHash, staffPasswordHash] = await Promise.all([
     hashPassword(e2eAdmin.password),
     hashPassword(e2eStaff.password),
@@ -199,17 +200,13 @@ async function seedUsers(
     email: adminUser.email,
     displayName: adminUser.displayName,
     role: "admin",
-  } as const
+    permissions: [],
+  }
 }
 
 async function seedSmokeData(
   db: ReturnType<typeof drizzle<typeof schema>>,
-  adminUser: {
-    id: string
-    email: string
-    displayName: string | null
-    role: "admin"
-  },
+  adminUser: SafeUser,
 ) {
   const [customer] = await db
     .insert(schema.customers)

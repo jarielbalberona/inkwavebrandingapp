@@ -56,6 +56,7 @@ test("toOrderDto hides line-item pricing for staff", () => {
     email: "staff@example.com",
     displayName: "Staff",
     role: "staff",
+    permissions: [],
   })
 
   assert.equal("unit_cost_price" in dto.items[0], false)
@@ -69,6 +70,7 @@ test("toOrderDto includes line-item pricing for admin", () => {
     email: "admin@example.com",
     displayName: "Admin",
     role: "admin",
+    permissions: [],
   })
 
   assert.equal("unit_cost_price" in dto.items[0], true)

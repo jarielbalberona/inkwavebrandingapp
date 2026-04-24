@@ -1,7 +1,7 @@
 import type { Lid } from "../../db/schema/index.js"
 import { generateLidSku } from "../../lib/master-data/sku.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
+import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 
 export interface AdminLidDto {
   id: string
@@ -22,17 +22,11 @@ export type StaffLidDto = Omit<AdminLidDto, "cost_price" | "default_sell_price">
 
 export type LidDto = AdminLidDto | StaffLidDto
 
-export function toLidDto(lid: Lid, user: Pick<SafeUser, "role">): LidDto {
-  const dto = shapeRoleAwareResponse(user, {
-    admin: () => toAdminLidDto(lid),
-    staff: () => toStaffLidDto(lid),
+export function toLidDto(lid: Lid, user: Pick<SafeUser, "role" | "permissions">): LidDto {
+  return shapePermissionAwareResponse(user, "catalog.pricing.view", {
+    allowed: () => toAdminLidDto(lid),
+    restricted: () => toStaffLidDto(lid),
   })
-
-  if (user.role === "staff") {
-    assertNoStaffRestrictedKeys(dto)
-  }
-
-  return dto
 }
 
 function toAdminLidDto(lid: Lid): AdminLidDto {

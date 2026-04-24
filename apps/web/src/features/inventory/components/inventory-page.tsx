@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Link } from "@tanstack/react-router"
+import { Link, Navigate } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
@@ -43,6 +43,7 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { InventoryBalance } from "@/features/inventory/api/inventory-client"
 import {
   useInventoryAdjustmentMutation,
@@ -100,7 +101,29 @@ export function InventoryPage() {
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false)
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const isAdmin = currentUser.data?.role === "admin"
+  const canViewInventory = hasPermission(currentUser.data, appPermissions.inventoryView)
+  const canRecordStockIntake = hasPermission(currentUser.data, appPermissions.inventoryStockIntake)
+  const canAdjustInventory = hasPermission(currentUser.data, appPermissions.inventoryAdjust)
+  const canCreateCups = hasPermission(currentUser.data, appPermissions.cupsManage)
+  const canCreateLids = hasPermission(currentUser.data, appPermissions.lidsManage)
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewInventory) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/inventory") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Inventory visibility requires inventory-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   const form = useForm<StockIntakeFormValues>({
     resolver: zodResolver(stockIntakeFormSchema),
@@ -261,27 +284,31 @@ export function InventoryPage() {
               <Button asChild type="button" variant="outline">
                 <Link to="/inventory-history">View movement history</Link>
               </Button>
-              {isAdmin ? (
+              {canCreateCups || canCreateLids ? (
                 <>
-                  <Button asChild type="button" variant="outline">
-                    <Link to="/cups">
-                      <PlusIcon className="size-4" /> Cup
-                    </Link>
-                  </Button>
-                  <Button asChild type="button" variant="outline">
-                    <Link to="/lids">
-                      <PlusIcon className="size-4" /> Lid
-                    </Link>
-                  </Button>
+                  {canCreateCups ? (
+                    <Button asChild type="button" variant="outline">
+                      <Link to="/cups">
+                        <PlusIcon className="size-4" /> Cup
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {canCreateLids ? (
+                    <Button asChild type="button" variant="outline">
+                      <Link to="/lids">
+                        <PlusIcon className="size-4" /> Lid
+                      </Link>
+                    </Button>
+                  ) : null}
                 </>
               ) : null}
             </div>
           </div>
 
-          {currentUser.data && !isAdmin ? (
+          {currentUser.data && !canRecordStockIntake && !canAdjustInventory ? (
             <Alert>
               <AlertDescription>
-                Your account can inspect stock balances, but stock changes remain admin-only.
+                Your account can inspect stock balances, but stock changes require inventory permissions.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -381,7 +408,7 @@ export function InventoryPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            disabled={!isAdmin || !isInventoryItemActive(balance)}
+                            disabled={!canRecordStockIntake || !isInventoryItemActive(balance)}
                             onClick={() => openReceiveStockDialog(balance)}
                           >
                             Receive
@@ -416,7 +443,7 @@ export function InventoryPage() {
                                     <FormLabel>Quantity</FormLabel>
                                     <FormControl>
                                       <Input.Number
-                                        disabled={!isAdmin}
+                                        disabled={!canRecordStockIntake}
                                         min={0}
                                         value={field.value}
                                         onChange={(value) => field.onChange(value ?? 0)}
@@ -434,7 +461,7 @@ export function InventoryPage() {
                                     <FormLabel>Reference</FormLabel>
                                     <FormControl>
                                       <Input
-                                        disabled={!isAdmin}
+                                        disabled={!canRecordStockIntake}
                                         {...field}
                                         value={field.value ?? ""}
                                       />
@@ -451,7 +478,7 @@ export function InventoryPage() {
                                     <FormLabel>Note</FormLabel>
                                     <FormControl>
                                       <Input
-                                        disabled={!isAdmin}
+                                        disabled={!canRecordStockIntake}
                                         {...field}
                                         value={field.value ?? ""}
                                       />
@@ -460,7 +487,7 @@ export function InventoryPage() {
                                 )}
                               />
 
-                              <Button type="submit" disabled={!isAdmin || stockIntake.isPending}>
+                              <Button type="submit" disabled={!canRecordStockIntake || stockIntake.isPending}>
                                 {stockIntake.isPending ? "Recording..." : "Record stock intake"}
                               </Button>
                             </form>
@@ -480,7 +507,7 @@ export function InventoryPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            disabled={!isAdmin || !isInventoryItemActive(balance)}
+                            disabled={!canAdjustInventory || !isInventoryItemActive(balance)}
                             onClick={() => openAdjustmentDialog(balance)}
                           >
                             Adjust
@@ -517,7 +544,7 @@ export function InventoryPage() {
                                   <FormItem>
                                     <FormLabel>Adjustment type</FormLabel>
                                     <Select
-                                      disabled={!isAdmin}
+                                      disabled={!canAdjustInventory}
                                       value={field.value}
                                       onValueChange={field.onChange}
                                     >
@@ -545,7 +572,7 @@ export function InventoryPage() {
                                     <FormLabel>Quantity</FormLabel>
                                     <FormControl>
                                       <Input.Number
-                                        disabled={!isAdmin}
+                                        disabled={!canAdjustInventory}
                                         min={0}
                                         value={field.value}
                                         onChange={(value) => field.onChange(value ?? 0)}
@@ -563,7 +590,7 @@ export function InventoryPage() {
                                     <FormLabel>Reference</FormLabel>
                                     <FormControl>
                                       <Input
-                                        disabled={!isAdmin}
+                                        disabled={!canAdjustInventory}
                                         {...field}
                                         value={field.value ?? ""}
                                       />
@@ -580,7 +607,7 @@ export function InventoryPage() {
                                     <FormLabel>Reason</FormLabel>
                                     <FormControl>
                                       <Input
-                                        disabled={!isAdmin}
+                                        disabled={!canAdjustInventory}
                                         {...field}
                                         value={field.value ?? ""}
                                       />
@@ -591,7 +618,7 @@ export function InventoryPage() {
 
                               <Button
                                 type="submit"
-                                disabled={!isAdmin || inventoryAdjustment.isPending}
+                                disabled={!canAdjustInventory || inventoryAdjustment.isPending}
                               >
                                 {inventoryAdjustment.isPending
                                   ? "Recording..."

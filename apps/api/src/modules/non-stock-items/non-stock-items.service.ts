@@ -1,5 +1,5 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin, AuthorizationError } from "../auth/authorization.js"
+import { assertPermission, AuthorizationError } from "../auth/authorization.js"
 import type {
   CreateNonStockItemInput,
   NonStockItemListQuery,
@@ -36,6 +36,8 @@ export class NonStockItemsService {
   constructor(private readonly nonStockItemsRepository: NonStockItemsRepository) {}
 
   async list(query: NonStockItemListQuery, user: SafeUser): Promise<NonStockItemDto[]> {
+    assertPermission(user, "non_stock_items.view")
+
     const nonStockItems = await this.nonStockItemsRepository.list({
       includeInactive: query.include_inactive,
       name: query.name,
@@ -45,6 +47,8 @@ export class NonStockItemsService {
   }
 
   async getById(id: string, user: SafeUser): Promise<NonStockItemDto> {
+    assertPermission(user, "non_stock_items.view")
+
     const nonStockItem = await this.nonStockItemsRepository.findById(id)
 
     if (!nonStockItem) {
@@ -55,7 +59,7 @@ export class NonStockItemsService {
   }
 
   async create(input: CreateNonStockItemInput, user: SafeUser): Promise<NonStockItemDto> {
-    assertAdmin(user)
+    assertPermission(user, "non_stock_items.manage")
 
     try {
       return toNonStockItemDto(await this.nonStockItemsRepository.create(input), user)
@@ -78,7 +82,7 @@ export class NonStockItemsService {
     input: UpdateNonStockItemInput,
     user: SafeUser,
   ): Promise<NonStockItemDto> {
-    assertAdmin(user)
+    assertPermission(user, "non_stock_items.manage")
 
     try {
       const existingNonStockItem = await this.nonStockItemsRepository.findById(id)

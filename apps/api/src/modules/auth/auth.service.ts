@@ -1,4 +1,5 @@
 import type { User } from "../../db/schema/index.js"
+import { resolveEffectivePermissions } from "./permissions.js"
 import { verifyPassword } from "../users/passwords.js"
 import { UsersRepository } from "../users/users.repository.js"
 import type { LoginRequest, SafeUser } from "./auth.schemas.js"
@@ -45,5 +46,6 @@ function toSafeUser(user: User): SafeUser {
     email: user.email,
     displayName: user.displayName,
     role: user.role,
+    permissions: resolveEffectivePermissions(user.role, user.permissions),
   }
 }

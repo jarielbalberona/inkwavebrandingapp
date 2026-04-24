@@ -43,7 +43,7 @@ export type InventoryMovementDto =
 
 export function toInventoryMovementDto(
   movement: InventoryMovementWithRelations,
-  user: Pick<SafeUser, "role">,
+  user: Pick<SafeUser, "role" | "permissions">,
 ): InventoryMovementDto {
   const createdBy = movement.createdByUser
     ? {

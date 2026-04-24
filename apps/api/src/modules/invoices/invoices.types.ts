@@ -77,7 +77,7 @@ export interface InvoicePaymentDto {
 }
 
 export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceListItemDto {
-  assertPermission(user, "invoices.manage")
+  assertPermission(user, "invoices.view")
 
   return {
     id: invoice.id,
@@ -100,7 +100,7 @@ export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceL
 }
 
 export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): InvoiceDto {
-  assertPermission(user, "invoices.manage")
+  assertPermission(user, "invoices.view")
 
   return {
     id: invoice.id,

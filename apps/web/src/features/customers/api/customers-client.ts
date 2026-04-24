@@ -96,7 +96,7 @@ async function sendCustomerRequest(
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new CustomersApiError("Only admins can change customer records.", error.status)
+      throw new CustomersApiError("You do not have permission to change customer records.", error.status)
     }
 
     if (error instanceof ApiClientError && error.status === 404) {

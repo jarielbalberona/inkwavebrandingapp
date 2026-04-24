@@ -1,5 +1,5 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin } from "../auth/authorization.js"
+import { assertPermission } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { LidsRepository } from "../lids/lids.repository.js"
 import {
@@ -95,7 +95,7 @@ export class InventoryService {
   }
 
   async recordStockIntake(input: StockIntakeRequest, user: SafeUser) {
-    assertAdmin(user)
+    assertPermission(user, "inventory.stock_intake")
 
     return this.appendMovement({
       itemType: input.itemType,
@@ -110,6 +110,8 @@ export class InventoryService {
   }
 
   async listBalances(query: InventoryBalanceQuery, user: SafeUser) {
+    assertPermission(user, "inventory.view")
+
     const parsedQuery = inventoryBalanceQuerySchema.parse(query)
     const balances = await this.inventoryRepository.listBalances({
       includeInactive: parsedQuery.include_inactive,
@@ -120,6 +122,8 @@ export class InventoryService {
   }
 
   async getBalanceByCupId(cupId: string, user: SafeUser) {
+    assertPermission(user, "inventory.view")
+
     const balance = await this.inventoryRepository.getBalanceByCupId(cupId)
 
     if (!balance) {
@@ -130,6 +134,8 @@ export class InventoryService {
   }
 
   async listMovements(query: InventoryMovementsQuery, user: SafeUser) {
+    assertPermission(user, "inventory.view")
+
     const parsedQuery = inventoryMovementsQuerySchema.parse(query)
     const movements = await this.inventoryRepository.listMovements(parsedQuery)
 
@@ -137,7 +143,7 @@ export class InventoryService {
   }
 
   async recordAdjustment(input: InventoryAdjustmentRequest, user: SafeUser) {
-    assertAdmin(user)
+    assertPermission(user, "inventory.adjust")
 
     const parsedInput = inventoryAdjustmentRequestSchema.parse(input)
     const balance = await this.inventoryRepository.getBalanceByItem(

@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react"
 
+import { Navigate } from "@tanstack/react-router"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -38,6 +39,7 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Customer, CustomerPayload } from "@/features/customers/api/customers-client"
 import {
   useCreateCustomerMutation,
@@ -79,12 +81,32 @@ export function CustomersPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const canViewCustomers = hasPermission(currentUser.data, appPermissions.customersView)
   const selectedCustomer = useMemo(
     () => customersQuery.data?.find((customer) => customer.id === selectedCustomerId) ?? null,
     [customersQuery.data, selectedCustomerId],
   )
-  const isAdmin = currentUser.data?.role === "admin"
-  const canEditConfidentialFields = isAdmin && (!selectedCustomer || "contact_person" in selectedCustomer)
+  const canManageCustomers = hasPermission(currentUser.data, appPermissions.customersManage)
+  const canEditConfidentialFields =
+    canManageCustomers && (!selectedCustomer || "contact_person" in selectedCustomer)
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewCustomers) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/customers") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Customer visibility requires customer-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   const form = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
@@ -139,7 +161,7 @@ export function CustomersPage() {
               Maintain first-class customers for order selection. Staff receive operational customer summaries only.
             </CardDescription>
           </div>
-          {isAdmin ? <Button onClick={openCreateDialog}>Create Customer</Button> : null}
+          {canManageCustomers ? <Button onClick={openCreateDialog}>Create Customer</Button> : null}
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
@@ -164,7 +186,7 @@ export function CustomersPage() {
 
           {!customersQuery.isLoading && customersQuery.data?.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No customers found. Admins can create the first customer record.
+              No customers found. Users with customer-management permission can create the first record.
             </p>
           ) : null}
 
@@ -214,7 +236,7 @@ export function CustomersPage() {
           <DialogHeader>
             <DialogTitle>{selectedCustomer ? "Customer Detail" : "Create Customer"}</DialogTitle>
             <DialogDescription>
-              {isAdmin
+              {canManageCustomers
                 ? "Maintain customer records with shared form primitives."
                 : "Staff can inspect customer records but cannot edit confidential customer data."}
             </DialogDescription>
@@ -229,7 +251,7 @@ export function CustomersPage() {
           <Form {...form}>
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
-                <TextFormField control={form.control} disabled={!isAdmin} label="Business name" name="businessName" />
+                <TextFormField control={form.control} disabled={!canManageCustomers} label="Business name" name="businessName" />
                 <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact person" name="contactPerson" />
                 <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Contact number" name="contactNumber" />
               <TextFormField control={form.control} disabled={!canEditConfidentialFields} label="Email" name="email" />
@@ -245,7 +267,7 @@ export function CustomersPage() {
                     <FormControl>
                       <Checkbox
                         checked={field.value}
-                        disabled={!isAdmin}
+                        disabled={!canManageCustomers}
                         onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                       />
                     </FormControl>
@@ -258,7 +280,7 @@ export function CustomersPage() {
               />
 
               <DialogFooter showCloseButton>
-                {isAdmin ? (
+                {canManageCustomers ? (
                   <Button type="submit" disabled={createCustomer.isPending || updateCustomer.isPending}>
                     {selectedCustomer ? "Save Changes" : "Create Customer"}
                   </Button>

@@ -1,5 +1,5 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin, AuthorizationError } from "../auth/authorization.js"
+import { assertPermission, AuthorizationError } from "../auth/authorization.js"
 import type {
   CreateCustomerInput,
   CustomerListQuery,
@@ -28,11 +28,15 @@ export class CustomersService {
   constructor(private readonly customersRepository: CustomersRepository) {}
 
   async list(query: CustomerListQuery, user: SafeUser): Promise<CustomerDto[]> {
+    assertPermission(user, "customers.view")
+
     const customers = await this.customersRepository.list(query)
     return customers.map((customer) => toCustomerDto(customer, user))
   }
 
   async getById(id: string, user: SafeUser): Promise<CustomerDto> {
+    assertPermission(user, "customers.view")
+
     const customer = await this.customersRepository.findById(id)
 
     if (!customer) {
@@ -43,7 +47,7 @@ export class CustomersService {
   }
 
   async create(input: CreateCustomerInput, user: SafeUser): Promise<CustomerDto> {
-    assertAdmin(user)
+    assertPermission(user, "customers.manage")
 
     try {
       return toCustomerDto(await this.customersRepository.create(input), user)
@@ -57,7 +61,7 @@ export class CustomersService {
   }
 
   async update(id: string, input: UpdateCustomerInput, user: SafeUser): Promise<CustomerDto> {
-    assertAdmin(user)
+    assertPermission(user, "customers.manage")
 
     try {
       const customer = await this.customersRepository.update(id, input)

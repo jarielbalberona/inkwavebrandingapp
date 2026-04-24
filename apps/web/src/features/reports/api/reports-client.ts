@@ -191,7 +191,7 @@ export async function getSalesCostReport(): Promise<SalesCostReport> {
   })
 
   if (response.status === 403) {
-    throw new ReportsApiError("Only admins can view sales and cost reporting.", response.status)
+    throw new ReportsApiError("You do not have permission to view sales and cost reporting.", response.status)
   }
 
   if (!response.ok) {

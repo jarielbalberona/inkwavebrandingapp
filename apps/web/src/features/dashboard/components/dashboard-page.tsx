@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router"
+import { Link, Navigate } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
@@ -15,11 +15,33 @@ import { Skeleton } from "@workspace/ui/components/skeleton"
 
 import type { DashboardSummary } from "@/features/dashboard/api/dashboard-client"
 import { useDashboardSummaryQuery } from "@/features/dashboard/hooks/use-dashboard"
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 
 export function DashboardPage() {
+  const currentUser = useCurrentUser()
   const summaryQuery = useDashboardSummaryQuery()
+  const canViewDashboard = hasPermission(currentUser.data, appPermissions.dashboardView)
 
   const summary = summaryQuery.data
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewDashboard) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/dashboard") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Dashboard visibility requires dashboard-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
     <div className="grid gap-3">

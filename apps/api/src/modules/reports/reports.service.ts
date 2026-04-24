@@ -2,7 +2,7 @@ import { ReportsRepository } from "./reports.repository.js"
 import type { CupUsageReportQuery } from "./reports.schemas.js"
 import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertCanViewConfidentialFields } from "../auth/authorization.js"
+import { assertCanViewConfidentialFields, assertPermission } from "../auth/authorization.js"
 import {
   orderReportStatuses,
   toCupUsageReportDto,
@@ -17,7 +17,9 @@ import {
 export class ReportsService {
   constructor(private readonly reportsRepository: ReportsRepository) {}
 
-  async getInventorySummary(): Promise<InventoryReportDto> {
+  async getInventorySummary(user: SafeUser): Promise<InventoryReportDto> {
+    assertPermission(user, "reports.view")
+
     const balances = await this.reportsRepository.listInventoryBalances()
 
     return {
@@ -27,8 +29,8 @@ export class ReportsService {
     }
   }
 
-  async getLowStock(): Promise<InventoryReportDto> {
-    const summary = await this.getInventorySummary()
+  async getLowStock(user: SafeUser): Promise<InventoryReportDto> {
+    const summary = await this.getInventorySummary(user)
 
     return {
       low_stock_basis: summary.low_stock_basis,
@@ -37,7 +39,9 @@ export class ReportsService {
     }
   }
 
-  async getOrderStatusReport(): Promise<OrderStatusReportDto> {
+  async getOrderStatusReport(user: SafeUser): Promise<OrderStatusReportDto> {
+    assertPermission(user, "reports.view")
+
     const rows = await this.reportsRepository.countOrdersByStatus()
     const countsByStatus = new Map(rows.map((row) => [row.status, row.count]))
     const statuses = orderReportStatuses.map((status) => ({
@@ -51,7 +55,9 @@ export class ReportsService {
     }
   }
 
-  async getCupUsageReport(query: CupUsageReportQuery): Promise<CupUsageReportDto> {
+  async getCupUsageReport(query: CupUsageReportQuery, user: SafeUser): Promise<CupUsageReportDto> {
+    assertPermission(user, "reports.view")
+
     const rows = await this.reportsRepository.listCupUsage(query)
 
     return toCupUsageReportDto(
@@ -67,6 +73,7 @@ export class ReportsService {
     query: SalesCostVisibilityReportQuery,
     user: SafeUser,
   ): Promise<SalesCostVisibilityReportDto> {
+    assertPermission(user, "reports.view")
     assertCanViewConfidentialFields(user)
 
     const rows = await this.reportsRepository.listSalesCostVisibility(query)

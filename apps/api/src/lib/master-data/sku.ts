@@ -17,13 +17,6 @@ const cupColorCodes: Record<CupContractShape["color"], string> = {
   kraft: "KRFT",
 }
 
-const lidDiameterCodes: Record<LidContractShape["diameter"], string> = {
-  "80mm": "80",
-  "90mm": "90",
-  "95mm": "95",
-  "98mm": "98",
-}
-
 const lidBrandCodes: Record<LidContractShape["brand"], string> = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
@@ -57,7 +50,7 @@ export function generateCupSku(input: CupSkuInput): string {
 
 export function generateLidSku(input: LidSkuInput): string {
   const segments = [
-    lidDiameterCodes[input.diameter],
+    input.diameter,
     lidBrandCodes[input.brand],
     input.shape,
   ]

@@ -1,7 +1,7 @@
 import type { Cup } from "../../db/schema/index.js"
 import { generateCupSku } from "../../lib/master-data/sku.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
+import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 
 export interface AdminCupDto {
   id: string
@@ -23,17 +23,11 @@ export type StaffCupDto = Omit<AdminCupDto, "cost_price" | "default_sell_price">
 
 export type CupDto = AdminCupDto | StaffCupDto
 
-export function toCupDto(cup: Cup, user: Pick<SafeUser, "role">): CupDto {
-  const dto = shapeRoleAwareResponse(user, {
-    admin: () => toAdminCupDto(cup),
-    staff: () => toStaffCupDto(cup),
+export function toCupDto(cup: Cup, user: Pick<SafeUser, "role" | "permissions">): CupDto {
+  return shapePermissionAwareResponse(user, "catalog.pricing.view", {
+    allowed: () => toAdminCupDto(cup),
+    restricted: () => toStaffCupDto(cup),
   })
-
-  if (user.role === "staff") {
-    assertNoStaffRestrictedKeys(dto)
-  }
-
-  return dto
 }
 
 function toAdminCupDto(cup: Cup): AdminCupDto {

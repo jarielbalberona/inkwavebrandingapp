@@ -1,6 +1,6 @@
 import type { NonStockItem } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
+import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 
 export interface AdminNonStockItemDto {
   id: string
@@ -22,18 +22,12 @@ export type NonStockItemDto = AdminNonStockItemDto | StaffNonStockItemDto
 
 export function toNonStockItemDto(
   nonStockItem: NonStockItem,
-  user: Pick<SafeUser, "role">,
+  user: Pick<SafeUser, "role" | "permissions">,
 ): NonStockItemDto {
-  const dto = shapeRoleAwareResponse(user, {
-    admin: () => toAdminNonStockItemDto(nonStockItem),
-    staff: () => toStaffNonStockItemDto(nonStockItem),
+  return shapePermissionAwareResponse(user, "catalog.pricing.view", {
+    allowed: () => toAdminNonStockItemDto(nonStockItem),
+    restricted: () => toStaffNonStockItemDto(nonStockItem),
   })
-
-  if (user.role === "staff") {
-    assertNoStaffRestrictedKeys(dto)
-  }
-
-  return dto
 }
 
 function toAdminNonStockItemDto(nonStockItem: NonStockItem): AdminNonStockItemDto {

@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react"
 
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, Navigate, useNavigate } from "@tanstack/react-router"
 import {
   DragDropContext,
   Draggable,
@@ -52,6 +52,8 @@ import {
 } from "@workspace/ui/components/table"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Customer } from "@/features/customers/api/customers-client"
 import { useCustomersQuery } from "@/features/customers/hooks/use-customers"
 import type { Order, OrderStatus } from "@/features/orders/api/orders-client"
@@ -73,7 +75,10 @@ const priorityRowClasses = [
 type OrdersSortOption = "priority" | "created_at"
 
 export function OrdersPage() {
+  const currentUser = useCurrentUser()
   const navigate = useNavigate()
+  const canViewOrders = hasPermission(currentUser.data, appPermissions.ordersView)
+  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
   const [status, setStatus] = useState<OrderStatus | "all">("all")
   const [customerFilterId, setCustomerFilterId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<OrdersSortOption>("priority")
@@ -99,12 +104,30 @@ export function OrdersPage() {
     [filteredOrders, sortBy]
   )
 
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewOrders) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/orders") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Order visibility requires order-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
+
   function navigateToOrder(orderId: string) {
     void navigate({ to: "/orders/$orderId", params: { orderId } })
   }
 
   function handlePriorityDragEnd(result: DropResult) {
-    if (sortBy !== "priority" || !result.destination) {
+    if (!canManageOrders || sortBy !== "priority" || !result.destination) {
       return
     }
 
@@ -133,9 +156,11 @@ export function OrdersPage() {
                 operations.
               </CardDescription>
             </div>
-            <Button asChild>
-              <Link to="/orders/new">Create Order</Link>
-            </Button>
+            {canManageOrders ? (
+              <Button asChild>
+                <Link to="/orders/new">Create Order</Link>
+              </Button>
+            ) : null}
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
@@ -235,7 +260,7 @@ export function OrdersPage() {
                         key={order.id}
                         draggableId={order.id}
                         index={index}
-                        isDragDisabled={sortBy !== "priority"}
+                        isDragDisabled={!canManageOrders || sortBy !== "priority"}
                       >
                         {(draggableProvided, snapshot) => (
                           <TableRow

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
+import { Navigate } from "@tanstack/react-router"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useWatch, type DefaultValues } from "react-hook-form"
 import { z } from "zod"
@@ -43,6 +44,7 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Cup, CupPayload } from "@/features/cups/api/cups-client"
 import { useCreateCupMutation, useCupsQuery, useUpdateCupMutation } from "@/features/cups/hooks/use-cups"
 import {
@@ -129,7 +131,8 @@ export function CupsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCupId, setSelectedCupId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const isAdmin = currentUser.data?.role === "admin"
+  const canViewCups = hasPermission(currentUser.data, appPermissions.cupsView)
+  const canManageCups = hasPermission(currentUser.data, appPermissions.cupsManage)
   const selectedCup = useMemo(
     () => cupsQuery.data?.find((cup) => cup.id === selectedCupId) ?? null,
     [cupsQuery.data, selectedCupId],
@@ -164,6 +167,24 @@ export function CupsPage() {
       }),
     [selectedType, selectedBrand, selectedSize, selectedColor],
   )
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewCups) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/products" && fallbackRoute !== "/cups") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Cup visibility requires cup-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   useEffect(() => {
     if (!dialogOpen) {
@@ -241,7 +262,7 @@ export function CupsPage() {
               SKU is the inventory identity. Contract rules are backend-enforced and mirrored in the form.
             </CardDescription>
           </div>
-          {isAdmin ? <Button onClick={openCreateDialog}>Create Cup</Button> : null}
+          {canManageCups ? <Button onClick={openCreateDialog}>Create Cup</Button> : null}
         </CardHeader>
         <CardContent className="grid gap-4">
           {cupsQuery.isError ? (
@@ -276,8 +297,12 @@ export function CupsPage() {
               {cupsQuery.data?.map((cup) => (
                 <TableRow
                   key={cup.id}
-                  className="cursor-pointer"
-                  onClick={() => openDetailDialog(cup)}
+                  className={canManageCups ? "cursor-pointer" : undefined}
+                  onClick={() => {
+                    if (canManageCups) {
+                      openDetailDialog(cup)
+                    }
+                  }}
                 >
                   <TableCell className="font-medium">{cup.sku}</TableCell>
                   <TableCell>{formatCupContractLabel(cup.type)}</TableCell>
@@ -316,7 +341,7 @@ export function CupsPage() {
           <DialogHeader>
             <DialogTitle>{selectedCup ? "Cup Detail" : "Create Cup"}</DialogTitle>
             <DialogDescription>
-              {isAdmin
+              {canManageCups
                 ? "Maintain cup catalog records using the enforced cup contract."
                 : "Staff can inspect cup records but cannot edit catalog data."}
             </DialogDescription>
@@ -334,54 +359,54 @@ export function CupsPage() {
                 <ReadOnlySkuField value={skuPreview} />
                 <SelectFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Type"
                   name="type"
                   options={cupTypes}
                 />
                 <SelectFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Brand"
                   name="brand"
                   options={availableBrands}
                 />
                 <SelectFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Size"
                   name="size"
                   options={availableSizes}
                 />
                 <SelectFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Diameter"
                   name="diameter"
                   options={availableDiameters}
                 />
                 <SelectFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Color"
                   name="color"
                   options={availableColors}
                 />
                 <NumberFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Min stock"
                   name="min_stock"
                 />
                 <CurrencyFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Cost price"
                   name="cost_price"
                 />
                 <CurrencyFormField
                   control={form.control}
-                  disabled={!isAdmin}
+                  disabled={!canManageCups}
                   label="Default sell price"
                   name="default_sell_price"
                 />
@@ -395,7 +420,7 @@ export function CupsPage() {
                     <FormControl>
                       <Checkbox
                         checked={field.value}
-                        disabled={!isAdmin}
+                        disabled={!canManageCups}
                         onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                       />
                     </FormControl>
@@ -410,7 +435,7 @@ export function CupsPage() {
               />
 
               <DialogFooter showCloseButton>
-                {isAdmin ? (
+                {canManageCups ? (
                   <Button type="submit" disabled={createCup.isPending || updateCup.isPending}>
                     {selectedCup ? "Save Changes" : "Create Cup"}
                   </Button>

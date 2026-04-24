@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { Navigate } from "@tanstack/react-router"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -14,6 +15,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type {
   CupUsageReport,
   CupUsageReportItem,
@@ -41,12 +43,13 @@ type ReportTab =
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState<ReportTab>("inventory-summary")
   const currentUser = useCurrentUser()
-  const isAdmin = currentUser.data?.role === "admin"
+  const canViewReports = hasPermission(currentUser.data, appPermissions.reportsView)
+  const canViewFinancialReports = hasPermission(currentUser.data, appPermissions.reportsFinancialView)
   const inventorySummaryQuery = useInventorySummaryReportQuery()
   const lowStockQuery = useLowStockReportQuery()
   const orderStatusQuery = useOrderStatusReportQuery()
   const cupUsageQuery = useCupUsageReportQuery()
-  const salesCostQuery = useSalesCostReportQuery(isAdmin)
+  const salesCostQuery = useSalesCostReportQuery(canViewFinancialReports)
 
   const inventoryReport =
     activeTab === "inventory-summary"
@@ -65,6 +68,24 @@ export function ReportsPage() {
           : activeTab === "cup-usage"
             ? cupUsageQuery
             : salesCostQuery
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewReports) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/reports") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Report visibility requires report-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
     <div className="grid gap-4">
@@ -97,7 +118,7 @@ export function ReportsPage() {
               <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
               <TabsTrigger value="order-status">Order Status</TabsTrigger>
               <TabsTrigger value="cup-usage">Cup Usage</TabsTrigger>
-              <TabsTrigger value="sales-cost">Sales & Cost</TabsTrigger>
+              {canViewFinancialReports ? <TabsTrigger value="sales-cost">Sales & Cost</TabsTrigger> : null}
             </TabsList>
           </Tabs>
 
@@ -106,7 +127,10 @@ export function ReportsPage() {
           ) : activeTab === "cup-usage" ? (
             <CupUsageReportSection report={cupUsageQuery.data} />
           ) : activeTab === "sales-cost" ? (
-            <SalesCostReportSection isAdmin={isAdmin} report={salesCostQuery.data} />
+            <SalesCostReportSection
+              canViewFinancialReports={canViewFinancialReports}
+              report={salesCostQuery.data}
+            />
           ) : (
             <InventoryReportSummaryCards
               activeTab={activeTab}
@@ -154,7 +178,7 @@ export function ReportsPage() {
 
           {!activeQuery.isLoading &&
           activeTab === "sales-cost" &&
-          isAdmin &&
+          canViewFinancialReports &&
           salesCostQuery.data?.items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No released quantity has been recorded for financial reporting yet.
@@ -172,7 +196,7 @@ export function ReportsPage() {
             <CupUsageReportTable items={cupUsageQuery.data.items} />
           ) : null}
 
-          {activeTab === "sales-cost" && isAdmin && salesCostQuery.data?.items.length ? (
+          {activeTab === "sales-cost" && canViewFinancialReports && salesCostQuery.data?.items.length ? (
             <SalesCostReportTable items={salesCostQuery.data.items} />
           ) : null}
         </CardContent>
@@ -410,18 +434,18 @@ function CupUsageReportSection({ report }: { report: CupUsageReport | undefined 
 }
 
 function SalesCostReportSection({
-  isAdmin,
+  canViewFinancialReports,
   report,
 }: {
-  isAdmin: boolean
+  canViewFinancialReports: boolean
   report: SalesCostReport | undefined
 }) {
-  if (!isAdmin) {
+  if (!canViewFinancialReports) {
     return (
       <Alert>
         <AlertDescription>
-          Sales and cost reporting is admin-only. This page does not request or render financial
-          data for staff users.
+          Sales and cost reporting requires the financial-report permission. This page does not
+          request or render that data without it.
         </AlertDescription>
       </Alert>
     )

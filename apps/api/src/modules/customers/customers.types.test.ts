@@ -19,7 +19,7 @@ const customer = {
 } as const
 
 test("toCustomerDto strips confidential fields for staff", () => {
-  const dto = toCustomerDto(customer as never, { role: "staff" })
+  const dto = toCustomerDto(customer as never, { role: "staff", permissions: [] })
 
   assert.equal("contact_person" in dto, false)
   assert.equal("email" in dto, false)
@@ -27,7 +27,7 @@ test("toCustomerDto strips confidential fields for staff", () => {
 })
 
 test("toCustomerDto keeps confidential fields for admin", () => {
-  const dto = toCustomerDto(customer as never, { role: "admin" })
+  const dto = toCustomerDto(customer as never, { role: "admin", permissions: [] })
 
   assert.equal("contact_person" in dto, true)
   assert.equal("email" in dto, true)

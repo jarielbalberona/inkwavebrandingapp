@@ -473,6 +473,8 @@ export class OrdersService {
   ) {}
 
   async list(query: OrderListQuery, user: SafeUser): Promise<OrderDto[]> {
+    assertPermission(user, "orders.view")
+
     const parsedQuery = orderListQuerySchema.parse(query)
     const orders = await this.ordersRepository.listWithRelations(parsedQuery)
 
@@ -480,6 +482,8 @@ export class OrdersService {
   }
 
   async getById(orderId: string, user: SafeUser): Promise<OrderDto> {
+    assertPermission(user, "orders.view")
+
     const order = await this.ordersRepository.findByIdWithRelations(orderId)
 
     if (!order) {
@@ -490,6 +494,8 @@ export class OrdersService {
   }
 
   async create(input: CreateOrderInput, user: SafeUser): Promise<OrderDto> {
+    assertPermission(user, "orders.manage")
+
     const parsedInput = createOrderSchema.parse(input)
     const customer = await this.customersRepository.findById(parsedInput.customer_id)
 
@@ -579,7 +585,9 @@ export class OrdersService {
     })
   }
 
-  async listProgressEvents(orderLineItemId: string) {
+  async listProgressEvents(orderLineItemId: string, user: SafeUser) {
+    assertPermission(user, "orders.view")
+
     const orderItem = await this.ordersRepository.findOrderItemWithOrder(orderLineItemId)
 
     if (!orderItem) {
@@ -605,6 +613,8 @@ export class OrdersService {
     input: CreateOrderLineItemProgressEventInput,
     user: SafeUser,
   ) {
+    assertPermission(user, "orders.manage")
+
     const parsedInput = createOrderLineItemProgressEventSchema.parse(input)
 
     return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
@@ -745,6 +755,8 @@ export class OrdersService {
   }
 
   async cancel(orderId: string, user: SafeUser): Promise<OrderDto> {
+    assertPermission(user, "orders.manage")
+
     return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
       const order = await ordersRepository.findByIdWithRelations(orderId)
 
@@ -805,6 +817,8 @@ export class OrdersService {
   }
 
   async update(orderId: string, input: UpdateOrderInput, user: SafeUser): Promise<OrderDto> {
+    assertPermission(user, "orders.manage")
+
     const parsedInput = updateOrderSchema.parse(input)
 
     return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
@@ -1151,6 +1165,8 @@ export class OrdersService {
   }
 
   async updatePriorities(input: UpdateOrderPrioritiesInput, user: SafeUser): Promise<OrderDto[]> {
+    assertPermission(user, "orders.manage")
+
     const parsedInput = updateOrderPrioritiesSchema.parse(input)
 
     return this.ordersRepository.transaction(async ({ ordersRepository }) => {

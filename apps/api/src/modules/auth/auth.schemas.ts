@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { userEmailSchema, userRoleSchema } from "../users/users.schemas.js"
+import { userEmailSchema, userRoleSchema, appPermissionSchema } from "../users/users.schemas.js"
 
 export const loginRequestSchema = z.object({
   email: userEmailSchema,
@@ -12,6 +12,7 @@ export const safeUserSchema = z.object({
   email: userEmailSchema,
   displayName: z.string().nullable(),
   role: userRoleSchema,
+  permissions: z.array(appPermissionSchema),
 })
 
 export type LoginRequest = z.infer<typeof loginRequestSchema>

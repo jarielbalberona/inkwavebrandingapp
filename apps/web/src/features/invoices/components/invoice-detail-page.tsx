@@ -1,11 +1,21 @@
 import { useState } from "react"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Link } from "@tanstack/react-router"
+import { Link, Navigate } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -22,6 +32,14 @@ import { Input } from "@workspace/ui/components/input"
 import { Item, ItemContent, ItemDescription, ItemTitle } from "@workspace/ui/components/item"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@workspace/ui/components/dialog"
+import {
   Table,
   TableBody,
   TableCell,
@@ -32,7 +50,7 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import { appPermissions, hasPermission } from "@/features/auth/permissions"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import { getInvoiceShareLink } from "@/features/invoices/api/invoices-client"
 import {
   useInvoiceQuery,
@@ -54,6 +72,7 @@ type PaymentFormValues = z.infer<typeof paymentFormSchema>
 
 export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const currentUser = useCurrentUser()
+  const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
   const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
   const invoiceQuery = useInvoiceQuery(invoiceId)
   const recordInvoicePaymentMutation = useRecordInvoicePaymentMutation()
@@ -63,6 +82,12 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isCreatingShareLink, setIsCreatingShareLink] = useState(false)
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
+  const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false)
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
 
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
@@ -73,17 +98,25 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
     },
   })
 
-  if (!canManageInvoices) {
+  if (!canViewInvoices) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== `/invoices/${invoiceId}`) {
+      return <Navigate to={fallbackRoute} />
+    }
+
     return (
       <Alert>
-        <AlertDescription>Invoice visibility requires invoice-management permission.</AlertDescription>
+        <AlertDescription>Invoice visibility requires invoice-view permission.</AlertDescription>
       </Alert>
     )
   }
 
   const invoice = invoiceQuery.data ?? null
-  const canRecordPayment = invoice !== null && invoice.status !== "paid" && invoice.status !== "void"
+  const canRecordPayment =
+    canManageInvoices && invoice !== null && invoice.status !== "paid" && invoice.status !== "void"
   const canVoidInvoice =
+    canManageInvoices &&
     invoice !== null &&
     invoice.status === "pending" &&
     Number(invoice.paid_amount) === 0 &&
@@ -151,12 +184,9 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
     setActionError(null)
     setActionMessage(null)
 
-    if (!window.confirm(`Void invoice ${invoice.invoice_number}? This cannot be undone from the current UI.`)) {
-      return
-    }
-
     try {
       const updatedInvoice = await voidInvoiceMutation.mutateAsync(invoice.id)
+      setIsVoidDialogOpen(false)
       setActionMessage(`Voided ${updatedInvoice.invoice_number}.`)
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Unable to void invoice.")
@@ -313,130 +343,139 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
               </Alert>
             ) : null}
 
-            <Card>
-              <CardHeader className="gap-2">
-                <CardTitle className="text-base">Payment actions</CardTitle>
-                <CardDescription>
-                  Record real payments here. This does not edit invoice line items or totals.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-                <Form {...paymentForm}>
-                  <form className="grid gap-4" onSubmit={paymentForm.handleSubmit(handleRecordPayment)}>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <FormField
-                        control={paymentForm.control}
-                        name="amount"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Payment amount</FormLabel>
-                            <FormControl>
-                              <Input.Currency
-                                disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
-                                min={0}
-                                value={field.value ?? undefined}
-                                onChange={(value) => field.onChange(value)}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={paymentForm.control}
-                        name="payment_date"
-                        render={({ field }) => (
-                          <FormItem className="grid gap-2">
-                            <FormLabel>Payment date</FormLabel>
-                            <FormControl>
-                              <DatePicker
-                                disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
-                                value={field.value}
-                                onSelect={(date) => field.onChange(date ?? new Date())}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <FormField
-                      control={paymentForm.control}
-                      name="note"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Payment note</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
-                              placeholder="Reference number, payment channel, or short admin note"
-                              value={field.value ?? ""}
-                              onChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="submit"
-                        disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
-                      >
-                        {recordInvoicePaymentMutation.isPending ? "Recording..." : "Record payment"}
-                      </Button>
-                      {!canRecordPayment ? (
-                        <Button type="button" variant="outline" disabled>
-                          Payments locked
-                        </Button>
-                      ) : null}
-                    </div>
-                  </form>
-                </Form>
-
-                <div className="grid gap-3 rounded-md border p-4 text-sm">
-                  <div className="grid gap-1">
-                    <p className="font-medium">Invoice state</p>
-                    <p className="text-muted-foreground">
-                      {invoice.status === "void"
-                        ? "Void invoices cannot accept payments."
-                        : invoice.status === "paid"
-                          ? "This invoice is fully settled."
-                          : paymentLockStarted
-                            ? "Partial payment recorded. Structural order edits are locked."
-                            : "No payment recorded yet. Structural changes still belong on the linked order."}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    disabled={!canVoidInvoice}
-                    onClick={() => {
-                      void handleVoidInvoice()
-                    }}
-                  >
-                    {voidInvoiceMutation.isPending ? "Voiding..." : "Void invoice"}
-                  </Button>
-                  {!canVoidInvoice ? (
-                    <p className="text-muted-foreground">
-                      {invoice.status === "void"
-                        ? "Already void."
-                        : Number(invoice.paid_amount) > 0
-                          ? "Void is disabled once any payment has been recorded."
-                          : "Void is only available for unpaid pending invoices."}
-                    </p>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-
             <div className="grid gap-2">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-medium">Payment history</h2>
-                <Badge variant="secondary">{invoice.payments.length} entries</Badge>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-sm font-medium">Payment history</h2>
+                  <Badge variant="secondary">{invoice.payments.length} entries</Badge>
+                </div>
+                <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="outline">
+                      Payment actions
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle>Payment actions</DialogTitle>
+                      <DialogDescription>
+                        Record real payments here. This does not edit invoice line items or totals.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                      <Form {...paymentForm}>
+                        <form className="grid gap-4" onSubmit={paymentForm.handleSubmit(handleRecordPayment)}>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <FormField
+                              control={paymentForm.control}
+                              name="amount"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Payment amount</FormLabel>
+                                  <FormControl>
+                                    <Input.Currency
+                                      disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                                      min={0}
+                                      value={field.value ?? undefined}
+                                      onChange={(value) => field.onChange(value)}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={paymentForm.control}
+                              name="payment_date"
+                              render={({ field }) => (
+                                <FormItem className="grid gap-2">
+                                  <FormLabel>Payment date</FormLabel>
+                                  <FormControl>
+                                    <DatePicker
+                                      disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                                      value={field.value}
+                                      onSelect={(date) => field.onChange(date ?? new Date())}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          <FormField
+                            control={paymentForm.control}
+                            name="note"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Payment note</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                                    placeholder="Reference number, payment channel, or short admin note"
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="submit"
+                              disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                            >
+                              {recordInvoicePaymentMutation.isPending ? "Recording..." : "Record payment"}
+                            </Button>
+                            {!canRecordPayment ? (
+                              <Button type="button" variant="outline" disabled>
+                                Payments locked
+                              </Button>
+                            ) : null}
+                          </div>
+                        </form>
+                      </Form>
+
+                      <div className="grid gap-3 rounded-md border p-4 text-sm">
+                        <div className="grid gap-1">
+                          <p className="font-medium">Invoice state</p>
+                          <p className="text-muted-foreground">
+                            {invoice.status === "void"
+                              ? "Void invoices cannot accept payments."
+                              : invoice.status === "paid"
+                                ? "This invoice is fully settled."
+                                : paymentLockStarted
+                                  ? "Partial payment recorded. Structural order edits are locked."
+                                  : "No payment recorded yet. Structural changes still belong on the linked order."}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={!canVoidInvoice}
+                          onClick={() => {
+                            setIsVoidDialogOpen(true)
+                          }}
+                        >
+                          {voidInvoiceMutation.isPending ? "Voiding..." : "Void invoice"}
+                        </Button>
+                        {!canVoidInvoice ? (
+                          <p className="text-muted-foreground">
+                            {invoice.status === "void"
+                              ? "Already void."
+                              : Number(invoice.paid_amount) > 0
+                                ? "Void is disabled once any payment has been recorded."
+                                : "Void is only available for unpaid pending invoices."}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {invoice.payments.length > 0 ? (
@@ -493,6 +532,30 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
           </>
         ) : null}
       </CardContent>
+      <AlertDialog open={isVoidDialogOpen} onOpenChange={setIsVoidDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {invoice
+                ? `Void invoice ${invoice.invoice_number}? This cannot be undone from the current UI.`
+                : "Void this invoice? This cannot be undone from the current UI."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={voidInvoiceMutation.isPending}>Keep invoice</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={voidInvoiceMutation.isPending}
+              onClick={() => {
+                void handleVoidInvoice()
+              }}
+            >
+              {voidInvoiceMutation.isPending ? "Voiding..." : "Void invoice"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

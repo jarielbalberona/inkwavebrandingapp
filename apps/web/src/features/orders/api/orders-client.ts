@@ -471,6 +471,10 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
         )
       }
 
+      if (error.status === 403) {
+        throw new Error("You do not have permission to manage orders.")
+      }
+
       throw new Error("Unable to create order.")
     }
 
@@ -490,6 +494,10 @@ export async function cancelOrder(id: string): Promise<Order> {
 
       if (error.status === 409) {
         throw new Error("This order cannot be canceled in its current state.")
+      }
+
+      if (error.status === 403) {
+        throw new Error("You do not have permission to manage orders.")
       }
 
       throw new Error("Unable to cancel order.")
@@ -529,6 +537,10 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
         )
       }
 
+      if (error.status === 403) {
+        throw new Error("You do not have permission to manage orders.")
+      }
+
       throw new Error("Unable to update order.")
     }
 
@@ -552,6 +564,10 @@ export async function updateOrderPriorities(
 
     if (error instanceof ApiClientError && error.status === 404) {
       throw new Error("Some reordered orders no longer exist.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("You do not have permission to manage orders.")
     }
 
     if (error instanceof ApiClientError) {
@@ -609,6 +625,10 @@ export async function createProgressEvent(
 
       if (error.status === 409) {
         throw new Error(error.message || "Progress quantity exceeds the allowed stage balance.")
+      }
+
+      if (error.status === 403) {
+        throw new Error("You do not have permission to manage orders.")
       }
 
       throw new Error("Unable to record progress event.")

@@ -1,10 +1,6 @@
 export function formatMoney(value: string) {
-  const normalized = value.replace(/\u00B1/g, "").trim()
-  if (normalized === "") {
-    return value
-  }
 
-  const numeric = Number(normalized)
+  const numeric = Number(value)
 
   if (Number.isNaN(numeric)) {
     return value

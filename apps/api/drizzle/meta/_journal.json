@@ -148,6 +148,20 @@
       "when": 1777043709518,
       "tag": "0020_burly_jean_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1777052000000,
+      "tag": "0022_lid_sku_full_diameter",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1777045383618,
+      "tag": "0023_free_scorpion",
+      "breakpoints": true
     }
   ]
 }

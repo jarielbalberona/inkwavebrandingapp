@@ -119,7 +119,7 @@ async function sendCupRequest(path: string, method: "POST" | "PATCH", payload: C
     }
 
     if (error instanceof ApiClientError && error.status === 403) {
-      throw new CupsApiError("Only admins can change cup catalog records.", error.status)
+      throw new CupsApiError("You do not have permission to change cup catalog records.", error.status)
     }
 
     if (error instanceof ApiClientError) {

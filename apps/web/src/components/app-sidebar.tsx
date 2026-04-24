@@ -22,19 +22,35 @@ import {
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import type { AuthenticatedUser } from "@/features/auth/api/auth-client"
+import { appPermissions, canViewProducts, hasPermission } from "@/features/auth/permissions"
 
 export function AppSidebar({ user }: { user: AuthenticatedUser }) {
   const displayName = user.displayName ?? user.email
   const operationsItems = [
-    { title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon },
-    { title: "Products", to: "/products", icon: BoxIcon },
-    { title: "Customers", to: "/customers", icon: UsersRoundIcon },
-    { title: "Inventory", to: "/inventory", icon: PackageSearchIcon },
-    { title: "Orders", to: "/orders", icon: ShoppingCartIcon },
-    ...(user.role === "admin"
+    ...(hasPermission(user, appPermissions.dashboardView)
+      ? [{ title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon }]
+      : []),
+    ...(canViewProducts(user)
+      ? [{ title: "Products", to: "/products", icon: BoxIcon }]
+      : []),
+    ...(hasPermission(user, appPermissions.customersView)
+      ? [{ title: "Customers", to: "/customers", icon: UsersRoundIcon }]
+      : []),
+    ...(hasPermission(user, appPermissions.inventoryView)
+      ? [{ title: "Inventory", to: "/inventory", icon: PackageSearchIcon }]
+      : []),
+    ...(hasPermission(user, appPermissions.ordersView)
+      ? [{ title: "Orders", to: "/orders", icon: ShoppingCartIcon }]
+      : []),
+    ...(hasPermission(user, appPermissions.invoicesView)
       ? [{ title: "Invoices", to: "/invoices", icon: FileTextIcon }]
       : []),
-    { title: "Reports", to: "/reports", icon: BookOpenTextIcon },
+    ...(hasPermission(user, appPermissions.usersManage)
+      ? [{ title: "Users", to: "/users", icon: UsersRoundIcon }]
+      : []),
+    ...(hasPermission(user, appPermissions.reportsView)
+      ? [{ title: "Reports", to: "/reports", icon: BookOpenTextIcon }]
+      : []),
   ] as const
 
   return (

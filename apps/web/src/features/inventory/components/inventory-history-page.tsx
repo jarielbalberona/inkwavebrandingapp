@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 
-import { Link } from "@tanstack/react-router"
+import { Link, Navigate } from "@tanstack/react-router"
+import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -26,8 +27,11 @@ import {
   inventoryMovementTypeOptions,
   useInventoryMovementsQuery,
 } from "@/features/inventory/hooks/use-inventory"
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 
 export function InventoryHistoryPage() {
+  const currentUser = useCurrentUser()
   const [itemId, setItemId] = useState("")
   const [itemType, setItemType] = useState<string>("all")
   const [movementType, setMovementType] = useState<string>("all")
@@ -40,6 +44,25 @@ export function InventoryHistoryPage() {
     [itemId, itemType, movementType],
   )
   const movementsQuery = useInventoryMovementsQuery(query)
+  const canViewInventory = hasPermission(currentUser.data, appPermissions.inventoryView)
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewInventory) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/inventory-history") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Inventory visibility requires inventory-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
     <Card>

@@ -1,12 +1,40 @@
 import { z } from "zod"
 
 import { ApiClientError, api, skipErrorToast } from "@/lib/api"
+import { appPermissions } from "@/features/auth/permissions"
+
+const appPermissionSchema = z.enum([
+  appPermissions.dashboardView,
+  appPermissions.usersManage,
+  appPermissions.customersView,
+  appPermissions.customersManage,
+  appPermissions.customersConfidentialView,
+  appPermissions.cupsView,
+  appPermissions.catalogPricingView,
+  appPermissions.cupsManage,
+  appPermissions.lidsView,
+  appPermissions.lidsManage,
+  appPermissions.nonStockItemsView,
+  appPermissions.nonStockItemsManage,
+  appPermissions.inventoryView,
+  appPermissions.inventoryStockIntake,
+  appPermissions.inventoryAdjust,
+  appPermissions.ordersView,
+  appPermissions.ordersManage,
+  appPermissions.ordersCustomChargesManage,
+  appPermissions.ordersPricingView,
+  appPermissions.invoicesView,
+  appPermissions.invoicesManage,
+  appPermissions.reportsView,
+  appPermissions.reportsFinancialView,
+])
 
 export const authenticatedUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   displayName: z.string().nullable(),
   role: z.enum(["admin", "staff"]),
+  permissions: z.array(appPermissionSchema),
 })
 
 const authResponseSchema = z.object({

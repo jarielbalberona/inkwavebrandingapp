@@ -5,7 +5,7 @@ import { getDatabaseClient } from "../../db/client.js"
 import { sendJson } from "../../http/json.js"
 import { getRequestPath } from "../../http/routes.js"
 import { requireAuthenticatedRequest } from "../auth/auth.middleware.js"
-import { AuthorizationError, sendForbidden } from "../auth/authorization.js"
+import { assertPermission, AuthorizationError, sendForbidden } from "../auth/authorization.js"
 import { AuthService } from "../auth/auth.service.js"
 import { UsersRepository } from "../users/users.repository.js"
 import { DashboardRepository } from "./dashboard.repository.js"
@@ -32,6 +32,8 @@ export async function handleDashboardRoute(
       if (!authContext) {
         return true
       }
+
+      assertPermission(authContext.user, "dashboard.view")
 
       const service = new DashboardService(new DashboardRepository(getDatabaseClient()))
       sendJson(response, 200, { summary: await service.getSummary() })

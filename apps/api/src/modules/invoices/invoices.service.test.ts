@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
+import type { SafeUser } from "../auth/auth.schemas.js"
 import { AuthorizationError } from "../auth/authorization.js"
 import {
   assertInvoiceAllowsStructuralChanges,
@@ -17,21 +18,21 @@ import {
   syncInvoiceSnapshotForOrder,
 } from "./invoices.service.js"
 
-const adminUser = {
+const adminUser: SafeUser = {
   id: "77777777-7777-7777-7777-777777777777",
   email: "admin@example.com",
   displayName: "Admin",
   role: "admin",
   permissions: [],
-} as const
+}
 
-const staffUser = {
+const staffUser: SafeUser = {
   id: "88888888-8888-8888-8888-888888888888",
   email: "staff@example.com",
   displayName: "Staff",
   role: "staff",
   permissions: [],
-} as const
+}
 
 test("generateForOrder rejects staff access", async () => {
   const service = new InvoicesService(
@@ -419,7 +420,7 @@ test("assertInvoiceAllowsStructuralChanges rejects invoices with recorded paymen
 test("recordPayment persists a partial payment and keeps the invoice pending", async () => {
   const recordedPayments: unknown[] = []
   let financialStateUpdate: unknown = null
-  let currentInvoice = {
+  let currentInvoice: any = {
     id: "invoice-1",
     invoiceNumber: "INV-20260424-PAY0001",
     orderId: "order-1",

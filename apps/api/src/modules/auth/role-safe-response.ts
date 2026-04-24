@@ -1,5 +1,6 @@
 import type { SafeUser } from "./auth.schemas.js"
-import { canViewConfidentialFields } from "./authorization.js"
+import type { AppPermission } from "./permissions.js"
+import { hasPermission } from "./permissions.js"
 
 export const staffRestrictedResponseKeys = [
   "customer_info",
@@ -39,14 +40,15 @@ export type StaffRestrictedResponseKey = (typeof staffRestrictedResponseKeys)[nu
 
 const restrictedKeySet = new Set<string>(staffRestrictedResponseKeys)
 
-export function shapeRoleAwareResponse<TAdmin, TStaff>(
-  user: Pick<SafeUser, "role">,
+export function shapePermissionAwareResponse<TAllowed, TRestricted>(
+  user: Pick<SafeUser, "role" | "permissions">,
+  permission: AppPermission,
   shapes: {
-    admin: () => TAdmin
-    staff: () => TStaff
+    allowed: () => TAllowed
+    restricted: () => TRestricted
   },
-): TAdmin | TStaff {
-  return canViewConfidentialFields(user) ? shapes.admin() : shapes.staff()
+): TAllowed | TRestricted {
+  return hasPermission(user, permission) ? shapes.allowed() : shapes.restricted()
 }
 
 export function assertNoStaffRestrictedKeys(payload: unknown) {

@@ -1,8 +1,12 @@
-import { eq } from "drizzle-orm"
+import { desc, eq } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import { users, type User } from "../../db/schema/index.js"
-import type { BootstrapAdminInput } from "./users.schemas.js"
+import type {
+  BootstrapAdminInput,
+  CreateUserInput,
+  UpdateUserPermissionsInput,
+} from "./users.schemas.js"
 
 export class UsersRepository {
   constructor(private readonly db: DatabaseClient) {}
@@ -27,6 +31,45 @@ export class UsersRepository {
     return rows[0]
   }
 
+  async list(): Promise<User[]> {
+    return this.db.select().from(users).orderBy(desc(users.createdAt), desc(users.email))
+  }
+
+  async createUser(input: CreateUserInput & { passwordHash: string }): Promise<User> {
+    const rows = await this.db
+      .insert(users)
+      .values({
+        email: input.email,
+        displayName: input.displayName,
+        role: input.role,
+        permissions: input.permissions,
+        passwordHash: input.passwordHash,
+        isActive: true,
+      })
+      .returning()
+
+    const user = rows[0]
+
+    if (!user) {
+      throw new Error("Failed to create user")
+    }
+
+    return user
+  }
+
+  async updatePermissions(id: string, input: UpdateUserPermissionsInput): Promise<User | undefined> {
+    const rows = await this.db
+      .update(users)
+      .set({
+        permissions: input.permissions,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning()
+
+    return rows[0]
+  }
+
   async upsertAdminUser(input: BootstrapAdminInput & { passwordHash: string }): Promise<User> {
     const rows = await this.db
       .insert(users)
@@ -34,6 +77,7 @@ export class UsersRepository {
         email: input.email,
         displayName: input.displayName,
         role: "admin",
+        permissions: [],
         passwordHash: input.passwordHash,
         isActive: true,
       })
@@ -42,6 +86,7 @@ export class UsersRepository {
         set: {
           displayName: input.displayName,
           role: "admin",
+          permissions: [],
           passwordHash: input.passwordHash,
           isActive: true,
           updatedAt: new Date(),

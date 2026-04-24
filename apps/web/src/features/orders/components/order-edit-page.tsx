@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, Navigate, useNavigate } from "@tanstack/react-router"
 import { TrashIcon } from "lucide-react"
 import {
   useFieldArray,
@@ -33,6 +33,7 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Cup } from "@/features/cups/api/cups-client"
 import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import { CustomerSearchSelect } from "@/features/customers/components/customer-search-select"
@@ -111,9 +112,15 @@ const emptyLineItem: OrderEditValues["line_items"][number] = {
 export function OrderEditPage({ orderId }: { orderId: string }) {
   const navigate = useNavigate()
   const currentUser = useCurrentUser()
-  const isAdmin = currentUser.data?.role === "admin"
+  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
+  const canManageCustomCharges = hasPermission(
+    currentUser.data,
+    appPermissions.ordersCustomChargesManage,
+  )
+  const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
+  const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
   const orderQuery = useOrderQuery(orderId)
-  const orderInvoiceQuery = useOrderInvoiceQuery(orderId, isAdmin)
+  const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canViewInvoices)
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
@@ -133,6 +140,24 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
     [nonStockItemsQuery.data],
   )
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canManageOrders) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== `/orders/${orderId}/edit`) {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Order editing requires order-management permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   const form = useForm<OrderEditValues>({
     resolver: zodResolver(orderEditSchema),
@@ -154,7 +179,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
   const statusLocked =
     order?.status === "canceled" || order?.status === "completed" || order?.status === "partial_released"
   const nonAdminCustomChargeLock =
-    !isAdmin && Boolean(order?.items.some((item) => item.item_type === "custom_charge"))
+    !canManageCustomCharges && Boolean(order?.items.some((item) => item.item_type === "custom_charge"))
   const formLocked = statusLocked || invoiceLocked || nonAdminCustomChargeLock
 
   useEffect(() => {
@@ -339,7 +364,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
             <div className="grid gap-2 border p-4 text-sm">
               <p className="font-medium">{order.order_number}</p>
               <p className="text-muted-foreground">Order status: {order.status}</p>
-              {isAdmin && invoice ? (
+              {canManageInvoices && invoice ? (
                 <p className="text-muted-foreground">Invoice status: {invoice.status}</p>
               ) : null}
               {formLocked ? (
@@ -349,7 +374,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                     : invoice?.status === "void"
                       ? "This order is structurally locked because the invoice has been voided."
                       : nonAdminCustomChargeLock
-                        ? "Only admins can edit orders that contain custom charge lines."
+                        ? "Only users with custom-charge permission can edit orders that contain custom charge lines."
                         : "This order is no longer in the unpaid open-edit window."}
                 </p>
               ) : (
@@ -428,7 +453,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                           lidsLoading={lidsQuery.isLoading}
                           nonStockItemsLoading={nonStockItemsQuery.isLoading}
                           disabled={formLocked}
-                          isAdmin={isAdmin}
+                                canManageCustomCharges={canManageCustomCharges}
                         />
                       </div>
                     ))}
@@ -490,7 +515,7 @@ function OrderEditLineItemFields({
   lidsLoading,
   nonStockItemsLoading,
   disabled,
-  isAdmin,
+  canManageCustomCharges,
 }: {
   index: number
   fieldId: string
@@ -501,7 +526,7 @@ function OrderEditLineItemFields({
   lidsLoading: boolean
   nonStockItemsLoading: boolean
   disabled: boolean
-  isAdmin: boolean
+  canManageCustomCharges: boolean
 }) {
   const { control, setValue } = useFormContext<OrderEditValues>()
   const itemType =
@@ -544,7 +569,7 @@ function OrderEditLineItemFields({
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
-                <SelectItem value="custom_charge" disabled={!isAdmin}>
+                <SelectItem value="custom_charge" disabled={!canManageCustomCharges}>
                   Custom Charge
                 </SelectItem>
               </SelectContent>

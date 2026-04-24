@@ -6,6 +6,7 @@ import { sendJson } from "../../http/json.js"
 import { AuthService } from "./auth.service.js"
 import type { SafeUser } from "./auth.schemas.js"
 import { AUTH_SESSION_COOKIE } from "./auth.constants.js"
+import { authSessionCookieOptions } from "./auth-session-cookie.js"
 import { verifySessionToken } from "./sessions.js"
 
 export interface AuthenticatedRequestContext {
@@ -55,12 +56,6 @@ export function sendUnauthenticated(
   context: Pick<AuthMiddlewareContext, "env">,
 ) {
   sendJson(response, 401, { error: "Unauthenticated" }, {
-    "Set-Cookie": serializeCookie(AUTH_SESSION_COOKIE, "", {
-      httpOnly: true,
-      maxAgeSeconds: 0,
-      path: "/",
-      sameSite: "Lax",
-      secure: context.env.nodeEnv === "production",
-    }),
+    "Set-Cookie": serializeCookie(AUTH_SESSION_COOKIE, "", authSessionCookieOptions(context.env, 0)),
   })
 }

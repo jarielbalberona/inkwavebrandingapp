@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
+import { Navigate } from "@tanstack/react-router"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useWatch, type DefaultValues } from "react-hook-form"
 import { z } from "zod"
@@ -43,6 +44,7 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Lid, LidPayload } from "@/features/lids/api/lids-client"
 import { useCreateLidMutation, useLidsQuery, useUpdateLidMutation } from "@/features/lids/hooks/use-lids"
 import {
@@ -127,7 +129,8 @@ export function LidsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedLidId, setSelectedLidId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const isAdmin = currentUser.data?.role === "admin"
+  const canViewLids = hasPermission(currentUser.data, appPermissions.lidsView)
+  const canManageLids = hasPermission(currentUser.data, appPermissions.lidsManage)
   const selectedLid = useMemo(
     () => lidsQuery.data?.find((lid) => lid.id === selectedLidId) ?? null,
     [lidsQuery.data, selectedLidId],
@@ -157,6 +160,24 @@ export function LidsPage() {
       }),
     [selectedDiameter, selectedBrand, selectedShape, selectedColor],
   )
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewLids) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/products" && fallbackRoute !== "/lids") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Lid visibility requires lid-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   useEffect(() => {
     if (!dialogOpen) {
@@ -232,7 +253,7 @@ export function LidsPage() {
               Lids are first-class master data. Production progress does not apply here.
             </CardDescription>
           </div>
-          {isAdmin ? <Button onClick={openCreateDialog}>Create Lid</Button> : null}
+          {canManageLids ? <Button onClick={openCreateDialog}>Create Lid</Button> : null}
         </CardHeader>
         <CardContent className="grid gap-4">
           {lidsQuery.isLoading ? (
@@ -258,7 +279,15 @@ export function LidsPage() {
             </TableHeader>
             <TableBody>
               {lidsQuery.data?.map((lid) => (
-                <TableRow key={lid.id} className="cursor-pointer" onClick={() => openDetailDialog(lid)}>
+                <TableRow
+                  key={lid.id}
+                  className={canManageLids ? "cursor-pointer" : undefined}
+                  onClick={() => {
+                    if (canManageLids) {
+                      openDetailDialog(lid)
+                    }
+                  }}
+                >
                   <TableCell className="font-medium">{lid.sku}</TableCell>
                   <TableCell>{formatLidContractLabel(lid.type)}</TableCell>
                   <TableCell>{formatLidContractLabel(lid.brand)}</TableCell>
@@ -295,7 +324,7 @@ export function LidsPage() {
           <DialogHeader>
             <DialogTitle>{selectedLid ? "Lid Detail" : "Create Lid"}</DialogTitle>
             <DialogDescription>
-              {isAdmin
+              {canManageLids
                 ? "Maintain lid catalog records using the enforced lid contract."
                 : "Staff can inspect lid records but cannot edit catalog data."}
             </DialogDescription>
@@ -311,13 +340,13 @@ export function LidsPage() {
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <ReadOnlySkuField value={skuPreview} />
-                <SelectFormField control={form.control} disabled={!isAdmin} label="Type" name="type" options={lidTypes} />
-                <SelectFormField control={form.control} disabled={!isAdmin} label="Brand" name="brand" options={availableBrands} />
-                <SelectFormField control={form.control} disabled={!isAdmin} label="Diameter" name="diameter" options={availableDiameters} />
-                <SelectFormField control={form.control} disabled={!isAdmin} label="Shape" name="shape" options={availableShapes} />
-                <SelectFormField control={form.control} disabled={!isAdmin} label="Color" name="color" options={availableColors} />
-                <CurrencyFormField control={form.control} disabled={!isAdmin} label="Cost price" name="cost_price" />
-                <CurrencyFormField control={form.control} disabled={!isAdmin} label="Default sell price" name="default_sell_price" />
+                <SelectFormField control={form.control} disabled={!canManageLids} label="Type" name="type" options={lidTypes} />
+                <SelectFormField control={form.control} disabled={!canManageLids} label="Brand" name="brand" options={availableBrands} />
+                <SelectFormField control={form.control} disabled={!canManageLids} label="Diameter" name="diameter" options={availableDiameters} />
+                <SelectFormField control={form.control} disabled={!canManageLids} label="Shape" name="shape" options={availableShapes} />
+                <SelectFormField control={form.control} disabled={!canManageLids} label="Color" name="color" options={availableColors} />
+                <CurrencyFormField control={form.control} disabled={!canManageLids} label="Cost price" name="cost_price" />
+                <CurrencyFormField control={form.control} disabled={!canManageLids} label="Default sell price" name="default_sell_price" />
               </div>
 
               <FormField
@@ -328,7 +357,7 @@ export function LidsPage() {
                     <FormControl>
                       <Checkbox
                         checked={field.value}
-                        disabled={!isAdmin}
+                        disabled={!canManageLids}
                         onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                       />
                     </FormControl>
@@ -343,7 +372,7 @@ export function LidsPage() {
               />
 
               <DialogFooter showCloseButton>
-                {isAdmin ? (
+                {canManageLids ? (
                   <Button type="submit" disabled={createLid.isPending || updateLid.isPending}>
                     {selectedLid ? "Save Changes" : "Create Lid"}
                   </Button>

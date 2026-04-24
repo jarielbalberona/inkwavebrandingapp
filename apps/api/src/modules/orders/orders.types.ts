@@ -1,6 +1,6 @@
 import type { Cup, Customer, Lid, NonStockItem } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertNoStaffRestrictedKeys, shapeRoleAwareResponse } from "../auth/role-safe-response.js"
+import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 import { toCustomerDto } from "../customers/customers.types.js"
 import type { OrderWithRelations, ProgressEventWithRelations } from "./orders.repository.js"
 import type { OrderLineItemProgressStage } from "./orders.schemas.js"
@@ -104,16 +104,10 @@ export interface OrderLineItemProgressEventDto {
 }
 
 export function toOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto {
-  const dto = shapeRoleAwareResponse(user, {
-    admin: () => toAdminOrderDto(order, user),
-    staff: () => toStaffOrderDto(order, user),
+  return shapePermissionAwareResponse(user, "orders.pricing.view", {
+    allowed: () => toAdminOrderDto(order, user),
+    restricted: () => toStaffOrderDto(order, user),
   })
-
-  if (user.role === "staff") {
-    assertNoStaffRestrictedKeys(dto)
-  }
-
-  return dto
 }
 
 function toAdminOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto {

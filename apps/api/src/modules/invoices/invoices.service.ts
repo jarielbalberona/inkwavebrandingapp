@@ -226,7 +226,7 @@ export class InvoicesService {
   ) {}
 
   async list(query: InvoicesListQuery, user: SafeUser): Promise<InvoiceListItemDto[]> {
-    assertPermission(user, "invoices.manage")
+    assertPermission(user, "invoices.view")
 
     const invoices = await this.invoicesRepository.list(query)
 
@@ -234,7 +234,7 @@ export class InvoicesService {
   }
 
   async getById(invoiceId: string, user: SafeUser): Promise<InvoiceDto> {
-    assertPermission(user, "invoices.manage")
+    assertPermission(user, "invoices.view")
 
     const invoice = await this.invoicesRepository.findByIdWithRelations(invoiceId)
 
@@ -246,7 +246,7 @@ export class InvoicesService {
   }
 
   async getByOrderId(orderId: string, user: SafeUser): Promise<InvoiceDto> {
-    assertPermission(user, "invoices.manage")
+    assertPermission(user, "invoices.view")
 
     const invoice = await this.invoicesRepository.findByOrderId(orderId)
 

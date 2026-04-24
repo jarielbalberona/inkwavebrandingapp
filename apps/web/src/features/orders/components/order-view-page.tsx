@@ -1,8 +1,18 @@
 import { useState } from "react"
 
-import { Link } from "@tanstack/react-router"
+import { Link, Navigate } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -22,7 +32,7 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import { appPermissions, hasPermission } from "@/features/auth/permissions"
+import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Invoice, Order, OrderStatus } from "@/features/orders/api/orders-client"
 import {
   useCancelOrderMutation,
@@ -34,13 +44,17 @@ import { apiBaseUrl } from "@/lib/api"
 
 export function OrderViewPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
+  const canViewOrders = hasPermission(currentUser.data, appPermissions.ordersView)
+  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
   const orderQuery = useOrderQuery(orderId)
+  const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
   const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
-  const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canManageInvoices)
+  const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canViewInvoices)
   const generateOrderInvoiceMutation = useGenerateOrderInvoiceMutation()
   const cancelOrderMutation = useCancelOrderMutation()
   const [pageError, setPageError] = useState<string | null>(null)
   const [pageSuccess, setPageSuccess] = useState<string | null>(null)
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
 
   const order = orderQuery.data ?? null
   const invoiceLockBlocksEdit =
@@ -48,11 +62,30 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
     orderInvoiceQuery.data?.status === "void" ||
     Number(orderInvoiceQuery.data?.paid_amount ?? "0") > 0
   const canOpenEdit =
+    canManageOrders &&
     order !== null &&
     order.status !== "canceled" &&
     order.status !== "completed" &&
     order.status !== "partial_released" &&
     !invoiceLockBlocksEdit
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewOrders) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== `/orders/${orderId}`) {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Order visibility requires order-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   async function handleCancelOrder() {
     setPageError(null)
@@ -62,16 +95,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       return
     }
 
-    if (
-      !window.confirm(
-        `Cancel order ${order.order_number}? Unconsumed reservations will be released.`,
-      )
-    ) {
-      return
-    }
-
     try {
       const canceledOrder = await cancelOrderMutation.mutateAsync(order.id)
+      setIsCancelDialogOpen(false)
       setPageSuccess(
         `Canceled ${canceledOrder.order_number}. Unconsumed reservations were released by the API.`,
       )
@@ -112,11 +138,13 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
               <Link to="/orders">Back to orders</Link>
             </Button>
             {order ? (
-              <Button asChild variant="outline">
-                <Link to="/orders/$orderId/fulfillment" params={{ orderId: order.id }}>
-                  Fulfillment
-                </Link>
-              </Button>
+              canManageOrders ? (
+                <Button asChild variant="outline">
+                  <Link to="/orders/$orderId/fulfillment" params={{ orderId: order.id }}>
+                    Fulfillment
+                  </Link>
+                </Button>
+              ) : null
             ) : null}
             {order ? (
               canOpenEdit ? (
@@ -205,19 +233,23 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                   <Button asChild type="button" variant="outline" size="sm">
                     <Link to="/orders">Back</Link>
                   </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    disabled={
-                      cancelOrderMutation.isPending ||
-                      order.status === "canceled" ||
-                      order.status === "completed"
-                    }
-                    onClick={handleCancelOrder}
-                  >
-                    {cancelOrderMutation.isPending ? "Canceling..." : "Cancel order"}
-                  </Button>
+                  {canManageOrders ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={
+                        cancelOrderMutation.isPending ||
+                        order.status === "canceled" ||
+                        order.status === "completed"
+                      }
+                      onClick={() => {
+                        setIsCancelDialogOpen(true)
+                      }}
+                    >
+                      {cancelOrderMutation.isPending ? "Canceling..." : "Cancel order"}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -265,6 +297,30 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
           </>
         ) : null}
       </CardContent>
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {order
+                ? `Cancel order ${order.order_number}? Unconsumed reservations will be released.`
+                : "Cancel this order? Unconsumed reservations will be released."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelOrderMutation.isPending}>Keep order</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={cancelOrderMutation.isPending}
+              onClick={() => {
+                void handleCancelOrder()
+              }}
+            >
+              {cancelOrderMutation.isPending ? "Canceling..." : "Cancel order"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }
