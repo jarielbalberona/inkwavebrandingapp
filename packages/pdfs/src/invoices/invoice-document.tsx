@@ -7,7 +7,7 @@ import {
 } from "@react-pdf/renderer"
 
 import { formatMoney } from "../shared/format.js"
-import type { InvoicePdfData } from "../shared/invoice-pdf.types.js"
+import type { InvoicePdfData } from "../shared/types/index.js"
 
 const styles = StyleSheet.create({
   page: {

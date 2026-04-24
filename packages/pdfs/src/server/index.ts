@@ -1,2 +1,2 @@
 export * from "./render-invoice-pdf.js"
-export type * from "../shared/invoice-pdf.types.js"
+export type * from "../shared/types/index.js"
