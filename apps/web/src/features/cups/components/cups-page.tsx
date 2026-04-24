@@ -27,6 +27,7 @@ import {
   FormLabel,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import {
   Select,
   SelectContent,
@@ -131,11 +132,19 @@ export function CupsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedCupId, setSelectedCupId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [brandFilter, setBrandFilter] = useState("all")
+  const [sizeFilter, setSizeFilter] = useState("all")
+  const [colorFilter, setColorFilter] = useState("all")
   const canViewCups = hasPermission(currentUser.data, appPermissions.cupsView)
   const canManageCups = hasPermission(currentUser.data, appPermissions.cupsManage)
   const selectedCup = useMemo(
     () => cupsQuery.data?.find((cup) => cup.id === selectedCupId) ?? null,
     [cupsQuery.data, selectedCupId],
+  )
+  const visibleCups = useMemo(
+    () => filterAndSortCups(cupsQuery.data ?? [], { search, brandFilter, sizeFilter, colorFilter }),
+    [brandFilter, colorFilter, cupsQuery.data, search, sizeFilter],
   )
 
   const form = useForm<CupFormValues>({
@@ -168,24 +177,6 @@ export function CupsPage() {
     [selectedType, selectedBrand, selectedSize, selectedColor],
   )
 
-  if (currentUser.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading access...</p>
-  }
-
-  if (!canViewCups) {
-    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
-
-    if (fallbackRoute && fallbackRoute !== "/products" && fallbackRoute !== "/cups") {
-      return <Navigate to={fallbackRoute} />
-    }
-
-    return (
-      <Alert>
-        <AlertDescription>Cup visibility requires cup-view permission.</AlertDescription>
-      </Alert>
-    )
-  }
-
   useEffect(() => {
     if (!dialogOpen) {
       return
@@ -217,6 +208,24 @@ export function CupsPage() {
       form.setValue("color", availableColors[0], { shouldValidate: true })
     }
   }, [availableColors, form])
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewCups) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/products" && fallbackRoute !== "/cups") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Cup visibility requires cup-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   async function onSubmit(values: CupFormValues) {
     setSubmitError(null)
@@ -279,50 +288,89 @@ export function CupsPage() {
             <p className="text-sm text-muted-foreground">No cups found. Admins can create the first SKU.</p>
           ) : null}
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Diameter</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Color</TableHead>
-                <TableHead>Min stock</TableHead>
-                <TableHead>Status</TableHead>
-                {hasPricing(cupsQuery.data) ? <TableHead>Sell price</TableHead> : null}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cupsQuery.data?.map((cup) => (
-                <TableRow
-                  key={cup.id}
-                  className={canManageCups ? "cursor-pointer" : undefined}
-                  onClick={() => {
-                    if (canManageCups) {
-                      openDetailDialog(cup)
-                    }
-                  }}
-                >
-                  <TableCell className="font-medium">{cup.sku}</TableCell>
-                  <TableCell>{formatCupContractLabel(cup.type)}</TableCell>
-                  <TableCell>{formatCupContractLabel(cup.brand)}</TableCell>
-                  <TableCell>{cup.diameter}</TableCell>
-                  <TableCell>{cup.size}</TableCell>
-                  <TableCell>{formatCupContractLabel(cup.color)}</TableCell>
-                  <TableCell>{cup.min_stock}</TableCell>
-                  <TableCell>
-                    <Badge variant={cup.is_active ? "default" : "secondary"}>
-                      {cup.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  {hasPricing(cupsQuery.data) ? (
-                    <TableCell>{cup.default_sell_price ?? "Restricted"}</TableCell>
-                  ) : null}
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_10rem_12rem]">
+            <div className="grid gap-2">
+              <Label htmlFor="cup-search">Search cups</Label>
+              <Input
+                id="cup-search"
+                placeholder="Search SKU, type, brand, size, or color"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <CatalogFilterSelect
+              label="Brand"
+              value={brandFilter}
+              options={cupBrands}
+              formatLabel={formatCupContractLabel}
+              onValueChange={setBrandFilter}
+            />
+            <CatalogFilterSelect
+              label="Size"
+              value={sizeFilter}
+              options={cupSizes}
+              formatLabel={(value) => value}
+              onValueChange={setSizeFilter}
+            />
+            <CatalogFilterSelect
+              label="Color"
+              value={colorFilter}
+              options={cupColors}
+              formatLabel={formatCupContractLabel}
+              onValueChange={setColorFilter}
+            />
+          </div>
+
+          {!cupsQuery.isLoading && cupsQuery.data && cupsQuery.data.length > 0 && visibleCups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No cups match the current filters.</p>
+          ) : null}
+
+          {visibleCups.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Diameter</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead>Color</TableHead>
+                  <TableHead>Min stock</TableHead>
+                  <TableHead>Status</TableHead>
+                  {hasPricing(cupsQuery.data) ? <TableHead>Sell price</TableHead> : null}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {visibleCups.map((cup) => (
+                  <TableRow
+                    key={cup.id}
+                    className={canManageCups ? "cursor-pointer" : undefined}
+                    onClick={() => {
+                      if (canManageCups) {
+                        openDetailDialog(cup)
+                      }
+                    }}
+                  >
+                    <TableCell className="font-medium">{cup.sku}</TableCell>
+                    <TableCell>{formatCupContractLabel(cup.type)}</TableCell>
+                    <TableCell>{formatCupContractLabel(cup.brand)}</TableCell>
+                    <TableCell>{cup.diameter}</TableCell>
+                    <TableCell>{cup.size}</TableCell>
+                    <TableCell>{formatCupContractLabel(cup.color)}</TableCell>
+                    <TableCell>{cup.min_stock}</TableCell>
+                    <TableCell>
+                      <Badge variant={cup.is_active ? "default" : "secondary"}>
+                        {cup.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    {hasPricing(cupsQuery.data) ? (
+                      <TableCell>{cup.default_sell_price ?? "Restricted"}</TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -568,6 +616,86 @@ function CurrencyFormField({
 
 function hasPricing(cups: Cup[] | undefined): boolean {
   return Boolean(cups?.some((cup) => "default_sell_price" in cup))
+}
+
+function CatalogFilterSelect({
+  label,
+  value,
+  options,
+  formatLabel,
+  onValueChange,
+}: {
+  label: string
+  value: string
+  options: readonly string[]
+  formatLabel: (value: string) => string
+  onValueChange: (value: string) => void
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={`All ${label.toLowerCase()}`} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All {label.toLowerCase()}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {formatLabel(option)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+function filterAndSortCups(
+  cups: Cup[],
+  filters: {
+    search: string
+    brandFilter: string
+    sizeFilter: string
+    colorFilter: string
+  },
+): Cup[] {
+  const normalizedSearch = filters.search.trim().toLowerCase()
+
+  return [...cups]
+    .sort((left, right) => left.sku.localeCompare(right.sku, undefined, { numeric: true }))
+    .filter((cup) => {
+      if (filters.brandFilter !== "all" && cup.brand !== filters.brandFilter) {
+        return false
+      }
+
+      if (filters.sizeFilter !== "all" && cup.size !== filters.sizeFilter) {
+        return false
+      }
+
+      if (filters.colorFilter !== "all" && cup.color !== filters.colorFilter) {
+        return false
+      }
+
+      if (!normalizedSearch) {
+        return true
+      }
+
+      return [
+        cup.sku,
+        cup.type,
+        formatCupContractLabel(cup.type),
+        cup.brand,
+        formatCupContractLabel(cup.brand),
+        cup.diameter,
+        cup.size,
+        cup.color,
+        formatCupContractLabel(cup.color),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch)
+    })
 }
 
 function toFormValues(cup: Cup): CupFormValues {

@@ -27,6 +27,7 @@ import {
   FormLabel,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import {
   Table,
   TableBody,
@@ -79,11 +80,16 @@ export function GeneralItemsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
   const canViewGeneralItems = hasPermission(currentUser.data, appPermissions.nonStockItemsView)
   const canManageGeneralItems = hasPermission(currentUser.data, appPermissions.nonStockItemsManage)
   const selectedItem = useMemo(
     () => nonStockItemsQuery.data?.find((item) => item.id === selectedItemId) ?? null,
     [nonStockItemsQuery.data, selectedItemId],
+  )
+  const visibleItems = useMemo(
+    () => filterAndSortGeneralItems(nonStockItemsQuery.data ?? [], search),
+    [nonStockItemsQuery.data, search],
   )
 
   const form = useForm<GeneralItemFormValues>({
@@ -92,6 +98,14 @@ export function GeneralItemsPage() {
   })
 
   const hasCostPrice = useWatch({ control: form.control, name: "has_cost_price" })
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      return
+    }
+
+    form.reset(selectedItem ? toFormValues(selectedItem) : emptyFormValues)
+  }, [dialogOpen, form, selectedItem])
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -110,14 +124,6 @@ export function GeneralItemsPage() {
       </Alert>
     )
   }
-
-  useEffect(() => {
-    if (!dialogOpen) {
-      return
-    }
-
-    form.reset(selectedItem ? toFormValues(selectedItem) : emptyFormValues)
-  }, [dialogOpen, form, selectedItem])
 
   async function onSubmit(values: GeneralItemFormValues) {
     setSubmitError(null)
@@ -178,46 +184,65 @@ export function GeneralItemsPage() {
             </p>
           ) : null}
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Status</TableHead>
-                {hasPricing(nonStockItemsQuery.data) ? <TableHead>Cost price</TableHead> : null}
-                {hasPricing(nonStockItemsQuery.data) ? <TableHead>Sell price</TableHead> : null}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {nonStockItemsQuery.data?.map((item) => (
-                <TableRow key={item.id} className={canManageGeneralItems ? "cursor-pointer" : undefined} onClick={() => {
-                  if (canManageGeneralItems) {
-                    openDetailDialog(item)
-                  }
-                }}>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {item.description?.trim() || "No description"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={item.is_active ? "default" : "secondary"}>
-                      {item.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  {hasPricing(nonStockItemsQuery.data) ? (
-                    <TableCell>
-                      {"cost_price" in item ? item.cost_price ?? "No cost" : "Restricted"}
-                    </TableCell>
-                  ) : null}
-                  {hasPricing(nonStockItemsQuery.data) ? (
-                    <TableCell>
-                      {"default_sell_price" in item ? item.default_sell_price : "Restricted"}
-                    </TableCell>
-                  ) : null}
+          <div className="grid gap-2">
+            <Label htmlFor="general-item-search">Search general items</Label>
+            <Input
+              id="general-item-search"
+              placeholder="Search name or description"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+
+          {!nonStockItemsQuery.isLoading &&
+          nonStockItemsQuery.data &&
+          nonStockItemsQuery.data.length > 0 &&
+          visibleItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No general items match the current search.</p>
+          ) : null}
+
+          {visibleItems.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Status</TableHead>
+                  {hasPricing(nonStockItemsQuery.data) ? <TableHead>Cost price</TableHead> : null}
+                  {hasPricing(nonStockItemsQuery.data) ? <TableHead>Sell price</TableHead> : null}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {visibleItems.map((item) => (
+                  <TableRow key={item.id} className={canManageGeneralItems ? "cursor-pointer" : undefined} onClick={() => {
+                    if (canManageGeneralItems) {
+                      openDetailDialog(item)
+                    }
+                  }}>
+                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {item.description?.trim() || "No description"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={item.is_active ? "default" : "secondary"}>
+                        {item.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    {hasPricing(nonStockItemsQuery.data) ? (
+                      <TableCell>
+                        {"cost_price" in item ? item.cost_price ?? "No cost" : "Restricted"}
+                      </TableCell>
+                    ) : null}
+                    {hasPricing(nonStockItemsQuery.data) ? (
+                      <TableCell>
+                        {"default_sell_price" in item ? item.default_sell_price : "Restricted"}
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -378,6 +403,23 @@ function toFormValues(item: NonStockItem): GeneralItemFormValues {
       "default_sell_price" in item && item.default_sell_price ? Number(item.default_sell_price) : 0,
     is_active: item.is_active,
   }
+}
+
+function filterAndSortGeneralItems(items: NonStockItem[], search: string): NonStockItem[] {
+  const normalizedSearch = search.trim().toLowerCase()
+
+  return [...items]
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }))
+    .filter((item) => {
+      if (!normalizedSearch) {
+        return true
+      }
+
+      return [item.name, item.description ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch)
+    })
 }
 
 function hasPricing(items: NonStockItem[] | undefined) {

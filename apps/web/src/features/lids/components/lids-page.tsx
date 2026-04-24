@@ -27,6 +27,7 @@ import {
   FormLabel,
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import {
   Select,
   SelectContent,
@@ -129,11 +130,19 @@ export function LidsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedLidId, setSelectedLidId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [brandFilter, setBrandFilter] = useState("all")
+  const [sizeFilter, setSizeFilter] = useState("all")
+  const [colorFilter, setColorFilter] = useState("all")
   const canViewLids = hasPermission(currentUser.data, appPermissions.lidsView)
   const canManageLids = hasPermission(currentUser.data, appPermissions.lidsManage)
   const selectedLid = useMemo(
     () => lidsQuery.data?.find((lid) => lid.id === selectedLidId) ?? null,
     [lidsQuery.data, selectedLidId],
+  )
+  const visibleLids = useMemo(
+    () => filterAndSortLids(lidsQuery.data ?? [], { search, brandFilter, sizeFilter, colorFilter }),
+    [brandFilter, colorFilter, lidsQuery.data, search, sizeFilter],
   )
 
   const form = useForm<LidFormValues>({
@@ -160,24 +169,6 @@ export function LidsPage() {
       }),
     [selectedDiameter, selectedBrand, selectedShape, selectedColor],
   )
-
-  if (currentUser.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading access...</p>
-  }
-
-  if (!canViewLids) {
-    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
-
-    if (fallbackRoute && fallbackRoute !== "/products" && fallbackRoute !== "/lids") {
-      return <Navigate to={fallbackRoute} />
-    }
-
-    return (
-      <Alert>
-        <AlertDescription>Lid visibility requires lid-view permission.</AlertDescription>
-      </Alert>
-    )
-  }
 
   useEffect(() => {
     if (!dialogOpen) {
@@ -208,6 +199,24 @@ export function LidsPage() {
       form.setValue("color", availableColors[0], { shouldValidate: true })
     }
   }, [availableBrands, availableColors, availableDiameters, availableShapes, form])
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
+
+  if (!canViewLids) {
+    const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
+
+    if (fallbackRoute && fallbackRoute !== "/products" && fallbackRoute !== "/lids") {
+      return <Navigate to={fallbackRoute} />
+    }
+
+    return (
+      <Alert>
+        <AlertDescription>Lid visibility requires lid-view permission.</AlertDescription>
+      </Alert>
+    )
+  }
 
   async function onSubmit(values: LidFormValues) {
     setSubmitError(null)
@@ -264,48 +273,87 @@ export function LidsPage() {
             <p className="text-sm text-muted-foreground">No lids found. Admins can create the first lid record.</p>
           ) : null}
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Diameter</TableHead>
-                <TableHead>Shape</TableHead>
-                <TableHead>Color</TableHead>
-                <TableHead>Status</TableHead>
-                {hasPricing(lidsQuery.data) ? <TableHead>Sell price</TableHead> : null}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lidsQuery.data?.map((lid) => (
-                <TableRow
-                  key={lid.id}
-                  className={canManageLids ? "cursor-pointer" : undefined}
-                  onClick={() => {
-                    if (canManageLids) {
-                      openDetailDialog(lid)
-                    }
-                  }}
-                >
-                  <TableCell className="font-medium">{lid.sku}</TableCell>
-                  <TableCell>{formatLidContractLabel(lid.type)}</TableCell>
-                  <TableCell>{formatLidContractLabel(lid.brand)}</TableCell>
-                  <TableCell>{lid.diameter}</TableCell>
-                  <TableCell>{formatLidContractLabel(lid.shape)}</TableCell>
-                  <TableCell>{formatLidContractLabel(lid.color)}</TableCell>
-                  <TableCell>
-                    <Badge variant={lid.is_active ? "default" : "secondary"}>
-                      {lid.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  {hasPricing(lidsQuery.data) ? (
-                    <TableCell>{lid.default_sell_price ?? "Restricted"}</TableCell>
-                  ) : null}
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_10rem_12rem]">
+            <div className="grid gap-2">
+              <Label htmlFor="lid-search">Search lids</Label>
+              <Input
+                id="lid-search"
+                placeholder="Search SKU, type, brand, diameter, shape, or color"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <CatalogFilterSelect
+              label="Brand"
+              value={brandFilter}
+              options={lidBrands}
+              formatLabel={formatLidContractLabel}
+              onValueChange={setBrandFilter}
+            />
+            <CatalogFilterSelect
+              label="Size"
+              value={sizeFilter}
+              options={lidDiameters}
+              formatLabel={(value) => value}
+              onValueChange={setSizeFilter}
+            />
+            <CatalogFilterSelect
+              label="Color"
+              value={colorFilter}
+              options={lidColors}
+              formatLabel={formatLidContractLabel}
+              onValueChange={setColorFilter}
+            />
+          </div>
+
+          {!lidsQuery.isLoading && lidsQuery.data && lidsQuery.data.length > 0 && visibleLids.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No lids match the current filters.</p>
+          ) : null}
+
+          {visibleLids.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Diameter</TableHead>
+                  <TableHead>Shape</TableHead>
+                  <TableHead>Color</TableHead>
+                  <TableHead>Status</TableHead>
+                  {hasPricing(lidsQuery.data) ? <TableHead>Sell price</TableHead> : null}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {visibleLids.map((lid) => (
+                  <TableRow
+                    key={lid.id}
+                    className={canManageLids ? "cursor-pointer" : undefined}
+                    onClick={() => {
+                      if (canManageLids) {
+                        openDetailDialog(lid)
+                      }
+                    }}
+                  >
+                    <TableCell className="font-medium">{lid.sku}</TableCell>
+                    <TableCell>{formatLidContractLabel(lid.type)}</TableCell>
+                    <TableCell>{formatLidContractLabel(lid.brand)}</TableCell>
+                    <TableCell>{lid.diameter}</TableCell>
+                    <TableCell>{formatLidContractLabel(lid.shape)}</TableCell>
+                    <TableCell>{formatLidContractLabel(lid.color)}</TableCell>
+                    <TableCell>
+                      <Badge variant={lid.is_active ? "default" : "secondary"}>
+                        {lid.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    {hasPricing(lidsQuery.data) ? (
+                      <TableCell>{lid.default_sell_price ?? "Restricted"}</TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -473,6 +521,87 @@ function CurrencyFormField({
 
 function hasPricing(lids: Lid[] | undefined): boolean {
   return Boolean(lids?.some((lid) => "default_sell_price" in lid))
+}
+
+function CatalogFilterSelect({
+  label,
+  value,
+  options,
+  formatLabel,
+  onValueChange,
+}: {
+  label: string
+  value: string
+  options: readonly string[]
+  formatLabel: (value: string) => string
+  onValueChange: (value: string) => void
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder={`All ${label.toLowerCase()}`} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All {label.toLowerCase()}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {formatLabel(option)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+function filterAndSortLids(
+  lids: Lid[],
+  filters: {
+    search: string
+    brandFilter: string
+    sizeFilter: string
+    colorFilter: string
+  },
+): Lid[] {
+  const normalizedSearch = filters.search.trim().toLowerCase()
+
+  return [...lids]
+    .sort((left, right) => left.sku.localeCompare(right.sku, undefined, { numeric: true }))
+    .filter((lid) => {
+      if (filters.brandFilter !== "all" && lid.brand !== filters.brandFilter) {
+        return false
+      }
+
+      if (filters.sizeFilter !== "all" && lid.diameter !== filters.sizeFilter) {
+        return false
+      }
+
+      if (filters.colorFilter !== "all" && lid.color !== filters.colorFilter) {
+        return false
+      }
+
+      if (!normalizedSearch) {
+        return true
+      }
+
+      return [
+        lid.sku,
+        lid.type,
+        formatLidContractLabel(lid.type),
+        lid.brand,
+        formatLidContractLabel(lid.brand),
+        lid.diameter,
+        lid.shape,
+        formatLidContractLabel(lid.shape),
+        lid.color,
+        formatLidContractLabel(lid.color),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch)
+    })
 }
 
 function toFormValues(lid: Lid): LidFormValues {
