@@ -1,7 +1,6 @@
 import {
   BookOpenTextIcon,
   BoxIcon,
-  Disc3Icon,
   FileTextIcon,
   LayoutDashboardIcon,
   PackageSearchIcon,
@@ -28,8 +27,7 @@ export function AppSidebar({ user }: { user: AuthenticatedUser }) {
   const displayName = user.displayName ?? user.email
   const operationsItems = [
     { title: "Dashboard", to: "/dashboard", icon: LayoutDashboardIcon },
-    { title: "Cups", to: "/cups", icon: BoxIcon },
-    { title: "Lids", to: "/lids", icon: Disc3Icon },
+    { title: "Products", to: "/products", icon: BoxIcon },
     { title: "Customers", to: "/customers", icon: UsersRoundIcon },
     { title: "Inventory", to: "/inventory", icon: PackageSearchIcon },
     { title: "Orders", to: "/orders", icon: ShoppingCartIcon },
