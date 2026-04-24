@@ -14,6 +14,7 @@ import { ThemeSwitcher } from "@/components/theme-switcher"
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/cups": "Cups",
+  "/general-items": "General Items",
   "/inventory": "Inventory",
   "/inventory-history": "Inventory History",
   "/orders": "Orders",
