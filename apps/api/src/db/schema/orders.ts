@@ -39,6 +39,7 @@ export const orderLineItemTypeEnum = pgEnum("order_line_item_type", [
   "cup",
   "lid",
   "non_stock_item",
+  "custom_charge",
 ])
 
 export const orders = pgTable(
@@ -107,6 +108,8 @@ export const orderItems = pgTable(
         (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL AND ${table.nonStockItemId} IS NULL)
         OR
         (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NOT NULL)
+        OR
+        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL)
       )`,
     ),
     check(
@@ -129,6 +132,13 @@ export const orderItems = pgTable(
         (
           ${table.itemType} = 'non_stock_item'
           AND ${table.nonStockItemId} IS NOT NULL
+          AND ${table.cupId} IS NULL
+          AND ${table.lidId} IS NULL
+        )
+        OR
+        (
+          ${table.itemType} = 'custom_charge'
+          AND ${table.nonStockItemId} IS NULL
           AND ${table.cupId} IS NULL
           AND ${table.lidId} IS NULL
         )

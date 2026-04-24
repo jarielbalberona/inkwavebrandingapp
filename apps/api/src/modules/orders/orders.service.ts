@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import type { DatabaseClient } from "../../db/client.js"
 import type { Cup, Lid, NonStockItem } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
+import { assertAdmin } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
@@ -90,9 +91,9 @@ export class DuplicateOrderItemError extends Error {
 
 export interface OrderCreateLineItemErrorDetail {
   lineItemIndex: number
-  itemType: "cup" | "lid" | "non_stock_item"
-  itemId: string
-  field: "item_id" | "quantity"
+  itemType: "cup" | "lid" | "non_stock_item" | "custom_charge"
+  itemId?: string
+  field: "item_id" | "quantity" | "description_snapshot" | "unit_sell_price" | "unit_cost_price"
   message: string
   requestedQuantity?: number
   availableQuantity?: number
@@ -226,6 +227,15 @@ type ResolvedOrderLineItem =
       quantity: number
       notes?: string
     }
+  | {
+      requestLineItemIndex: number
+      itemType: "custom_charge"
+      descriptionSnapshot: string
+      quantity: number
+      unitSellPrice: string
+      unitCostPrice: string
+      notes?: string
+    }
 
 export class OrdersService {
   constructor(
@@ -266,9 +276,19 @@ export class OrdersService {
       throw new OrderCustomerInactiveError()
     }
 
+    const includesCustomCharge = parsedInput.line_items.some((item) => item.item_type === "custom_charge")
+
+    if (includesCustomCharge) {
+      assertAdmin(user)
+    }
+
     const duplicateIndexesByKey = new Map<string, number[]>()
 
     for (const [index, item] of parsedInput.line_items.entries()) {
+      if (item.item_type === "custom_charge") {
+        continue
+      }
+
       const key =
         item.item_type === "cup"
           ? `cup:${item.cup_id}`
@@ -390,40 +410,54 @@ export class OrdersService {
         continue
       }
 
-      const nonStockItem = await this.nonStockItemsRepository.findById(item.non_stock_item_id)
+      if (item.item_type === "non_stock_item") {
+        const nonStockItem = await this.nonStockItemsRepository.findById(item.non_stock_item_id)
 
-      if (!nonStockItem) {
-        throw new OrderCreateValidationError("Some order line items are invalid", 404, [
-          {
-            lineItemIndex: index,
-            itemType: "non_stock_item",
-            itemId: item.non_stock_item_id,
-            field: "item_id",
-            message: `Line item ${index + 1} references a general item that no longer exists.`,
-          },
-        ])
-      }
+        if (!nonStockItem) {
+          throw new OrderCreateValidationError("Some order line items are invalid", 404, [
+            {
+              lineItemIndex: index,
+              itemType: "non_stock_item",
+              itemId: item.non_stock_item_id,
+              field: "item_id",
+              message: `Line item ${index + 1} references a general item that no longer exists.`,
+            },
+          ])
+        }
 
-      if (!nonStockItem.isActive) {
-        throw new OrderCreateValidationError("Some order line items are invalid", 409, [
-          {
-            lineItemIndex: index,
-            itemType: "non_stock_item",
-            itemId: item.non_stock_item_id,
-            field: "item_id",
-            itemLabel: nonStockItem.name,
-            message: `Line item ${index + 1} uses inactive general item ${nonStockItem.name}.`,
-          },
-        ])
+        if (!nonStockItem.isActive) {
+          throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+            {
+              lineItemIndex: index,
+              itemType: "non_stock_item",
+              itemId: item.non_stock_item_id,
+              field: "item_id",
+              itemLabel: nonStockItem.name,
+              message: `Line item ${index + 1} uses inactive general item ${nonStockItem.name}.`,
+            },
+          ])
+        }
+
+        resolvedItems.push({
+          requestLineItemIndex: index,
+          itemType: "non_stock_item",
+          nonStockItem,
+          quantity: item.quantity,
+          notes: item.notes,
+        })
+        continue
       }
 
       resolvedItems.push({
         requestLineItemIndex: index,
-        itemType: "non_stock_item",
-        nonStockItem,
+        itemType: "custom_charge",
+        descriptionSnapshot: item.description_snapshot.trim(),
         quantity: item.quantity,
+        unitSellPrice: item.unit_sell_price,
+        unitCostPrice: item.unit_cost_price ?? "0.00",
         notes: item.notes,
       })
+      continue
     }
 
     return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
@@ -465,15 +499,29 @@ export class OrdersService {
             }
           }
 
+          if (item.itemType === "non_stock_item") {
+            return {
+              itemType: "non_stock_item",
+              cupId: undefined,
+              lidId: undefined,
+              nonStockItemId: item.nonStockItem.id,
+              descriptionSnapshot: buildNonStockItemDescriptionSnapshot(item.nonStockItem),
+              quantity: item.quantity,
+              unitCostPrice: item.nonStockItem.costPrice ?? "0",
+              unitSellPrice: item.nonStockItem.defaultSellPrice,
+              notes: item.notes,
+            }
+          }
+
           return {
-            itemType: "non_stock_item",
+            itemType: "custom_charge",
             cupId: undefined,
             lidId: undefined,
-            nonStockItemId: item.nonStockItem.id,
-            descriptionSnapshot: buildNonStockItemDescriptionSnapshot(item.nonStockItem),
+            nonStockItemId: undefined,
+            descriptionSnapshot: item.descriptionSnapshot,
             quantity: item.quantity,
-            unitCostPrice: item.nonStockItem.costPrice ?? "0",
-            unitSellPrice: item.nonStockItem.defaultSellPrice,
+            unitCostPrice: item.unitCostPrice,
+            unitSellPrice: item.unitSellPrice,
             notes: item.notes,
           }
         }),
@@ -535,9 +583,9 @@ export class OrdersService {
       throw new OrderLineItemNotFoundError()
     }
 
-    if (orderItem.itemType === "non_stock_item") {
+    if (orderItem.itemType === "non_stock_item" || orderItem.itemType === "custom_charge") {
       throw new OrderProgressValidationError(
-        "Non-stock item line items do not support fulfillment progress events",
+        "Non-stock and custom charge line items do not support fulfillment progress events",
       )
     }
 
@@ -563,9 +611,9 @@ export class OrdersService {
         throw new OrderLineItemNotFoundError()
       }
 
-      if (orderItem.itemType === "non_stock_item") {
+      if (orderItem.itemType === "non_stock_item" || orderItem.itemType === "custom_charge") {
         throw new OrderProgressValidationError(
-          "Non-stock item line items do not support fulfillment progress events",
+          "Non-stock and custom charge line items do not support fulfillment progress events",
         )
       }
 
@@ -713,7 +761,7 @@ export class OrdersService {
       const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
 
       for (const item of orderItems) {
-        if (item.itemType === "non_stock_item") {
+        if (item.itemType === "non_stock_item" || item.itemType === "custom_charge") {
           continue
         }
 

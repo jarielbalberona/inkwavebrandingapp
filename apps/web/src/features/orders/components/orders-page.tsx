@@ -113,12 +113,17 @@ export function OrdersPage() {
     selectedOrderQuery.data ??
     ordersQuery.data?.find((order) => order.id === selectedOrderId) ??
     null
-  const trackedLineItems = selectedOrder?.items.filter((item) => item.item_type !== "non_stock_item") ?? []
+  const trackedLineItems =
+    selectedOrder?.items.filter(
+      (item) => item.item_type !== "non_stock_item" && item.item_type !== "custom_charge",
+    ) ?? []
   const selectedLineItem =
     selectedOrder?.items.find((item) => item.id === selectedLineItemId) ?? null
   const progressEventsQuery = useProgressEventsQuery(
-    selectedLineItem?.item_type === "non_stock_item" ? null : selectedLineItemId,
-    selectedLineItem?.item_type !== "non_stock_item",
+    selectedLineItem?.item_type === "non_stock_item" || selectedLineItem?.item_type === "custom_charge"
+      ? null
+      : selectedLineItemId,
+    selectedLineItem?.item_type !== "non_stock_item" && selectedLineItem?.item_type !== "custom_charge",
   )
   const createProgressEventMutation = useCreateProgressEventMutation()
   const updateOrderPrioritiesMutation = useUpdateOrderPrioritiesMutation()
@@ -142,7 +147,9 @@ export function OrdersPage() {
 
   function openFulfillmentDialog(order: Order) {
     setSelectedOrderId(order.id)
-    const firstTrackedLineItem = order.items.find((item) => item.item_type !== "non_stock_item")
+    const firstTrackedLineItem = order.items.find(
+      (item) => item.item_type !== "non_stock_item" && item.item_type !== "custom_charge",
+    )
     setSelectedLineItemId(firstTrackedLineItem?.id ?? null)
     setProgressStage("printed")
     setProgressQuantity("1")
@@ -171,8 +178,11 @@ export function OrdersPage() {
       return
     }
 
-    if (selectedLineItem.item_type === "non_stock_item") {
-      setProgressError("General items do not participate in fulfillment progress.")
+    if (
+      selectedLineItem.item_type === "non_stock_item" ||
+      selectedLineItem.item_type === "custom_charge"
+    ) {
+      setProgressError("General items and custom charges do not participate in fulfillment progress.")
       return
     }
 
@@ -457,7 +467,13 @@ export function OrdersPage() {
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  disabled={!order.items.some((item) => item.item_type !== "non_stock_item")}
+                                  disabled={
+                                    !order.items.some(
+                                      (item) =>
+                                        item.item_type !== "non_stock_item" &&
+                                        item.item_type !== "custom_charge",
+                                    )
+                                  }
                                   onClick={() => openFulfillmentDialog(order)}
                                 >
                                   Fulfillment Progress
@@ -558,8 +574,8 @@ export function OrdersPage() {
               {trackedLineItems.length === 0 ? (
                 <Alert>
                   <AlertDescription>
-                    This order only contains general items. There is no fulfillment progress workflow
-                    because non-stock items do not reserve or consume inventory.
+                    This order only contains non-inventory lines. There is no fulfillment progress
+                    workflow because general items and custom charges do not reserve or consume inventory.
                   </AlertDescription>
                 </Alert>
               ) : null}
@@ -910,6 +926,10 @@ function formatOrderItemLabel(item: Order["items"][number]): string {
     return item.lid.sku
   }
 
+  if (item.item_type === "custom_charge") {
+    return item.description_snapshot
+  }
+
   return item.non_stock_item.name
 }
 
@@ -922,13 +942,21 @@ function formatOrderItemDetails(item: Order["items"][number]): string {
     return `${item.lid.type} · ${item.lid.brand} · ${item.lid.color} · ${item.description_snapshot}`
   }
 
+  if (item.item_type === "custom_charge") {
+    return "Custom charge"
+  }
+
   return item.non_stock_item.description?.trim() || item.description_snapshot
 }
 
 function getAllowedProgressStages(
   itemType: Order["items"][number]["item_type"] | undefined
 ): ProgressStage[] {
-  if (itemType === "non_stock_item" || itemType === undefined) {
+  if (
+    itemType === "non_stock_item" ||
+    itemType === "custom_charge" ||
+    itemType === undefined
+  ) {
     return []
   }
 
@@ -1038,7 +1066,7 @@ function maxQuantityForStage(
   orderedQuantity: number,
   totals: ProgressTotals
 ): number {
-  if (itemType === "non_stock_item") {
+  if (itemType === "non_stock_item" || itemType === "custom_charge") {
     return 0
   }
 

@@ -31,12 +31,17 @@ interface OrderNonStockItemDto {
   description: string | null
 }
 
+interface OrderCustomChargeDto {
+  description_snapshot: string
+}
+
 interface BaseOrderItemDto {
   id: string
-  item_type: "cup" | "lid" | "non_stock_item"
+  item_type: "cup" | "lid" | "non_stock_item" | "custom_charge"
   cup: OrderCupDto | null
   lid: OrderLidDto | null
   non_stock_item: OrderNonStockItemDto | null
+  custom_charge: OrderCustomChargeDto | null
   description_snapshot: string
   quantity: number
   notes: string | null
@@ -149,6 +154,7 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
       cup: toCupDto(item.cup as Cup),
       lid: null,
       non_stock_item: null,
+      custom_charge: null,
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -164,6 +170,25 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
       cup: null,
       lid: toLidDto(item.lid as Lid),
       non_stock_item: null,
+      custom_charge: null,
+      description_snapshot: item.descriptionSnapshot,
+      quantity: item.quantity,
+      notes: item.notes ?? null,
+      created_at: item.createdAt.toISOString(),
+      updated_at: item.updatedAt.toISOString(),
+    }
+  }
+
+  if (item.itemType === "custom_charge") {
+    return {
+      id: item.id,
+      item_type: "custom_charge",
+      cup: null,
+      lid: null,
+      non_stock_item: null,
+      custom_charge: {
+        description_snapshot: item.descriptionSnapshot,
+      },
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -178,6 +203,7 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
     cup: null,
     lid: null,
     non_stock_item: toNonStockItemDto(item.nonStockItem as NonStockItem),
+    custom_charge: null,
     description_snapshot: item.descriptionSnapshot,
     quantity: item.quantity,
     notes: item.notes ?? null,

@@ -20,6 +20,8 @@ const nullableOptionalText = (max: number) =>
       return value
     })
 
+const moneyStringSchema = z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid non-negative money amount")
+
 export const orderStatusSchema = z.enum([
   "pending",
   "in_progress",
@@ -58,6 +60,14 @@ export const createOrderSchema = z.object({
         item_type: z.literal("non_stock_item"),
         non_stock_item_id: z.string().uuid(),
         quantity: z.number().int().positive(),
+        notes: optionalText(500),
+      }),
+      z.object({
+        item_type: z.literal("custom_charge"),
+        description_snapshot: z.string().trim().min(1).max(500),
+        quantity: z.number().int().positive(),
+        unit_sell_price: moneyStringSchema,
+        unit_cost_price: moneyStringSchema.optional(),
         notes: optionalText(500),
       }),
     ]),

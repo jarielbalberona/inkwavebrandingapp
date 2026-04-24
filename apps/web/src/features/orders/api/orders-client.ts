@@ -55,6 +55,10 @@ const orderNonStockItemSchema = z.object({
   description: z.string().nullable(),
 })
 
+const orderCustomChargeSchema = z.object({
+  description_snapshot: z.string(),
+})
+
 const orderItemSchema = z.discriminatedUnion("item_type", [
   z.object({
     id: z.string().uuid(),
@@ -90,6 +94,22 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     cup: z.null(),
     lid: z.null(),
     non_stock_item: orderNonStockItemSchema,
+    custom_charge: z.null(),
+    description_snapshot: z.string(),
+    quantity: z.number().int().positive(),
+    notes: z.string().nullable(),
+    unit_cost_price: z.string().optional(),
+    unit_sell_price: z.string().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    item_type: z.literal("custom_charge"),
+    cup: z.null(),
+    lid: z.null(),
+    non_stock_item: z.null(),
+    custom_charge: orderCustomChargeSchema,
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -115,7 +135,7 @@ const orderSchema = z.object({
 const invoiceItemSchema = z.object({
   id: z.string().uuid(),
   order_line_item_id: z.string().uuid(),
-  item_type: z.enum(["cup", "lid", "non_stock_item"]),
+  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge"]),
   description_snapshot: z.string(),
   quantity: z.number().int().positive(),
   unit_price: z.string(),
@@ -201,9 +221,9 @@ export type ProgressEvent = z.infer<typeof progressEventSchema>
 
 const createOrderLineItemErrorSchema = z.object({
   line_item_index: z.number().int().nonnegative(),
-  item_type: z.enum(["cup", "lid", "non_stock_item"]),
-  item_id: z.string().uuid(),
-  field: z.enum(["item_id", "quantity"]),
+  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge"]),
+  item_id: z.string().uuid().optional(),
+  field: z.enum(["item_id", "quantity", "description_snapshot", "unit_sell_price", "unit_cost_price"]),
   item_label: z.string().optional(),
   requested_quantity: z.number().int().positive().optional(),
   available_quantity: z.number().int().min(0).optional(),
@@ -246,6 +266,14 @@ export interface CreateOrderPayload {
         item_type: "non_stock_item"
         non_stock_item_id: string
         quantity: number
+        notes?: string
+      }
+    | {
+        item_type: "custom_charge"
+        description_snapshot: string
+        quantity: number
+        unit_sell_price: string
+        unit_cost_price?: string
         notes?: string
       }
   >
