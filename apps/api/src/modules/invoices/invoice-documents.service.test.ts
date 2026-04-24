@@ -38,6 +38,7 @@ test("InvoiceDocumentsService renders inline PDF when storage is disabled", asyn
   assert.equal(document.contentType, "application/pdf")
   assert.equal(document.filename, "INV-20260424-TEST0001.pdf")
   assert.ok(document.body.byteLength > 0)
+  assert.equal(document.body.subarray(0, 4).toString("utf8"), "%PDF")
   assert.equal(assetCreated, false)
 })
 

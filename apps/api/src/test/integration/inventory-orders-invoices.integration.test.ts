@@ -364,6 +364,8 @@ describe("inventory, order, and invoice integration", () => {
     expect(pdfResponse.headers["content-disposition"]).toContain(
       `${invoiceAfterCreateResponse.body.invoice.invoice_number}.pdf`,
     )
+    expect(Buffer.isBuffer(pdfResponse.body)).toBe(true)
+    expect((pdfResponse.body as Buffer).subarray(0, 4).toString("utf8")).toBe("%PDF")
   })
 
   it("allows unpaid pending orders to be structurally edited and resyncs the same invoice", async () => {
