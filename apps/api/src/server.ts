@@ -13,6 +13,7 @@ import { handleDashboardRoute } from "./modules/dashboard/dashboard.routes.js"
 import { handleInventoryRoute } from "./modules/inventory/inventory.routes.js"
 import { handleInvoicesRoute } from "./modules/invoices/invoices.routes.js"
 import { handleLidsRoute } from "./modules/lids/lids.routes.js"
+import { handleNonStockItemsRoute } from "./modules/non-stock-items/non-stock-items.routes.js"
 import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
 import { handleReportsRoute } from "./modules/reports/reports.routes.js"
 
@@ -72,6 +73,10 @@ const server = createServer(async (request, response) => {
     }
 
     if (await handleLidsRoute(request, response, { env: runtimeEnv })) {
+      return
+    }
+
+    if (await handleNonStockItemsRoute(request, response, { env: runtimeEnv })) {
       return
     }
 
