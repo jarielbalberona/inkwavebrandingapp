@@ -197,6 +197,13 @@
       "when": 1777066491448,
       "tag": "0028_quick_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1777070000000,
+      "tag": "0029_users_permissions",
+      "breakpoints": true
     }
   ]
 }

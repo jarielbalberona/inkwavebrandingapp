@@ -271,6 +271,8 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
       code: persistenceError.code,
       constraint: persistenceError.constraint,
       detail: persistenceError.detail,
+      column: persistenceError.column,
+      table: persistenceError.table,
     })
     return
   }
@@ -291,6 +293,8 @@ interface OrderPersistenceErrorResponse {
   code: string
   constraint?: string
   detail?: string
+  column?: string
+  table?: string
 }
 
 /**
@@ -301,6 +305,8 @@ function userMessageForOrderDbError(
   code: string,
   constraint: string | undefined,
   detail: string | undefined,
+  column?: string | undefined,
+  table?: string | undefined,
 ): string {
   const c = (constraint ?? "").toLowerCase()
   const d = (detail ?? "").toLowerCase()
@@ -364,8 +370,18 @@ function userMessageForOrderDbError(
     return "The order contains a value the system cannot read. Check quantities and prices, or refresh the page and try again."
   }
 
-  if (code === "42703" || code === "42P01") {
-    return "The app could not save this order because the server is missing a required update. Refresh and try again, or ask an admin to run the latest database migration."
+  if (code === "42703") {
+    if (column) {
+      return `The database is missing a required field (${column})${table ? ` on table ${table}` : ""}). Deploy a new API release (pre-deploy runs migrations) or have an admin run the migration command on the production database, then try again.`
+    }
+    return "The app could not save this order because the server database is out of date. Deploy a new API release or ask an admin to run database migrations, then try again."
+  }
+
+  if (code === "42P01") {
+    if (table) {
+      return `A required database object is missing (${table}). Deploy the latest API and run migrations, or ask an admin for help.`
+    }
+    return "The app could not save this order because the server database is out of date. Deploy a new API release or ask an admin to run database migrations, then try again."
   }
 
   if (code === "40001" || code === "40P01") {
@@ -388,53 +404,65 @@ function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse 
 
   const constraint = getDbErrorString(error, "constraint")
   const detail = getDbErrorString(error, "detail")
+  const column = getDbErrorString(error, "column")
+  const table = getDbErrorString(error, "table")
 
   if (code === "23503") {
     return {
       statusCode: 409,
-      error: userMessageForOrderDbError(code, constraint, detail),
+      error: userMessageForOrderDbError(code, constraint, detail, column, table),
       code,
       constraint,
       detail,
+      column,
+      table,
     }
   }
 
   if (code === "23505") {
     return {
       statusCode: 409,
-      error: userMessageForOrderDbError(code, constraint, detail),
+      error: userMessageForOrderDbError(code, constraint, detail, column, table),
       code,
       constraint,
       detail,
+      column,
+      table,
     }
   }
 
   if (code === "23514" || code === "23502" || code === "22P02") {
     return {
       statusCode: 400,
-      error: userMessageForOrderDbError(code, constraint, detail),
+      error: userMessageForOrderDbError(code, constraint, detail, column, table),
       code,
       constraint,
       detail,
+      column,
+      table,
     }
   }
 
   if (code === "42703" || code === "42P01" || code === "40001" || code === "40P01" || code === "57014") {
     return {
       statusCode: 500,
-      error: userMessageForOrderDbError(code, constraint, detail),
+      error: userMessageForOrderDbError(code, constraint, detail, column, table),
       code,
       constraint,
       detail,
+      column,
+      table,
     }
   }
 
   return {
     statusCode: 500,
-    error: userMessageForOrderDbError(code, constraint, detail),
+    error: userMessageForOrderDbError(code, constraint, detail, column, table),
     code,
     constraint,
     detail,
+    column,
+    table,
   }
 }
 
@@ -442,7 +470,10 @@ function getDbErrorCode(error: unknown): string | undefined {
   return getDbErrorString(error, "code")
 }
 
-function getDbErrorString(error: unknown, key: "code" | "constraint" | "detail"): string | undefined {
+function getDbErrorString(
+  error: unknown,
+  key: "code" | "constraint" | "detail" | "column" | "table",
+): string | undefined {
   if (!error || typeof error !== "object") {
     return undefined
   }
