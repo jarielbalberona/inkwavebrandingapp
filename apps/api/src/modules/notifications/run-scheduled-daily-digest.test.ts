@@ -33,10 +33,10 @@ test("runScheduledDailyDigest runs on weekdays using Manila business date", asyn
   const result = await runScheduledDailyDigest({
     runner: {
       async runForBusinessDate(businessDate) {
-        receivedBusinessDate = businessDate
+        receivedBusinessDate = businessDate ?? "missing"
 
         return {
-          businessDate,
+          businessDate: businessDate ?? "missing",
           status: "succeeded",
           recipientCount: 2,
           sentCount: 2,
