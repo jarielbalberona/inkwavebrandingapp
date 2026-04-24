@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import type { RetrievedObject, StoredObject } from "../../lib/storage/object-storage.types.js"
+import type {
+  PutObjectInput,
+  RetrievedObject,
+  StoredObject,
+} from "../../lib/storage/object-storage.types.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { InvoiceDocumentsService } from "./invoice-documents.service.js"
 
@@ -246,11 +250,9 @@ test("InvoiceDocumentsService returns a public share link when R2 public CDN is 
       putObject: async () => {
         throw new Error("putObject should not be used when the stored public asset is fresh")
       },
-      getObject: async () => ({
-        body: Buffer.from("stored-pdf"),
-        contentType: "application/pdf",
-        contentLength: 10,
-      }),
+      getObject: async () => {
+        throw new Error("getObject should not be used when returning an existing public share URL")
+      },
       deleteObject: async () => {
         throw new Error("deleteObject should not be used when reusing the current asset")
       },
@@ -261,6 +263,81 @@ test("InvoiceDocumentsService returns a public share link when R2 public CDN is 
   const shareLink = await service.getShareablePdfLink("invoice-1", adminUser)
 
   assert.equal(shareLink.url, "https://cdn.example.com/invoices/invoice-1/pdf/current.pdf")
+  assert.equal(shareLink.filename, "INV-20260424-TEST0001.pdf")
+})
+
+test("InvoiceDocumentsService regenerates a stale invoice PDF before returning a share link", async () => {
+  let documentAsset: Record<string, unknown> = {
+    id: "asset-1",
+    kind: "invoice_pdf",
+    storageProvider: "r2",
+    visibility: "public",
+    objectKey: "invoices/invoice-1/pdf/old.pdf",
+    publicUrl: "https://cdn.example.com/invoices/invoice-1/pdf/old.pdf",
+    filename: "INV-20260424-TEST0001.pdf",
+    contentType: "application/pdf",
+    sizeBytes: 123,
+    createdAt: new Date("2026-04-24T10:10:00.000Z"),
+    updatedAt: new Date("2026-04-24T10:10:00.000Z"),
+  }
+
+  const service = new InvoiceDocumentsService(
+    {
+      findByIdWithRelations: async () =>
+        buildInvoiceRecord({
+          documentAsset: documentAsset as never,
+          updatedAt: new Date("2026-04-24T11:00:00.000Z"),
+        }),
+    } as never,
+    {
+      replace: async (input: {
+        assetId: string
+        asset: { objectKey: string; publicUrl: string | null; filename: string }
+      }) => {
+        assert.equal(input.assetId, "asset-1")
+        documentAsset = {
+          ...documentAsset,
+          objectKey: input.asset.objectKey,
+          publicUrl: input.asset.publicUrl,
+          filename: input.asset.filename,
+          updatedAt: new Date("2026-04-24T11:05:00.000Z"),
+        }
+        return documentAsset as never
+      },
+    } as never,
+    {
+      provider: "r2",
+      maxFileBytes: 5 * 1024 * 1024,
+      maxRequestBytes: 50 * 1024 * 1024,
+      r2: {
+        accountId: "acct",
+        accessKeyId: "key",
+        secretAccessKey: "secret",
+        bucketName: "bucket",
+        endpoint: "https://acct.r2.cloudflarestorage.com",
+        publicUrl: "https://cdn.example.com",
+        usePublicCdn: true,
+      },
+    },
+    {
+      putObject: async (input: PutObjectInput): Promise<StoredObject> => ({
+        objectKey: input.objectKey,
+        contentType: "application/pdf",
+        contentLength: 100,
+        visibility: input.visibility ?? "public",
+        publicUrl: `https://cdn.example.com/${input.objectKey}`,
+      }),
+      getObject: async () => {
+        throw new Error("getObject should not run when the stored asset is stale")
+      },
+      deleteObject: async () => {},
+      getPublicUrl: (objectKey: string) => `https://cdn.example.com/${objectKey}`,
+    },
+  )
+
+  const shareLink = await service.getShareablePdfLink("invoice-1", adminUser)
+
+  assert.match(shareLink.url, /^https:\/\/cdn\.example\.com\/invoices\/invoice-1\/pdf\/\d+-[a-f0-9]{16}\.pdf$/)
   assert.equal(shareLink.filename, "INV-20260424-TEST0001.pdf")
 })
 

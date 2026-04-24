@@ -156,15 +156,36 @@ export class InvoiceDocumentsService {
       throw new InvoiceShareLinkUnavailableError()
     }
 
-    await this.getPdfDocument(invoiceId, user)
-
     const invoice = await this.invoicesRepository.findByIdWithRelations(invoiceId)
 
     if (!invoice) {
       throw new InvoiceNotFoundError()
     }
 
-    const publicUrl = invoice.documentAsset?.publicUrl ?? null
+    const desiredVisibility = this.getDesiredVisibility()
+    const currentAsset = invoice.documentAsset ?? null
+
+    if (
+      currentAsset &&
+      currentAsset.updatedAt >= invoice.updatedAt &&
+      currentAsset.visibility === desiredVisibility &&
+      currentAsset.publicUrl
+    ) {
+      return {
+        url: currentAsset.publicUrl,
+        filename: currentAsset.filename ?? `${invoice.invoiceNumber}.pdf`,
+      }
+    }
+
+    await this.getPdfDocument(invoiceId, user)
+
+    const refreshed = await this.invoicesRepository.findByIdWithRelations(invoiceId)
+
+    if (!refreshed) {
+      throw new InvoiceNotFoundError()
+    }
+
+    const publicUrl = refreshed.documentAsset?.publicUrl ?? null
 
     if (!publicUrl) {
       throw new InvoiceShareLinkUnavailableError()
@@ -172,7 +193,7 @@ export class InvoiceDocumentsService {
 
     return {
       url: publicUrl,
-      filename: invoice.documentAsset?.filename ?? `${invoice.invoiceNumber}.pdf`,
+      filename: refreshed.documentAsset?.filename ?? `${refreshed.invoiceNumber}.pdf`,
     }
   }
 
