@@ -84,10 +84,22 @@ export async function login(input: LoginInput): Promise<AuthenticatedUser> {
       meta: skipErrorToast(),
     })
 
-    return authResponseSchema.parse(response).user
+    authResponseSchema.parse(response)
+
+    const verifiedUser = await fetchCurrentUser()
+
+    if (!verifiedUser) {
+      throw new AuthApiError("Session was not established", 401)
+    }
+
+    return verifiedUser
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 401) {
       throw new AuthApiError("Invalid email or password", error.status)
+    }
+
+    if (error instanceof AuthApiError && error.status === 401) {
+      throw new AuthApiError("Sign in succeeded, but the session was not persisted.", error.status)
     }
 
     if (error instanceof ApiClientError) {

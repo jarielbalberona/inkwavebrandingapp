@@ -15,6 +15,7 @@ export function useCurrentUser() {
     queryKey: currentUserQueryKey,
     queryFn: fetchCurrentUser,
     retry: false,
+    staleTime: 30_000,
   })
 }
 
