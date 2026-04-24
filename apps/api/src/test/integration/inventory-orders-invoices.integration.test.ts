@@ -704,6 +704,136 @@ describe("inventory, order, and invoice integration", () => {
     expect(updateResponse.body.error).toBe("Invoice is locked because payments have already been recorded")
   })
 
+  it("reflects persisted payment history and settlement state in invoice detail", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer({
+      businessName: "Payment Detail Customer",
+    })
+    const nonStockItem = await seedNonStockItem({
+      name: "Payment Detail Fee",
+      defaultSellPrice: "12.00",
+      costPrice: "4.00",
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 2 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const invoiceId = invoiceResponse.body.invoice.id as string
+
+    const partialPaymentResponse = await api
+      .post(`/invoices/${invoiceId}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "10.00",
+        payment_date: "2026-04-24T08:00:00.000Z",
+        note: "Initial deposit",
+      })
+
+    expect(partialPaymentResponse.status).toBe(201)
+    expect(partialPaymentResponse.body.invoice.status).toBe("pending")
+    expect(partialPaymentResponse.body.invoice.paid_amount).toBe("10.00")
+    expect(partialPaymentResponse.body.invoice.remaining_balance).toBe("14.00")
+
+    const settlementResponse = await api
+      .post(`/invoices/${invoiceId}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "14.00",
+        payment_date: "2026-04-25T08:00:00.000Z",
+        note: "Remaining balance",
+      })
+
+    expect(settlementResponse.status).toBe(201)
+    expect(settlementResponse.body.invoice.status).toBe("paid")
+    expect(settlementResponse.body.invoice.paid_amount).toBe("24.00")
+    expect(settlementResponse.body.invoice.remaining_balance).toBe("0.00")
+
+    const invoiceDetailResponse = await api
+      .get(`/invoices/${invoiceId}`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceDetailResponse.status).toBe(200)
+    expect(invoiceDetailResponse.body.invoice.total_amount).toBe("24.00")
+    expect(invoiceDetailResponse.body.invoice.paid_amount).toBe("24.00")
+    expect(invoiceDetailResponse.body.invoice.remaining_balance).toBe("0.00")
+    expect(invoiceDetailResponse.body.invoice.status).toBe("paid")
+    expect(invoiceDetailResponse.body.invoice.payments).toHaveLength(2)
+    expect(invoiceDetailResponse.body.invoice.payments[0]).toMatchObject({
+      amount: "14.00",
+      note: "Remaining balance",
+    })
+    expect(invoiceDetailResponse.body.invoice.payments[0]?.created_by?.email).toContain("@")
+    expect(invoiceDetailResponse.body.invoice.payments[1]).toMatchObject({
+      amount: "10.00",
+      note: "Initial deposit",
+    })
+    expect(invoiceDetailResponse.body.invoice.payments[1]?.created_by?.email).toContain("@")
+  })
+
+  it("rejects voiding invoices after payment activity has started", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer({
+      businessName: "Void Guard Customer",
+    })
+    const nonStockItem = await seedNonStockItem({
+      name: "Void Guard Fee",
+      defaultSellPrice: "12.00",
+      costPrice: "4.00",
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const invoiceId = invoiceResponse.body.invoice.id as string
+    const paymentResponse = await api
+      .post(`/invoices/${invoiceId}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "1.00",
+        payment_date: "2026-04-24T08:00:00.000Z",
+        note: "Deposit received",
+      })
+
+    expect(paymentResponse.status).toBe(201)
+
+    const voidResponse = await api
+      .post(`/invoices/${invoiceId}/void`)
+      .set("Cookie", adminCookie)
+
+    expect(voidResponse.status).toBe(409)
+    expect(voidResponse.body.error).toBe("Invoices with recorded payments cannot be voided")
+  })
+
   it("does not expose an invoice structural edit route", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()
