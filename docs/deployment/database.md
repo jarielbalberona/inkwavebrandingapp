@@ -9,7 +9,7 @@ If that distinction gets blurred, somebody will eventually run Ink Wave migratio
 - one shared Render PostgreSQL instance
 - one dedicated database for this app, for example `ink_wave_branding_app`
 - one dedicated database user/credential for this app if Render allows it
-- one `DATABASE_URL` that points only to the Ink Wave database
+- one database configuration that points only to the Ink Wave database, whether that is `DATABASE_URL` or the split `DATABASE_*` fields
 - no shared schemas, no cross-app tables, no “temporary” reuse of another app database
 
 If Render cannot provide a dedicated database user on the current plan, document that limitation in the service handoff and restrict credential access tightly. That is a concession, not a good design.
@@ -19,8 +19,9 @@ If Render cannot provide a dedicated database user on the current plan, document
 Current repo wiring already assumes one app-specific database target:
 
 - `apps/api/.env.example` points local development at `ink_wave_branding_app`
-- `apps/api/src/config/env.ts` requires `DATABASE_URL` for database work
+- `apps/api/src/config/env.ts` supports either `DATABASE_URL` or a complete split `DATABASE_*` configuration for database work
 - `apps/api/drizzle.config.ts` loads the API `.env` and sends Drizzle only to that `DATABASE_URL`
+- `apps/api/drizzle.config.ts` also resolves the split `DATABASE_*` configuration and encodes credentials safely when that mode is used
 - Drizzle migrations live in `apps/api/drizzle`
 - Drizzle schema source is `apps/api/src/db/schema/index.ts`
 
@@ -32,7 +33,8 @@ These values are required for safe database targeting:
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | API runtime + Drizzle | Full connection string for the Ink Wave database only |
+| `DATABASE_URL` | API runtime + Drizzle | Full connection string for the Ink Wave database only; common in local development |
+| `DATABASE_HOST` / `DATABASE_PORT` / `DATABASE_USER` / `DATABASE_PASSWORD` / `DATABASE_NAME` | API runtime + Drizzle | Preferred Render-safe alternative when credentials contain URL-reserved characters |
 | `DATABASE_SSL_MODE` | API runtime + Drizzle | `require` on Render, `disable` only for local non-SSL setups |
 
 Do not put database credentials in the frontend. Do not mirror them into `VITE_*` variables. If somebody suggests that, reject it.
@@ -41,14 +43,18 @@ Do not put database credentials in the frontend. Do not mirror them into `VITE_*
 
 Before running migrations in staging or production:
 
-1. Confirm the database name inside `DATABASE_URL` is the Ink Wave database, not another app.
+1. Confirm the database target is the Ink Wave database, not another app:
+   - if using `DATABASE_URL`, inspect the database name inside it
+   - if using split `DATABASE_*`, inspect `DATABASE_NAME` and the host/user pair
 2. Confirm the credential in use is scoped to Ink Wave or at least intentionally approved for this database.
 3. Confirm the migration output is the checked-in `apps/api/drizzle` directory.
-4. Run only the app package commands:
+4. Run `pnpm --filter @workspace/api db:check` first to print the connected database/user before you mutate anything.
+5. Run only the app package commands:
    - `pnpm --filter @workspace/api db:generate`
    - `pnpm --filter @workspace/api db:migrate`
+   - `pnpm --filter @workspace/api db:migrate:deploy`
    - `pnpm --filter @workspace/api db:drizzle-check`
-5. Do not run ad hoc SQL against a guessed target unless incident response explicitly requires it and the target database has already been verified.
+6. Do not run ad hoc SQL against a guessed target unless incident response explicitly requires it and the target database has already been verified.
 
 ## Local Development Baseline
 
@@ -69,5 +75,6 @@ Local convenience does not weaken the production rule. Local and production shou
 - This repo documents the target database shape. It does not prove the current Render instance is already provisioned exactly this way.
 - This repo does not automate database-user creation on Render.
 - This repo does not include a live smoke that validates the production `DATABASE_URL`.
+- This repo cannot prove the live Render dashboard is using the split `DATABASE_*` values exactly as documented without a real dashboard check.
 
 That means operators still need to verify the actual Render database target before first deploy and before every migration run.

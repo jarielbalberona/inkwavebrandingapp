@@ -35,10 +35,16 @@ Backend variables must not be exposed to the frontend bundle.
 | --- | --- | --- |
 | `NODE_ENV` | yes | `development`, `test`, or `production`. |
 | `PORT` | yes | API HTTP port. Render injects this; local default is `3000`. |
-| `DATABASE_URL` | yes for DB/runtime | Must target this app's database only. |
+| `DATABASE_URL` | yes unless split DB vars are used | Must target this app's database only. Local development usually uses this. |
+| `DATABASE_HOST` | yes as part of split DB mode | Preferred on Render when dashboard-managed passwords may contain URL-reserved characters. |
+| `DATABASE_PORT` | no | Defaults to `5432` when split DB mode is used. |
+| `DATABASE_USER` | yes as part of split DB mode | Database user for split DB mode. |
+| `DATABASE_PASSWORD` | yes as part of split DB mode | Database password for split DB mode. |
+| `DATABASE_NAME` | yes as part of split DB mode | Ink Wave database name for split DB mode. |
 | `DATABASE_SSL_MODE` | yes | Use `require` on Render unless local DB setup does not need SSL. |
 | `AUTH_SESSION_SECRET` | yes for API runtime | At least 32 random characters. Used only for signing HTTP-only auth session cookies. |
 | `AUTH_SESSION_TTL_SECONDS` | no | Session cookie lifetime. Defaults to 8 hours. |
+| `AUTH_SESSION_SAME_SITE` | no | `lax`, `strict`, or `none`. If omitted, defaults to `lax` in development and `none` in production so session cookies are sent on cross-site API calls (typical when the static site and API use different hostnames, for example on Render). |
 | `WEB_ORIGIN` | yes for browser API calls | Exact frontend origin allowed for credentialed CORS, for example the Render web URL or `http://localhost:5173`. |
 | `SENTRY_DSN` | no | Empty value disables Sentry initialization. |
 | `SENTRY_TRACES_SAMPLE_RATE` | no | Number from `0` to `1`; default `0`. |
@@ -61,6 +67,12 @@ API variables belong in:
 
 - local development: `apps/api/.env.example` copied to a local untracked `.env`
 - Render API service: dashboard-managed environment values
+
+Render-specific preference:
+
+- local development usually uses `DATABASE_URL`
+- Render should prefer the split `DATABASE_*` path because pasted dashboard passwords frequently contain `@`, `#`, and similar characters
+- do not set both modes carelessly and assume they are equivalent; the runtime prefers the complete split `DATABASE_*` set when all required fields are present
 
 Do not copy API secrets into the repo. Do not mirror API secrets into web variables. Do not put database credentials into shared documentation screenshots or chat snippets.
 
@@ -87,14 +99,14 @@ Expected local workflow:
 ## Render Secret Management Rules
 
 - `VITE_API_BASE_URL` is public and safe for the web service environment.
-- `DATABASE_URL`, `AUTH_SESSION_SECRET`, and any future provider keys are backend-only.
+- `DATABASE_URL` / split `DATABASE_*`, `AUTH_SESSION_SECRET`, and any future provider keys are backend-only.
 - Render must store production and staging secrets in service environment settings, not in `render.yaml`.
 - Rotate any secret immediately if it is ever committed, pasted into a public place, or shared in a frontend variable by mistake.
 
 ## Failure Modes To Avoid
 
 - web points at the wrong API origin because `VITE_API_BASE_URL` drifted
-- API boots against the wrong database because `DATABASE_URL` was copied from another app
+- API boots against the wrong database because `DATABASE_URL` or split `DATABASE_*` values were copied from another app
 - auth cookies break because `AUTH_SESSION_SECRET` is missing or too short
 - someone runs seed/admin tasks with a reused weak password
 - secrets leak because they were treated like setup documentation instead of credentials
@@ -104,6 +116,12 @@ Expected local workflow:
 `render.yaml` contains a live static web service definition because the web app has a buildable output at `apps/web/dist`.
 
 `render.yaml` now defines the API service contract with `pnpm --filter @workspace/api start` and `/health`. That still does not remove the need to set real dashboard-managed environment values and run a live smoke.
+
+Bootstrap admin truth:
+
+- `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_DISPLAY_NAME` are not normal runtime requirements
+- they are only needed for `pnpm --filter @workspace/api seed:admin`
+- after the first bootstrap, use the in-app `/users` management flow for ongoing staff/admin changes instead of treating the seed task like account management
 
 ## Migration Ownership
 

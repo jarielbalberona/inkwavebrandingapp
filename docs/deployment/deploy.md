@@ -22,20 +22,25 @@ Do not call a direct production push “staging by confidence.” That is lazy a
 ## Deployment Order
 
 1. Confirm Render environment values are present for the target web and API services.
-2. Confirm `DATABASE_URL` points to the Ink Wave database only.
+2. Confirm the database target points to the Ink Wave database only.
+   - on Render, prefer the split `DATABASE_HOST` / `DATABASE_USER` / `DATABASE_PASSWORD` / `DATABASE_NAME` path from `render.yaml`
+   - use `DATABASE_URL` locally when that is simpler and safe
 3. Confirm the API build still passes locally:
    - `pnpm --filter @workspace/api build`
 4. Confirm the web build still passes locally:
    - `pnpm --filter web build`
-5. Deploy the API service.
-6. Render runs the API `preDeployCommand` before switching traffic:
+5. Confirm the API would talk to the expected database before mutating anything:
+   - `pnpm --filter @workspace/api db:check`
+6. Deploy the API service.
+7. Render runs the API `preDeployCommand` before switching traffic:
    - `pnpm --filter @workspace/api db:migrate:deploy`
    - this fails early if the database already contains app tables but Drizzle has no `__drizzle_migrations` history
-7. Wait for the API health check at `/health` to return `200`.
-8. Deploy the web service.
-9. If this is a brand-new database, seed the bootstrap admin after the first successful API deploy:
+8. Wait for the API health check at `/health` to return `200`.
+9. Deploy the web service.
+10. If this is a brand-new database, seed the bootstrap admin after the first successful API deploy:
    - `pnpm --filter @workspace/api seed:admin`
-10. Run the smoke checks below.
+    - after bootstrap, manage ongoing staff/admin changes from the app’s `/users` surface rather than repeated seed runs
+11. Run the smoke checks below.
 
 If step 2 is skipped, the rest of this runbook is worthless.
 

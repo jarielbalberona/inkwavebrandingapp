@@ -1,6 +1,11 @@
-# Ink Wave Branding App
+# Ink Wave Branding | Internal Cup Printing Production App
 
 Internal operations app for Ink Wave cup printing. This repo is not a demo storefront and not a generic inventory sandbox. It exists to support cups and lids master data, stock intake, inventory balances, order lifecycle, invoice generation/PDF output, and basic reporting with real admin/staff access control.
+
+Admin account handling is split deliberately:
+
+- first bootstrap admin: `pnpm --filter @workspace/api seed:admin`
+- ongoing staff account creation: admin-only `/users` screen in the web app
 
 ## Workspace shape
 
@@ -108,7 +113,8 @@ Treat anything beyond that as unverified until somebody runs the live checks.
 - The app targets PostgreSQL only.
 - `apps/api` uses Drizzle ORM on top of the existing `pg` pool.
 - `apps/api/.env.example` documents the required DB env variables.
-- `DATABASE_URL` must point to the Ink Wave app database, not another schema/application on the shared Render instance.
+- `DATABASE_URL` or the split `DATABASE_*` fields must point to the Ink Wave app database, not another schema/application on the shared Render instance.
+- Render should prefer the split `DATABASE_HOST` / `DATABASE_USER` / `DATABASE_PASSWORD` / `DATABASE_NAME` path because dashboard-managed passwords may contain URL-reserved characters.
 - Drizzle schema exports start in `apps/api/src/db/schema`.
 - Drizzle migration output is `apps/api/drizzle`.
 - Drizzle is the forward migration owner; do not add a second migration tool without a deliberate ticket.
@@ -153,9 +159,11 @@ pnpm --filter @workspace/api db:migrate
 ## API runtime foundations
 
 - `apps/api/src/config/env.ts` is the central Zod-backed env contract.
+- `apps/api/src/config/env.ts` supports either `DATABASE_URL` or the split `DATABASE_*` credential path.
 - `apps/api/src/config/storage.ts` is the central storage contract. R2 stays opt-in through `STORAGE_PROVIDER=r2`.
 - Sentry is configured through `SENTRY_DSN` and stays disabled when no DSN is set.
 - `OPENAI_API_KEY` is optional scaffolding for future API work only; the app does not call OpenAI APIs yet.
+- `pnpm --filter @workspace/api seed:admin` is only the first-bootstrap path. Ongoing staff/admin management belongs in the app after bootstrap, not in repeated seed runs.
 
 ## Shared UI usage
 
