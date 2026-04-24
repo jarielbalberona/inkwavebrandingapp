@@ -60,16 +60,20 @@ pnpm --filter web typecheck
 
 What the repo proves today:
 
-- `pnpm test` passes for the current backend/PDF harness
 - `pnpm typecheck` passes
 - `pnpm build` passes
 - invoice list/detail/PDF surface exists in the repo
+- invoice PDF persistence now has an optional R2-backed path for private stored documents when `STORAGE_PROVIDER=r2`
+- targeted invoice service and invoice document tests pass
+- the DB-backed `inventory-orders-invoices` Vitest integration suite passes when run through the dedicated integration command path
 - mixed inventory summary now counts cups and lids truthfully
 
 What the repo still does not prove:
 
+- the current `pnpm --filter @workspace/api test` script is not a truthful green check because it incorrectly loads Vitest integration files through Node's builtin test runner
 - no live Render smoke from this repo alone
-- no database-backed integration harness yet
+- no live R2 credential smoke from this repo alone
+- no storage-enabled integration harness exists yet for real R2 credential smoke
 - no browser end-to-end smoke yet
 - low-stock remains cup-threshold-based because lids still have no reorder threshold field in schema
 
@@ -149,6 +153,7 @@ pnpm --filter @workspace/api db:migrate
 ## API runtime foundations
 
 - `apps/api/src/config/env.ts` is the central Zod-backed env contract.
+- `apps/api/src/config/storage.ts` is the central storage contract. R2 stays opt-in through `STORAGE_PROVIDER=r2`.
 - Sentry is configured through `SENTRY_DSN` and stays disabled when no DSN is set.
 - `OPENAI_API_KEY` is optional scaffolding for future API work only; the app does not call OpenAI APIs yet.
 
