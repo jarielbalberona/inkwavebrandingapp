@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Navigate, useNavigate } from "@tanstack/react-router"
+import { Eye, EyeOff } from "lucide-react"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
@@ -15,6 +16,7 @@ export function LoginPage() {
   const login = useLoginMutation()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
 
   if (currentUser.data) {
     return <Navigate to="/" />
@@ -64,14 +66,27 @@ export function LoginPage() {
 
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={isPasswordVisible ? "text" : "password"}
+                  autoComplete="current-password"
+                  className="pr-12"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2"
+                  aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+                  onClick={() => setIsPasswordVisible((current) => !current)}
+                >
+                  {isPasswordVisible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </Button>
+              </div>
             </div>
 
             <Button type="submit" disabled={login.isPending}>
