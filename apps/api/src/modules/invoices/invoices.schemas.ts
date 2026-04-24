@@ -26,3 +26,18 @@ export const invoicesListQuerySchema = z
   )
 
 export type InvoicesListQuery = z.infer<typeof invoicesListQuerySchema>
+
+const moneyAmountSchema = z
+  .string()
+  .trim()
+  .regex(/^\d+(\.\d{1,2})?$/, "Amount must be a positive money value")
+  .transform((value) => Number(value).toFixed(2))
+  .refine((value) => Number(value) > 0, "Amount must be greater than zero")
+
+export const createInvoicePaymentSchema = z.object({
+  amount: moneyAmountSchema,
+  payment_date: z.coerce.date(),
+  note: optionalText(1000),
+})
+
+export type CreateInvoicePaymentInput = z.infer<typeof createInvoicePaymentSchema>

@@ -5,8 +5,12 @@ import { AuthorizationError } from "../auth/authorization.js"
 import {
   assertInvoiceAllowsStructuralChanges,
   InvoiceAlreadyExistsError,
+  InvoiceAlreadyPaidError,
   InvoiceOrderCanceledError,
+  InvoicePaymentOverpaymentError,
+  InvoicePaymentVoidError,
   InvoicePaidLockError,
+  InvoiceVoidAfterPaymentError,
   InvoiceVoidLockError,
   InvoicesService,
   syncInvoiceSnapshotForOrder,
@@ -93,6 +97,9 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
           customerAddressSnapshot: "Manila",
           status: "pending",
           subtotal: "2400.00",
+          totalAmount: "2400.00",
+          paidAmount: "0.00",
+          remainingBalance: "2400.00",
           createdAt: new Date("2026-04-24T00:00:00.000Z"),
           updatedAt: new Date("2026-04-24T00:00:00.000Z"),
           items: [
@@ -267,6 +274,9 @@ test("generateForOrder includes custom_charge lines without any master-data depe
           customerAddressSnapshot: "Manila",
           status: "pending",
           subtotal: "1150.00",
+          totalAmount: "1150.00",
+          paidAmount: "0.00",
+          remainingBalance: "1150.00",
           createdAt: new Date("2026-04-24T00:00:00.000Z"),
           updatedAt: new Date("2026-04-24T00:00:00.000Z"),
           items: [
@@ -390,6 +400,360 @@ test("assertInvoiceAllowsStructuralChanges rejects void invoices", () => {
   assert.throws(() => assertInvoiceAllowsStructuralChanges("void"), InvoiceVoidLockError)
 })
 
+test("recordPayment persists a partial payment and keeps the invoice pending", async () => {
+  const recordedPayments: unknown[] = []
+  let financialStateUpdate: unknown = null
+  let currentInvoice = {
+    id: "invoice-1",
+    invoiceNumber: "INV-20260424-PAY0001",
+    orderId: "order-1",
+    orderNumberSnapshot: "ORD-001",
+    customerId: "customer-1",
+    customerCodeSnapshot: "CUST-001",
+    customerBusinessNameSnapshot: "Ink Wave Cafe",
+    customerContactPersonSnapshot: "Jane Doe",
+    customerContactNumberSnapshot: "09170000000",
+    customerEmailSnapshot: "jane@example.com",
+    customerAddressSnapshot: "Manila",
+    status: "pending" as const,
+    subtotal: "1000.00",
+    totalAmount: "1000.00",
+    paidAmount: "0.00",
+    remainingBalance: "1000.00",
+    createdAt: new Date("2026-04-24T00:00:00.000Z"),
+    updatedAt: new Date("2026-04-24T00:00:00.000Z"),
+    items: [],
+    payments: [],
+  }
+
+  const invoicesRepository = {
+    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      handler({ invoicesRepository, db: {} }),
+    findByIdWithRelations: async () => currentInvoice,
+    createPayment: async (input: unknown) => {
+      recordedPayments.push(input)
+      currentInvoice = {
+        ...currentInvoice,
+        payments: [
+          {
+            id: "payment-1",
+            invoiceId: "invoice-1",
+            amount: "250.00",
+            paymentDate: new Date("2026-04-24T08:00:00.000Z"),
+            note: "Initial deposit",
+            createdByUserId: adminUser.id,
+            createdAt: new Date("2026-04-24T08:00:00.000Z"),
+            updatedAt: new Date("2026-04-24T08:00:00.000Z"),
+            createdByUser: {
+              id: adminUser.id,
+              email: adminUser.email,
+              displayName: adminUser.displayName,
+            },
+          },
+        ],
+      }
+
+      return null
+    },
+    updateFinancialState: async (_invoiceId: string, input: unknown) => {
+      financialStateUpdate = input
+      currentInvoice = {
+        ...currentInvoice,
+        ...(input as Record<string, unknown>),
+      }
+    },
+  }
+
+  const service = new InvoicesService(invoicesRepository as never, {} as never)
+
+  const invoice = await service.recordPayment(
+    "invoice-1",
+    {
+      amount: "250.00",
+      payment_date: new Date("2026-04-24T08:00:00.000Z"),
+      note: "Initial deposit",
+    },
+    adminUser,
+  )
+
+  assert.deepEqual(recordedPayments, [
+    {
+      invoiceId: "invoice-1",
+      payment: {
+        amount: "250.00",
+        paymentDate: new Date("2026-04-24T08:00:00.000Z"),
+        note: "Initial deposit",
+        createdByUserId: adminUser.id,
+      },
+    },
+  ])
+  assert.deepEqual(financialStateUpdate, {
+    status: "pending",
+    paidAmount: "250.00",
+    remainingBalance: "750.00",
+  })
+  assert.equal(invoice.status, "pending")
+  assert.equal(invoice.paid_amount, "250.00")
+  assert.equal(invoice.remaining_balance, "750.00")
+  assert.equal(invoice.payments.length, 1)
+  assert.equal(invoice.payments[0]?.amount, "250.00")
+  assert.equal(invoice.payments[0]?.created_by?.id, adminUser.id)
+})
+
+test("recordPayment settles the invoice when the remaining balance is paid exactly", async () => {
+  let updatedState: unknown = null
+  let currentInvoice = {
+    id: "invoice-1",
+    invoiceNumber: "INV-20260424-PAY0002",
+    orderId: "order-1",
+    orderNumberSnapshot: "ORD-001",
+    customerId: "customer-1",
+    customerCodeSnapshot: "CUST-001",
+    customerBusinessNameSnapshot: "Ink Wave Cafe",
+    customerContactPersonSnapshot: "Jane Doe",
+    customerContactNumberSnapshot: "09170000000",
+    customerEmailSnapshot: "jane@example.com",
+    customerAddressSnapshot: "Manila",
+    status: "pending" as const,
+    subtotal: "1000.00",
+    totalAmount: "1000.00",
+    paidAmount: "400.00",
+    remainingBalance: "600.00",
+    createdAt: new Date("2026-04-24T00:00:00.000Z"),
+    updatedAt: new Date("2026-04-24T00:00:00.000Z"),
+    items: [],
+    payments: [],
+  }
+
+  const invoicesRepository = {
+    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      handler({ invoicesRepository, db: {} }),
+    findByIdWithRelations: async () => currentInvoice,
+    createPayment: async () => null,
+    updateFinancialState: async (_invoiceId: string, input: unknown) => {
+      updatedState = input
+      currentInvoice = {
+        ...currentInvoice,
+        ...(input as Record<string, unknown>),
+      }
+    },
+  }
+
+  const service = new InvoicesService(invoicesRepository as never, {} as never)
+
+  const invoice = await service.recordPayment(
+    "invoice-1",
+    {
+      amount: "600.00",
+      payment_date: new Date("2026-04-24T08:00:00.000Z"),
+    },
+    adminUser,
+  )
+
+  assert.deepEqual(updatedState, {
+    status: "paid",
+    paidAmount: "1000.00",
+    remainingBalance: "0.00",
+  })
+  assert.equal(invoice.status, "paid")
+  assert.equal(invoice.paid_amount, "1000.00")
+  assert.equal(invoice.remaining_balance, "0.00")
+})
+
+test("recordPayment rejects overpayment", async () => {
+  const service = new InvoicesService(
+    {
+      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+        handler({
+          invoicesRepository: {
+            findByIdWithRelations: async () => ({
+              id: "invoice-1",
+              status: "pending",
+              totalAmount: "1000.00",
+              paidAmount: "200.00",
+              remainingBalance: "800.00",
+            }),
+          },
+          db: {},
+        }),
+    } as never,
+    {} as never,
+  )
+
+  await assert.rejects(
+    () =>
+      service.recordPayment(
+        "invoice-1",
+        {
+          amount: "900.00",
+          payment_date: new Date("2026-04-24T08:00:00.000Z"),
+        },
+        adminUser,
+      ),
+    InvoicePaymentOverpaymentError,
+  )
+})
+
+test("recordPayment rejects void invoices", async () => {
+  const service = new InvoicesService(
+    {
+      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+        handler({
+          invoicesRepository: {
+            findByIdWithRelations: async () => ({
+              id: "invoice-1",
+              status: "void",
+              totalAmount: "1000.00",
+              paidAmount: "0.00",
+              remainingBalance: "1000.00",
+            }),
+          },
+          db: {},
+        }),
+    } as never,
+    {} as never,
+  )
+
+  await assert.rejects(
+    () =>
+      service.recordPayment(
+        "invoice-1",
+        {
+          amount: "100.00",
+          payment_date: new Date("2026-04-24T08:00:00.000Z"),
+        },
+        adminUser,
+      ),
+    InvoicePaymentVoidError,
+  )
+})
+
+test("recordPayment rejects already paid invoices", async () => {
+  const service = new InvoicesService(
+    {
+      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+        handler({
+          invoicesRepository: {
+            findByIdWithRelations: async () => ({
+              id: "invoice-1",
+              status: "paid",
+              totalAmount: "1000.00",
+              paidAmount: "1000.00",
+              remainingBalance: "0.00",
+            }),
+          },
+          db: {},
+        }),
+    } as never,
+    {} as never,
+  )
+
+  await assert.rejects(
+    () =>
+      service.recordPayment(
+        "invoice-1",
+        {
+          amount: "100.00",
+          payment_date: new Date("2026-04-24T08:00:00.000Z"),
+        },
+        adminUser,
+      ),
+    InvoiceAlreadyPaidError,
+  )
+})
+
+test("recordPayment rejects staff access", async () => {
+  const service = new InvoicesService({} as never, {} as never)
+
+  await assert.rejects(
+    () =>
+      service.recordPayment(
+        "invoice-1",
+        {
+          amount: "100.00",
+          payment_date: new Date("2026-04-24T08:00:00.000Z"),
+        },
+        staffUser,
+      ),
+    AuthorizationError,
+  )
+})
+
+test("void marks an unpaid invoice as void", async () => {
+  let updatedState: unknown = null
+  let currentInvoice = {
+    id: "invoice-1",
+    invoiceNumber: "INV-20260424-VOID0001",
+    orderId: "order-1",
+    orderNumberSnapshot: "ORD-001",
+    customerId: "customer-1",
+    customerCodeSnapshot: "CUST-001",
+    customerBusinessNameSnapshot: "Ink Wave Cafe",
+    customerContactPersonSnapshot: "Jane Doe",
+    customerContactNumberSnapshot: "09170000000",
+    customerEmailSnapshot: "jane@example.com",
+    customerAddressSnapshot: "Manila",
+    status: "pending" as const,
+    subtotal: "1000.00",
+    totalAmount: "1000.00",
+    paidAmount: "0.00",
+    remainingBalance: "1000.00",
+    createdAt: new Date("2026-04-24T00:00:00.000Z"),
+    updatedAt: new Date("2026-04-24T00:00:00.000Z"),
+    items: [],
+    payments: [],
+  }
+
+  const invoicesRepository = {
+    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      handler({ invoicesRepository, db: {} }),
+    findByIdWithRelations: async () => currentInvoice,
+    updateFinancialState: async (_invoiceId: string, input: unknown) => {
+      updatedState = input
+      currentInvoice = {
+        ...currentInvoice,
+        ...(input as Record<string, unknown>),
+      }
+    },
+  }
+
+  const service = new InvoicesService(invoicesRepository as never, {} as never)
+
+  const invoice = await service.void("invoice-1", adminUser)
+
+  assert.deepEqual(updatedState, {
+    status: "void",
+    paidAmount: "0.00",
+    remainingBalance: "1000.00",
+  })
+  assert.equal(invoice.status, "void")
+  assert.equal(invoice.paid_amount, "0.00")
+  assert.equal(invoice.remaining_balance, "1000.00")
+})
+
+test("void rejects invoices with recorded payments", async () => {
+  const service = new InvoicesService(
+    {
+      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+        handler({
+          invoicesRepository: {
+            findByIdWithRelations: async () => ({
+              id: "invoice-1",
+              status: "pending",
+              totalAmount: "1000.00",
+              paidAmount: "100.00",
+              remainingBalance: "900.00",
+            }),
+          },
+          db: {},
+        }),
+    } as never,
+    {} as never,
+  )
+
+  await assert.rejects(() => service.void("invoice-1", adminUser), InvoiceVoidAfterPaymentError)
+})
+
 test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not exist", async () => {
   let capturedInput: unknown
 
@@ -413,6 +777,9 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
           customerAddressSnapshot: "Manila",
           status: "pending",
           subtotal: "240.00",
+          totalAmount: "240.00",
+          paidAmount: "0.00",
+          remainingBalance: "240.00",
           createdAt: new Date("2026-04-24T00:00:00.000Z"),
           updatedAt: new Date("2026-04-24T00:00:00.000Z"),
           items: [],
@@ -498,6 +865,9 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
           customerAddressSnapshot: "Updated Address",
           status: "pending",
           subtotal: "325.00",
+          totalAmount: "325.00",
+          paidAmount: "0.00",
+          remainingBalance: "325.00",
           createdAt: new Date("2026-04-24T00:00:00.000Z"),
           updatedAt: new Date("2026-04-24T01:00:00.000Z"),
           items: [],

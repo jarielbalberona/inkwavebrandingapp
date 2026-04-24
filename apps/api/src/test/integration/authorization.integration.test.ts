@@ -31,7 +31,7 @@ describe("authorization integration", () => {
       })
 
     expect(staffResponse.status).toBe(403)
-    expect(staffResponse.body.error).toBe("Admin role required")
+    expect(staffResponse.body.error).toBe("Record stock intake permission required")
 
     const adminResponse = await api
       .post("/inventory/stock-intake")
@@ -169,7 +169,7 @@ describe("authorization integration", () => {
       })
 
     expect(staffResponse.status).toBe(403)
-    expect(staffResponse.body.error).toBe("Admin role required")
+    expect(staffResponse.body.error).toBe("Manage custom charges on orders permission required")
 
     const adminResponse = await api
       .post("/orders")
@@ -226,7 +226,7 @@ describe("authorization integration", () => {
       .set("Cookie", staffCookie)
 
     expect(staffGenerateResponse.status).toBe(403)
-    expect(staffGenerateResponse.body.error).toBe("Admin role required")
+    expect(staffGenerateResponse.body.error).toBe("Manage invoices permission required")
 
     const adminGenerateResponse = await api
       .post(`/orders/${orderId}/invoice`)
@@ -256,35 +256,53 @@ describe("authorization integration", () => {
       .set("Cookie", staffCookie)
 
     expect(staffListResponse.status).toBe(403)
-    expect(staffListResponse.body.error).toBe("Admin role required")
+    expect(staffListResponse.body.error).toBe("Manage invoices permission required")
 
     const staffDetailResponse = await api
       .get(`/invoices/${invoiceId}`)
       .set("Cookie", staffCookie)
 
     expect(staffDetailResponse.status).toBe(403)
-    expect(staffDetailResponse.body.error).toBe("Admin role required")
+    expect(staffDetailResponse.body.error).toBe("Manage invoices permission required")
 
     const staffOrderInvoiceResponse = await api
       .get(`/orders/${orderId}/invoice`)
       .set("Cookie", staffCookie)
 
     expect(staffOrderInvoiceResponse.status).toBe(403)
-    expect(staffOrderInvoiceResponse.body.error).toBe("Admin role required")
+    expect(staffOrderInvoiceResponse.body.error).toBe("Manage invoices permission required")
 
     const staffPdfResponse = await api
       .get(`/invoices/${invoiceId}/pdf`)
       .set("Cookie", staffCookie)
 
     expect(staffPdfResponse.status).toBe(403)
-    expect(staffPdfResponse.body.error).toBe("Admin role required")
+    expect(staffPdfResponse.body.error).toBe("Manage invoices permission required")
 
     const staffShareLinkResponse = await api
       .get(`/invoices/${invoiceId}/share-link`)
       .set("Cookie", staffCookie)
 
     expect(staffShareLinkResponse.status).toBe(403)
-    expect(staffShareLinkResponse.body.error).toBe("Admin role required")
+    expect(staffShareLinkResponse.body.error).toBe("Manage invoices permission required")
+
+    const staffPaymentResponse = await api
+      .post(`/invoices/${invoiceId}/payments`)
+      .set("Cookie", staffCookie)
+      .send({
+        amount: "1.00",
+        payment_date: "2026-04-24T08:00:00.000Z",
+      })
+
+    expect(staffPaymentResponse.status).toBe(403)
+    expect(staffPaymentResponse.body.error).toBe("Manage invoices permission required")
+
+    const staffVoidResponse = await api
+      .post(`/invoices/${invoiceId}/void`)
+      .set("Cookie", staffCookie)
+
+    expect(staffVoidResponse.status).toBe(403)
+    expect(staffVoidResponse.body.error).toBe("Manage invoices permission required")
 
     const adminDetailResponse = await api
       .get(`/invoices/${invoiceId}`)
@@ -293,5 +311,19 @@ describe("authorization integration", () => {
     expect(adminDetailResponse.status).toBe(200)
     expect(adminDetailResponse.body.invoice.id).toBe(invoiceId)
     expect(adminDetailResponse.body.invoice.status).toBe("pending")
+
+    const adminPaymentResponse = await api
+      .post(`/invoices/${invoiceId}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "1.00",
+        payment_date: "2026-04-24T08:00:00.000Z",
+        note: "Authorization test payment",
+      })
+
+    expect(adminPaymentResponse.status).toBe(201)
+    expect(adminPaymentResponse.body.invoice.id).toBe(invoiceId)
+    expect(adminPaymentResponse.body.invoice.paid_amount).toBe("1.00")
+    expect(adminPaymentResponse.body.invoice.remaining_balance).toBe("8.50")
   })
 })

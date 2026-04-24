@@ -1,5 +1,5 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
-import { assertAdmin } from "../auth/authorization.js"
+import { assertPermission } from "../auth/authorization.js"
 import type { InvoiceWithRelations } from "./invoices.repository.js"
 import type { Invoice } from "../../db/schema/index.js"
 
@@ -17,6 +17,9 @@ export interface InvoiceListItemDto {
   }
   status: InvoiceStatus
   subtotal: string
+  total_amount: string
+  paid_amount: string
+  remaining_balance: string
   created_at: string
   updated_at: string
 }
@@ -48,13 +51,33 @@ export interface InvoiceDto {
   }
   status: InvoiceStatus
   subtotal: string
+  total_amount: string
+  paid_amount: string
+  remaining_balance: string
+  due_date: string | null
+  notes: string | null
   items: InvoiceItemDto[]
+  payments: InvoicePaymentDto[]
+  created_at: string
+  updated_at: string
+}
+
+export interface InvoicePaymentDto {
+  id: string
+  amount: string
+  payment_date: string
+  note: string | null
+  created_by: {
+    id: string
+    email: string
+    display_name: string | null
+  } | null
   created_at: string
   updated_at: string
 }
 
 export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceListItemDto {
-  assertAdmin(user)
+  assertPermission(user, "invoices.manage")
 
   return {
     id: invoice.id,
@@ -68,13 +91,16 @@ export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceL
     },
     status: invoice.status,
     subtotal: toMoneyString(invoice.subtotal),
+    total_amount: toMoneyString(invoice.totalAmount),
+    paid_amount: toMoneyString(invoice.paidAmount),
+    remaining_balance: toMoneyString(invoice.remainingBalance),
     created_at: invoice.createdAt.toISOString(),
     updated_at: invoice.updatedAt.toISOString(),
   }
 }
 
 export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): InvoiceDto {
-  assertAdmin(user)
+  assertPermission(user, "invoices.manage")
 
   return {
     id: invoice.id,
@@ -92,6 +118,11 @@ export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): Inv
     },
     status: invoice.status,
     subtotal: toMoneyString(invoice.subtotal),
+    total_amount: toMoneyString(invoice.totalAmount),
+    paid_amount: toMoneyString(invoice.paidAmount),
+    remaining_balance: toMoneyString(invoice.remainingBalance),
+    due_date: invoice.dueDate?.toISOString() ?? null,
+    notes: invoice.notes ?? null,
     items: invoice.items.map((item) => ({
       id: item.id,
       order_line_item_id: item.orderItemId,
@@ -102,6 +133,32 @@ export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): Inv
       line_total: toMoneyString(item.lineTotal),
       created_at: item.createdAt.toISOString(),
     })),
+    payments: [...(invoice.payments ?? [])]
+      .sort((left, right) => {
+        const paymentDateDifference =
+          new Date(right.paymentDate).getTime() - new Date(left.paymentDate).getTime()
+
+        if (paymentDateDifference !== 0) {
+          return paymentDateDifference
+        }
+
+        return right.createdAt.getTime() - left.createdAt.getTime()
+      })
+      .map((payment) => ({
+        id: payment.id,
+        amount: toMoneyString(payment.amount),
+        payment_date: payment.paymentDate.toISOString(),
+        note: payment.note ?? null,
+        created_by: payment.createdByUser
+          ? {
+              id: payment.createdByUser.id,
+              email: payment.createdByUser.email,
+              display_name: payment.createdByUser.displayName ?? null,
+            }
+          : null,
+        created_at: payment.createdAt.toISOString(),
+        updated_at: payment.updatedAt.toISOString(),
+      })),
     created_at: invoice.createdAt.toISOString(),
     updated_at: invoice.updatedAt.toISOString(),
   }

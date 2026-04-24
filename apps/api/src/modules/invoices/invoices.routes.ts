@@ -3,7 +3,7 @@ import { ZodError } from "zod"
 
 import type { ApiEnv } from "../../config/env.js"
 import { getDatabaseClient } from "../../db/client.js"
-import { sendJson } from "../../http/json.js"
+import { readJsonBody, sendJson } from "../../http/json.js"
 import { getRequestPath } from "../../http/routes.js"
 import { requireAuthenticatedRequest } from "../auth/auth.middleware.js"
 import { AuthorizationError, sendForbidden } from "../auth/authorization.js"
@@ -15,13 +15,18 @@ import {
   InvoiceDocumentsService,
   InvoiceShareLinkUnavailableError,
 } from "./invoice-documents.service.js"
-import { invoicesListQuerySchema } from "./invoices.schemas.js"
+import { createInvoicePaymentSchema, invoicesListQuerySchema } from "./invoices.schemas.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 import {
   InvoiceAlreadyExistsError,
+  InvoiceAlreadyPaidError,
+  InvoiceAlreadyVoidError,
   InvoiceNotFoundError,
   InvoiceOrderCanceledError,
   InvoiceOrderNotFoundError,
+  InvoicePaymentOverpaymentError,
+  InvoicePaymentVoidError,
+  InvoiceVoidAfterPaymentError,
   InvoicesService,
 } from "./invoices.service.js"
 
@@ -68,6 +73,28 @@ export async function handleInvoicesRoute(
   if (invoiceMatch && request.method === "GET") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
       sendJson(response, 200, { invoice: await service.getById(invoiceMatch[1] ?? "", user) })
+    })
+    return true
+  }
+
+  const invoicePaymentsMatch = path.match(/^\/invoices\/([^/]+)\/payments$/)
+
+  if (invoicePaymentsMatch && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const input = createInvoicePaymentSchema.parse(await readJsonBody(request))
+
+      sendJson(response, 201, {
+        invoice: await service.recordPayment(invoicePaymentsMatch[1] ?? "", input, user),
+      })
+    })
+    return true
+  }
+
+  const invoiceVoidMatch = path.match(/^\/invoices\/([^/]+)\/void$/)
+
+  if (invoiceVoidMatch && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { invoice: await service.void(invoiceVoidMatch[1] ?? "", user) })
     })
     return true
   }
@@ -156,6 +183,11 @@ function handleInvoicesError(response: ServerResponse, error: unknown) {
     error instanceof InvoiceOrderNotFoundError ||
     error instanceof InvoiceAlreadyExistsError ||
     error instanceof InvoiceOrderCanceledError ||
+    error instanceof InvoiceAlreadyPaidError ||
+    error instanceof InvoiceAlreadyVoidError ||
+    error instanceof InvoicePaymentOverpaymentError ||
+    error instanceof InvoicePaymentVoidError ||
+    error instanceof InvoiceVoidAfterPaymentError ||
     error instanceof InvoiceShareLinkUnavailableError
   ) {
     sendJson(response, error.statusCode, { error: error.message })

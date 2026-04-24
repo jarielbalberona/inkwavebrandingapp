@@ -3,9 +3,11 @@ import { and, desc, eq, gte, ilike, lte, or } from "drizzle-orm"
 import type { DatabaseClient } from "../../db/client.js"
 import {
   invoiceItems,
+  invoicePayments,
   invoices,
   type NewInvoice,
   type NewInvoiceItem,
+  type NewInvoicePayment,
 } from "../../db/schema/index.js"
 import type { InvoicesListQuery } from "./invoices.schemas.js"
 
@@ -15,6 +17,17 @@ export type InvoiceWithRelations = NonNullable<
 
 export class InvoicesRepository {
   constructor(private readonly db: DatabaseClient) {}
+
+  async transaction<T>(
+    handler: (context: { db: DatabaseClient; invoicesRepository: InvoicesRepository }) => Promise<T>,
+  ): Promise<T> {
+    return this.db.transaction((tx) =>
+      handler({
+        db: tx as DatabaseClient,
+        invoicesRepository: new InvoicesRepository(tx as DatabaseClient),
+      }),
+    )
+  }
 
   async list(query: InvoicesListQuery) {
     const conditions = [
@@ -122,6 +135,11 @@ export class InvoicesRepository {
             orderItem: true,
           },
         },
+        payments: {
+          with: {
+            createdByUser: true,
+          },
+        },
       },
     })
   }
@@ -136,8 +154,43 @@ export class InvoicesRepository {
             orderItem: true,
           },
         },
+        payments: {
+          with: {
+            createdByUser: true,
+          },
+        },
       },
     })
+  }
+
+  async createPayment(input: {
+    invoiceId: string
+    payment: Omit<NewInvoicePayment, "invoiceId">
+  }) {
+    const rows = await this.db
+      .insert(invoicePayments)
+      .values({
+        ...input.payment,
+        invoiceId: input.invoiceId,
+      })
+      .returning()
+
+    return rows[0] ?? null
+  }
+
+  async updateFinancialState(
+    invoiceId: string,
+    input: Pick<NewInvoice, "status" | "paidAmount" | "remainingBalance">,
+  ): Promise<void> {
+    await this.db
+      .update(invoices)
+      .set({
+        status: input.status,
+        paidAmount: input.paidAmount,
+        remainingBalance: input.remainingBalance,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, invoiceId))
   }
 
   async setDocumentAssetId(invoiceId: string, documentAssetId: string | null): Promise<void> {
