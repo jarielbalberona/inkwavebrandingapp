@@ -16,7 +16,7 @@ import { InvoicesRepository } from "./invoices.repository.js"
 import {
   InvoiceAlreadyExistsError,
   InvoiceNotFoundError,
-  InvoiceOrderNotCompletedError,
+  InvoiceOrderCanceledError,
   InvoiceOrderNotFoundError,
   InvoicesService,
 } from "./invoices.service.js"
@@ -132,7 +132,7 @@ function handleInvoicesError(response: ServerResponse, error: unknown) {
     error instanceof InvoiceNotFoundError ||
     error instanceof InvoiceOrderNotFoundError ||
     error instanceof InvoiceAlreadyExistsError ||
-    error instanceof InvoiceOrderNotCompletedError
+    error instanceof InvoiceOrderCanceledError
   ) {
     sendJson(response, error.statusCode, { error: error.message })
     return

@@ -272,6 +272,18 @@ describe("inventory, order, and invoice integration", () => {
     expect(createOrderResponse.status).toBe(201)
 
     const orderId = createOrderResponse.body.order.id as string
+    const invoiceAfterCreateResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceAfterCreateResponse.status).toBe(200)
+    expect(invoiceAfterCreateResponse.body.invoice.status).toBe("pending")
+    expect(invoiceAfterCreateResponse.body.invoice.subtotal).toBe("52.50")
+    expect(
+      invoiceAfterCreateResponse.body.invoice.items.map((item: { item_type: string }) => item.item_type),
+    ).toEqual(["cup", "lid", "non_stock_item"])
+
+    const invoiceId = invoiceAfterCreateResponse.body.invoice.id as string
     const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
     const lidLineItem = findOrderItem(createOrderResponse.body.order.items, "lid")
 
@@ -297,15 +309,10 @@ describe("inventory, order, and invoice integration", () => {
       .post(`/orders/${orderId}/invoice`)
       .set("Cookie", adminCookie)
 
-    expect(invoiceResponse.status).toBe(201)
-    expect(invoiceResponse.body.invoice.status).toBe("pending")
-    expect(invoiceResponse.body.invoice.subtotal).toBe("52.50")
-    expect(
-      invoiceResponse.body.invoice.items.map((item: { item_type: string }) => item.item_type),
-    ).toEqual(["cup", "lid", "non_stock_item"])
+    expect(invoiceResponse.status).toBe(409)
+    expect(invoiceResponse.body.error).toBe("Invoice already exists for this order")
 
-    const invoiceId = invoiceResponse.body.invoice.id as string
-    const cupInvoiceItem = invoiceResponse.body.invoice.items.find(
+    const cupInvoiceItem = invoiceAfterCreateResponse.body.invoice.items.find(
       (item: { item_type: string }) => item.item_type === "cup",
     )
     expect(cupInvoiceItem?.unit_price).toBe("15.00")
@@ -355,15 +362,8 @@ describe("inventory, order, and invoice integration", () => {
     expect(pdfResponse.status).toBe(200)
     expect(pdfResponse.headers["content-type"]).toContain("application/pdf")
     expect(pdfResponse.headers["content-disposition"]).toContain(
-      `${invoiceResponse.body.invoice.invoice_number}.pdf`,
+      `${invoiceAfterCreateResponse.body.invoice.invoice_number}.pdf`,
     )
-
-    const duplicateInvoiceResponse = await api
-      .post(`/orders/${orderId}/invoice`)
-      .set("Cookie", adminCookie)
-
-    expect(duplicateInvoiceResponse.status).toBe(409)
-    expect(duplicateInvoiceResponse.body.error).toBe("Invoice already exists for this order")
   })
 
   it("keeps custom_charge out of inventory movements and product-oriented reports", async () => {

@@ -65,6 +65,47 @@ export class InvoicesRepository {
     return invoiceWithRelations
   }
 
+  async replaceInvoiceSnapshotWithItems(input: {
+    invoiceId: string
+    invoice: Pick<
+      NewInvoice,
+      | "orderNumberSnapshot"
+      | "customerId"
+      | "customerCodeSnapshot"
+      | "customerBusinessNameSnapshot"
+      | "customerContactPersonSnapshot"
+      | "customerContactNumberSnapshot"
+      | "customerEmailSnapshot"
+      | "customerAddressSnapshot"
+      | "subtotal"
+    >
+    items: Omit<NewInvoiceItem, "invoiceId">[]
+  }): Promise<InvoiceWithRelations> {
+    await this.db
+      .update(invoices)
+      .set({
+        ...input.invoice,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, input.invoiceId))
+
+    await this.db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.invoiceId))
+
+    if (input.items.length > 0) {
+      await this.db
+        .insert(invoiceItems)
+        .values(input.items.map((item) => ({ ...item, invoiceId: input.invoiceId })))
+    }
+
+    const invoiceWithRelations = await this.findByIdWithRelations(input.invoiceId)
+
+    if (!invoiceWithRelations) {
+      throw new Error("Failed to load replaced invoice")
+    }
+
+    return invoiceWithRelations
+  }
+
   async findByIdWithRelations(id: string) {
     return this.db.query.invoices.findFirst({
       where: eq(invoices.id, id),

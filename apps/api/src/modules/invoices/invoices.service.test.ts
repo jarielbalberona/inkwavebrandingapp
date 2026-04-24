@@ -5,10 +5,11 @@ import { AuthorizationError } from "../auth/authorization.js"
 import {
   assertInvoiceAllowsStructuralChanges,
   InvoiceAlreadyExistsError,
+  InvoiceOrderCanceledError,
   InvoicePaidLockError,
-  InvoiceOrderNotCompletedError,
   InvoiceVoidLockError,
   InvoicesService,
+  syncInvoiceSnapshotForOrder,
 } from "./invoices.service.js"
 
 const adminUser = {
@@ -53,7 +54,7 @@ test("generateForOrder rejects duplicate invoices for the same order", async () 
   await assert.rejects(() => service.generateForOrder("order-1", adminUser), InvoiceAlreadyExistsError)
 })
 
-test("generateForOrder rejects orders that are not completed", async () => {
+test("generateForOrder rejects canceled orders", async () => {
   const service = new InvoicesService(
     {
       findByOrderId: async () => null,
@@ -61,12 +62,12 @@ test("generateForOrder rejects orders that are not completed", async () => {
     {
       findByIdWithRelations: async () => ({
         id: "order-1",
-        status: "pending",
+        status: "canceled",
       }),
     } as never,
   )
 
-  await assert.rejects(() => service.generateForOrder("order-1", adminUser), InvoiceOrderNotCompletedError)
+  await assert.rejects(() => service.generateForOrder("order-1", adminUser), InvoiceOrderCanceledError)
 })
 
 test("generateForOrder snapshots order sell pricing and subtotal into the invoice", async () => {
@@ -123,7 +124,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       findByIdWithRelations: async () => ({
         id: "order-1",
         orderNumber: "ORD-001",
-        status: "completed",
+        status: "pending",
         customer: {
           id: "customer-1",
           customerCode: "CUST-001",
@@ -291,7 +292,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
       findByIdWithRelations: async () => ({
         id: "order-2",
         orderNumber: "ORD-002",
-        status: "completed",
+        status: "pending",
         customer: {
           id: "customer-1",
           customerCode: "CUST-001",
@@ -375,4 +376,201 @@ test("assertInvoiceAllowsStructuralChanges rejects paid invoices", () => {
 
 test("assertInvoiceAllowsStructuralChanges rejects void invoices", () => {
   assert.throws(() => assertInvoiceAllowsStructuralChanges("void"), InvoiceVoidLockError)
+})
+
+test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not exist", async () => {
+  let capturedInput: unknown
+
+  const invoice = await syncInvoiceSnapshotForOrder(
+    {
+      findByOrderId: async () => null,
+      createInvoiceWithItems: async (input: unknown) => {
+        capturedInput = input
+
+        return {
+          id: "invoice-1",
+          invoiceNumber: "INV-20260424-NEW00001",
+          orderId: "order-3",
+          orderNumberSnapshot: "ORD-003",
+          customerId: "customer-1",
+          customerCodeSnapshot: "CUST-001",
+          customerBusinessNameSnapshot: "Ink Wave Cafe",
+          customerContactPersonSnapshot: "Jane Doe",
+          customerContactNumberSnapshot: "09170000000",
+          customerEmailSnapshot: "jane@example.com",
+          customerAddressSnapshot: "Manila",
+          status: "pending",
+          subtotal: "240.00",
+          createdAt: new Date("2026-04-24T00:00:00.000Z"),
+          updatedAt: new Date("2026-04-24T00:00:00.000Z"),
+          items: [],
+        }
+      },
+      replaceInvoiceSnapshotWithItems: async () => {
+        throw new Error("replace should not run when invoice is missing")
+      },
+    } as never,
+    {
+      id: "order-3",
+      orderNumber: "ORD-003",
+      customer: {
+        id: "customer-1",
+        customerCode: "CUST-001",
+        businessName: "Ink Wave Cafe",
+        contactPerson: "Jane Doe",
+        contactNumber: "09170000000",
+        email: "jane@example.com",
+        address: "Manila",
+      },
+      items: [
+        {
+          id: "line-1",
+          itemType: "cup",
+          descriptionSnapshot: "12oz kraft paper cup",
+          quantity: 16,
+          unitSellPrice: "15.00",
+        },
+      ],
+    },
+    adminUser.id,
+  )
+
+  const createInput = capturedInput as {
+    invoice: {
+      orderId: string
+      status: "pending" | "paid" | "void"
+      createdByUserId: string
+      subtotal: string
+    }
+  }
+
+  assert.equal(createInput.invoice.orderId, "order-3")
+  assert.equal(createInput.invoice.status, "pending")
+  assert.equal(createInput.invoice.createdByUserId, adminUser.id)
+  assert.equal(createInput.invoice.subtotal, "240.00")
+  assert.equal(invoice.id, "invoice-1")
+})
+
+test("syncInvoiceSnapshotForOrder replaces the same invoice record when it already exists and is unpaid", async () => {
+  let replacedInput: unknown
+
+  const invoice = await syncInvoiceSnapshotForOrder(
+    {
+      findByOrderId: async () => ({
+        id: "invoice-existing",
+        status: "pending",
+      }),
+      createInvoiceWithItems: async () => {
+        throw new Error("create should not run when invoice already exists")
+      },
+      replaceInvoiceSnapshotWithItems: async (input: unknown) => {
+        replacedInput = input
+
+        return {
+          id: "invoice-existing",
+          invoiceNumber: "INV-20260424-EXIST001",
+          orderId: "order-4",
+          orderNumberSnapshot: "ORD-004",
+          customerId: "customer-1",
+          customerCodeSnapshot: "CUST-001",
+          customerBusinessNameSnapshot: "Ink Wave Cafe",
+          customerContactPersonSnapshot: "Jane Doe",
+          customerContactNumberSnapshot: "09170000000",
+          customerEmailSnapshot: "jane@example.com",
+          customerAddressSnapshot: "Updated Address",
+          status: "pending",
+          subtotal: "325.00",
+          createdAt: new Date("2026-04-24T00:00:00.000Z"),
+          updatedAt: new Date("2026-04-24T01:00:00.000Z"),
+          items: [],
+        }
+      },
+    } as never,
+    {
+      id: "order-4",
+      orderNumber: "ORD-004",
+      customer: {
+        id: "customer-1",
+        customerCode: "CUST-001",
+        businessName: "Ink Wave Cafe",
+        contactPerson: "Jane Doe",
+        contactNumber: "09170000000",
+        email: "jane@example.com",
+        address: "Updated Address",
+      },
+      items: [
+        {
+          id: "line-1",
+          itemType: "custom_charge",
+          descriptionSnapshot: "Rush fee",
+          quantity: 1,
+          unitSellPrice: "325.00",
+        },
+      ],
+    },
+    adminUser.id,
+  )
+
+  const replaceInput = replacedInput as {
+    invoiceId: string
+    invoice: {
+      subtotal: string
+      customerAddressSnapshot: string | null
+    }
+    items: Array<{
+      orderItemId: string
+      lineTotal: string
+    }>
+  }
+
+  assert.equal(replaceInput.invoiceId, "invoice-existing")
+  assert.equal(replaceInput.invoice.subtotal, "325.00")
+  assert.equal(replaceInput.invoice.customerAddressSnapshot, "Updated Address")
+  assert.deepEqual(replaceInput.items, [
+    {
+      orderItemId: "line-1",
+      itemType: "custom_charge",
+      descriptionSnapshot: "Rush fee",
+      quantity: 1,
+      unitPrice: "325.00",
+      lineTotal: "325.00",
+    },
+  ])
+  assert.equal(invoice.id, "invoice-existing")
+})
+
+test("syncInvoiceSnapshotForOrder rejects paid invoices", async () => {
+  await assert.rejects(
+    () =>
+      syncInvoiceSnapshotForOrder(
+        {
+          findByOrderId: async () => ({
+            id: "invoice-locked",
+            status: "paid",
+          }),
+          createInvoiceWithItems: async () => {
+            throw new Error("create should not run when invoice is locked")
+          },
+          replaceInvoiceSnapshotWithItems: async () => {
+            throw new Error("replace should not run when invoice is locked")
+          },
+        } as never,
+        {
+          id: "order-5",
+          orderNumber: "ORD-005",
+          customer: {
+            id: "customer-1",
+            customerCode: "CUST-001",
+            businessName: "Ink Wave Cafe",
+            contactPerson: null,
+            contactNumber: null,
+            email: null,
+            address: null,
+          },
+          items: [],
+        },
+        adminUser.id,
+      ),
+    InvoicePaidLockError,
+  )
 })

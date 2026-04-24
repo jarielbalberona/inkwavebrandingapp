@@ -232,10 +232,17 @@ describe("authorization integration", () => {
       .post(`/orders/${orderId}/invoice`)
       .set("Cookie", adminCookie)
 
-    expect(adminGenerateResponse.status).toBe(201)
-    expect(adminGenerateResponse.body.invoice.status).toBe("pending")
+    expect(adminGenerateResponse.status).toBe(409)
+    expect(adminGenerateResponse.body.error).toBe("Invoice already exists for this order")
 
-    const invoiceId = adminGenerateResponse.body.invoice.id as string
+    const adminOrderInvoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(adminOrderInvoiceResponse.status).toBe(200)
+    expect(adminOrderInvoiceResponse.body.invoice.status).toBe("pending")
+
+    const invoiceId = adminOrderInvoiceResponse.body.invoice.id as string
 
     const adminListResponse = await api
       .get("/invoices")

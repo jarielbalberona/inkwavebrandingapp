@@ -8,6 +8,8 @@ import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
 import { InventoryService } from "../inventory/inventory.service.js"
+import { InvoicesRepository } from "../invoices/invoices.repository.js"
+import { syncInvoiceSnapshotForOrder } from "../invoices/invoices.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
 import {
@@ -526,6 +528,8 @@ export class OrdersService {
           }
         }),
       })
+
+      await syncInvoiceSnapshotForOrder(new InvoicesRepository(db), order, user.id)
 
       const trackedItems = resolvedItems.filter(
         (item): item is Extract<ResolvedOrderLineItem, { itemType: "cup" | "lid" }> =>

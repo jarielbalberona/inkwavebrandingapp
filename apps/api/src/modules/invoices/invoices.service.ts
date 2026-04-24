@@ -37,11 +37,11 @@ export class InvoiceAlreadyExistsError extends Error {
   }
 }
 
-export class InvoiceOrderNotCompletedError extends Error {
+export class InvoiceOrderCanceledError extends Error {
   readonly statusCode = 409
 
   constructor() {
-    super("Invoice generation is only allowed for completed orders")
+    super("Invoice generation is not allowed for canceled orders")
   }
 }
 
@@ -69,6 +69,91 @@ export function assertInvoiceAllowsStructuralChanges(status: InvoiceStatus) {
   if (status === "void") {
     throw new InvoiceVoidLockError()
   }
+}
+
+interface InvoiceSnapshotOrder {
+  id: string
+  orderNumber: string
+  customer: {
+    id: string
+    customerCode: string | null
+    businessName: string
+    contactPerson: string | null
+    contactNumber: string | null
+    email: string | null
+    address: string | null
+  }
+  items: Array<{
+    id: string
+    itemType: "cup" | "lid" | "non_stock_item" | "custom_charge"
+    descriptionSnapshot: string
+    quantity: number
+    unitSellPrice: string
+  }>
+}
+
+function buildInvoiceSnapshotInput(order: InvoiceSnapshotOrder) {
+  const items = order.items.map((item) => {
+    const unitPrice = item.unitSellPrice
+    const lineTotal = multiplyMoneyByQuantity(unitPrice, item.quantity)
+
+    return {
+      orderItemId: item.id,
+      itemType: item.itemType,
+      descriptionSnapshot: item.descriptionSnapshot,
+      quantity: item.quantity,
+      unitPrice,
+      lineTotal,
+    }
+  })
+
+  return {
+    invoice: {
+      orderNumberSnapshot: order.orderNumber,
+      customerId: order.customer.id,
+      customerCodeSnapshot: order.customer.customerCode,
+      customerBusinessNameSnapshot: order.customer.businessName,
+      customerContactPersonSnapshot: order.customer.contactPerson,
+      customerContactNumberSnapshot: order.customer.contactNumber,
+      customerEmailSnapshot: order.customer.email,
+      customerAddressSnapshot: order.customer.address,
+      subtotal: sumMoney(items.map((item) => item.lineTotal)),
+    },
+    items,
+  }
+}
+
+export async function syncInvoiceSnapshotForOrder(
+  invoicesRepository: Pick<
+    InvoicesRepository,
+    "createInvoiceWithItems" | "findByOrderId" | "replaceInvoiceSnapshotWithItems"
+  >,
+  order: InvoiceSnapshotOrder,
+  createdByUserId: string,
+) {
+  const snapshot = buildInvoiceSnapshotInput(order)
+  const existingInvoice = await invoicesRepository.findByOrderId(order.id)
+
+  if (!existingInvoice) {
+    return invoicesRepository.createInvoiceWithItems({
+      invoice: {
+        invoiceNumber: createInvoiceNumber(),
+        orderId: order.id,
+        status: "pending",
+        createdByUserId,
+        ...snapshot.invoice,
+      },
+      items: snapshot.items,
+    })
+  }
+
+  assertInvoiceAllowsStructuralChanges(existingInvoice.status)
+
+  return invoicesRepository.replaceInvoiceSnapshotWithItems({
+    invoiceId: existingInvoice.id,
+    invoice: snapshot.invoice,
+    items: snapshot.items,
+  })
 }
 
 export class InvoicesService {
@@ -112,8 +197,6 @@ export class InvoicesService {
   async generateForOrder(orderId: string, user: SafeUser): Promise<InvoiceDto> {
     assertAdmin(user)
 
-    // MVP invoices are immutable snapshots, so there is no separate status lifecycle yet.
-
     const existingInvoice = await this.invoicesRepository.findByOrderId(orderId)
 
     if (existingInvoice) {
@@ -126,44 +209,11 @@ export class InvoicesService {
       throw new InvoiceOrderNotFoundError()
     }
 
-    if (order.status !== "completed") {
-      throw new InvoiceOrderNotCompletedError()
+    if (order.status === "canceled") {
+      throw new InvoiceOrderCanceledError()
     }
 
-    const items = order.items.map((item) => {
-      const unitPrice = item.unitSellPrice
-      const lineTotal = multiplyMoneyByQuantity(unitPrice, item.quantity)
-
-      return {
-        orderItemId: item.id,
-        itemType: item.itemType,
-        descriptionSnapshot: item.descriptionSnapshot,
-        quantity: item.quantity,
-        unitPrice,
-        lineTotal,
-      }
-    })
-
-    const subtotal = sumMoney(items.map((item) => item.lineTotal))
-
-    const invoice = await this.invoicesRepository.createInvoiceWithItems({
-      invoice: {
-        invoiceNumber: createInvoiceNumber(),
-        orderId: order.id,
-        orderNumberSnapshot: order.orderNumber,
-        customerId: order.customer.id,
-        customerCodeSnapshot: order.customer.customerCode,
-        customerBusinessNameSnapshot: order.customer.businessName,
-        customerContactPersonSnapshot: order.customer.contactPerson,
-        customerContactNumberSnapshot: order.customer.contactNumber,
-        customerEmailSnapshot: order.customer.email,
-        customerAddressSnapshot: order.customer.address,
-        status: "pending",
-        subtotal,
-        createdByUserId: user.id,
-      },
-      items,
-    })
+    const invoice = await syncInvoiceSnapshotForOrder(this.invoicesRepository, order, user.id)
 
     return toInvoiceDto(invoice, user)
   }

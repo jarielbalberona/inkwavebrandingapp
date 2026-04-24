@@ -274,7 +274,11 @@ async function seedSmokeData(
     adminUser,
   )
 
-  await invoicesService.generateForOrder(order.id, adminUser)
+  const invoice = await invoicesService.getByOrderId(order.id, adminUser)
+
+  if (invoice.status !== "pending") {
+    throw new Error(`Expected seeded invoice to be pending, received ${invoice.status}`)
+  }
 }
 
 void main()
