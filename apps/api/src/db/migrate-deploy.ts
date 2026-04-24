@@ -119,6 +119,8 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
     `)
     const lastCreatedAt = Number(lastMigrationResult.rows[0]?.created_at ?? 0)
 
+    let applied = 0
+
     for (const migration of migrations) {
       if (lastCreatedAt >= migration.folderMillis) {
         continue
@@ -150,6 +152,7 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
         if (useTransaction) {
           await client.query("COMMIT")
         }
+        applied += 1
       } catch (error) {
         if (useTransaction) {
           await client.query("ROLLBACK")
@@ -166,6 +169,14 @@ async function runDeployMigrations(pool: Pool): Promise<void> {
           { cause: error instanceof Error ? error : undefined },
         )
       }
+    }
+
+    if (applied === 0) {
+      console.log(
+        `Migrations: database already at journal head (last created_at=${String(lastCreatedAt)}). Nothing to apply among ${migrations.length} known migrations.`,
+      )
+    } else {
+      console.log(`Migrations: applied ${applied} migration(s) successfully.`)
     }
   } finally {
     client.release()
