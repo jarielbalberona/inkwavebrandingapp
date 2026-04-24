@@ -1,6 +1,6 @@
 # Ink Wave Branding App
 
-Internal operations app for Ink Wave cup printing. This repo is not a demo storefront and not a generic inventory sandbox. It exists to support cup catalog management, stock intake, inventory balances, order lifecycle, and basic reporting with real admin/staff access control.
+Internal operations app for Ink Wave cup printing. This repo is not a demo storefront and not a generic inventory sandbox. It exists to support cups and lids master data, stock intake, inventory balances, order lifecycle, invoice generation/PDF output, and basic reporting with real admin/staff access control.
 
 ## Workspace shape
 
@@ -8,6 +8,7 @@ Current packages:
 
 - `apps/api`: Node.js + TypeScript backend package for database, auth, and domain modules
 - `apps/web`: React + TypeScript + Vite frontend
+- `packages/pdfs`: shared React PDF invoice rendering package
 - `packages/ui`: shared UI primitives used by the frontend
 
 Rules:
@@ -26,6 +27,7 @@ pnpm dev
 pnpm build
 pnpm lint
 pnpm format
+pnpm test
 pnpm typecheck
 ```
 
@@ -53,6 +55,25 @@ pnpm --filter web typecheck
 - The current Render web service is buildable as a static site.
 - The current Render API service contract targets `pnpm --filter @workspace/api build`, `pnpm --filter @workspace/api start`, and `/health`.
 - Render config is source-controlled, but live deployment still requires dashboard-managed environment values and an actual smoke.
+
+## Current proof status
+
+What the repo proves today:
+
+- `pnpm test` passes for the current backend/PDF harness
+- `pnpm typecheck` passes
+- `pnpm build` passes
+- invoice list/detail/PDF surface exists in the repo
+- mixed inventory summary now counts cups and lids truthfully
+
+What the repo still does not prove:
+
+- no live Render smoke from this repo alone
+- no database-backed integration harness yet
+- no browser end-to-end smoke yet
+- low-stock remains cup-threshold-based because lids still have no reorder threshold field in schema
+
+Treat anything beyond that as unverified until somebody runs the live checks.
 
 ## Conventions
 
