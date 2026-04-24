@@ -48,9 +48,9 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
     })),
     subtotal: invoice.subtotal,
     discount: "0.00",
-    total: invoice.subtotal,
-    paid_amount: invoice.status === "paid" ? invoice.subtotal : "0.00",
-    remaining_balance: invoice.status === "pending" ? invoice.subtotal : "0.00",
+    total: invoice.total_amount,
+    paid_amount: invoice.paid_amount,
+    remaining_balance: invoice.remaining_balance,
     payment_instructions: toInvoicePdfPaymentInstructions(invoice.status),
     support_lines: [
       "Ink Wave Branding",

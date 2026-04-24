@@ -2,14 +2,16 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import type { RetrievedObject, StoredObject } from "../../lib/storage/object-storage.types.js"
+import type { SafeUser } from "../auth/auth.schemas.js"
 import { InvoiceDocumentsService } from "./invoice-documents.service.js"
 
-const adminUser = {
+const adminUser: SafeUser = {
   id: "77777777-7777-7777-7777-777777777777",
   email: "admin@example.com",
   displayName: "Admin",
   role: "admin",
-} as const
+  permissions: [],
+}
 
 test("InvoiceDocumentsService renders inline PDF when storage is disabled", async () => {
   let assetCreated = false
@@ -284,6 +286,11 @@ function baseInvoiceRecord() {
     customerAddressSnapshot: "Manila",
     status: "pending" as const,
     subtotal: "1500.00",
+    totalAmount: "1500.00",
+    paidAmount: "0.00",
+    remainingBalance: "1500.00",
+    dueDate: null,
+    notes: null,
     documentAssetId: null,
     createdByUserId: adminUser.id,
     createdAt: new Date("2026-04-24T09:00:00.000Z"),
@@ -305,5 +312,6 @@ function baseInvoiceRecord() {
         },
       },
     ],
+    payments: [],
   }
 }
