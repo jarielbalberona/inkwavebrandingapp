@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 
 import type { ApiEnv } from "./config/env.js"
 import { sendJson } from "./http/json.js"
+import { recordUnhandledErrorOnResponse, takeResponseLogForAccessLine } from "./http/response-log.js"
 import { getRequestPath, isPublicRoute } from "./http/routes.js"
 import { logError, logInfo, serializeError } from "./lib/logger.js"
 import { handleAuthRoute } from "./modules/auth/auth.routes.js"
@@ -38,14 +39,24 @@ export async function handleApiRequest(
 
   response.setHeader("X-Request-Id", requestId)
   response.once("finish", () => {
-    logInfo({
+    const logContext = takeResponseLogForAccessLine(response)
+    const statusCode = response.statusCode
+    const durationMs = Date.now() - startedAt
+    const entry = {
       event: "http_request_completed",
       requestId,
       method: request.method ?? "UNKNOWN",
       path,
-      statusCode: response.statusCode,
-      durationMs: Date.now() - startedAt,
-    })
+      statusCode,
+      durationMs,
+      ...(logContext?.unhandledError ? { unhandledError: logContext.unhandledError } : {}),
+      ...(logContext?.clientError ? { clientError: logContext.clientError } : {}),
+    }
+    if (statusCode >= 500) {
+      logError(entry as never)
+    } else {
+      logInfo(entry as never)
+    }
   })
 
   try {
@@ -84,6 +95,7 @@ export async function handleApiRequest(
       statusCode: 500,
       ...serializeError(error),
     })
+    recordUnhandledErrorOnResponse(response, error)
     sendJson(response, 500, { error: "Internal server error", requestId })
   }
 }

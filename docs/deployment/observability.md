@@ -25,6 +25,11 @@ Fields include:
 - `statusCode`
 - `durationMs`
 
+For `statusCode >= 500`, the line is written at `error` level and may add:
+
+- `clientError` — bounded copy of the JSON error returned to the client (`error`, `code`, `column`, `table`, `detail`, `constraint` when present)
+- `unhandledError` — `name` / `message` / `stack` when the request failed in the outer `catch` (rare; most route modules handle errors and respond with 500 + JSON without throwing)
+
 Startup logs also report only safe booleans such as whether database config, Sentry config, and web origin config are present. They do not print the secret values.
 
 ## Where To Inspect Logs

@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 
+import { record5xxResponseBodyForLogging } from "./response-log.js"
+
 export async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
 
@@ -26,6 +28,7 @@ export function sendJson(
   body: unknown,
   headers: Record<string, string | string[]> = {},
 ) {
+  record5xxResponseBodyForLogging(response, statusCode, body)
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     ...headers,
