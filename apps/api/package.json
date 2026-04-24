@@ -20,6 +20,7 @@
     "seed:admin": "node --import tsx src/modules/users/seed-admin.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.937.0",
     "@sentry/node": "^10.49.0",
     "@workspace/pdfs": "workspace:*",
     "argon2": "^0.44.0",
