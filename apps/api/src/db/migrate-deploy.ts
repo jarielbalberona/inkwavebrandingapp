@@ -1,7 +1,27 @@
-import { spawn } from "node:child_process"
+import { createHash } from "node:crypto"
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
 
 import { loadDatabaseEnv } from "../config/env.js"
 import { getDatabasePool } from "./pool.js"
+
+interface JournalEntry {
+  idx: number
+  when: number
+  tag: string
+  breakpoints: boolean
+}
+
+interface MigrationJournal {
+  entries: JournalEntry[]
+}
+
+interface ParsedMigration {
+  tag: string
+  folderMillis: number
+  hash: string
+  statements: string[]
+}
 
 async function assertMigrationStateIsSafe(): Promise<void> {
   loadDatabaseEnv()
@@ -43,34 +63,108 @@ async function assertMigrationStateIsSafe(): Promise<void> {
   }
 }
 
-async function runDrizzleMigrate(): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn("pnpm", ["exec", "drizzle-kit", "migrate"], {
-      stdio: "inherit",
-      env: process.env,
-    })
+async function readMigrations(): Promise<ParsedMigration[]> {
+  const migrationsDir = join(process.cwd(), "drizzle")
+  const journalPath = join(migrationsDir, "meta", "_journal.json")
+  const journal = JSON.parse(
+    await readFile(journalPath, "utf8"),
+  ) as MigrationJournal
 
-    child.on("error", reject)
-    child.on("exit", (code, signal) => {
-      if (code === 0) {
-        resolve()
-        return
+  return Promise.all(
+    journal.entries.map(async (entry) => {
+      const filePath = join(migrationsDir, `${entry.tag}.sql`)
+      const sql = await readFile(filePath, "utf8")
+
+      return {
+        tag: entry.tag,
+        folderMillis: entry.when,
+        hash: createHash("sha256").update(sql).digest("hex"),
+        statements: sql
+          .split("--> statement-breakpoint")
+          .map((statement) => statement.trim())
+          .filter(Boolean),
+      }
+    }),
+  )
+}
+
+function previewStatement(statement: string): string {
+  return statement.replaceAll(/\s+/g, " ").trim().slice(0, 240)
+}
+
+async function runDeployMigrations(): Promise<void> {
+  const migrations = await readMigrations()
+  const pool = getDatabasePool()
+  const client = await pool.connect()
+
+  try {
+    await client.query(`CREATE SCHEMA IF NOT EXISTS "drizzle"`)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
+        "id" SERIAL PRIMARY KEY,
+        "hash" text NOT NULL,
+        "created_at" bigint
+      )
+    `)
+
+    const lastMigrationResult = await client.query<{ created_at: string | number }>(`
+      SELECT created_at
+      FROM "drizzle"."__drizzle_migrations"
+      ORDER BY created_at DESC
+      LIMIT 1
+    `)
+    const lastCreatedAt = Number(lastMigrationResult.rows[0]?.created_at ?? 0)
+
+    for (const migration of migrations) {
+      if (lastCreatedAt >= migration.folderMillis) {
+        continue
       }
 
-      reject(
-        new Error(
-          signal
-            ? `drizzle-kit migrate terminated by signal ${signal}`
-            : `drizzle-kit migrate exited with code ${code ?? "unknown"}`,
-        ),
-      )
-    })
-  })
+      console.log(`Applying migration ${migration.tag}.sql`)
+      await client.query("BEGIN")
+      let failedStatement = ""
+
+      try {
+        for (const [index, statement] of migration.statements.entries()) {
+          failedStatement = statement
+          await client.query(statement)
+          console.log(
+            `Applied ${migration.tag}.sql statement ${index + 1}/${migration.statements.length}`,
+          )
+        }
+
+        await client.query(
+          `
+            INSERT INTO "drizzle"."__drizzle_migrations" ("hash", "created_at")
+            VALUES ($1, $2)
+          `,
+          [migration.hash, migration.folderMillis],
+        )
+        await client.query("COMMIT")
+      } catch (error) {
+        await client.query("ROLLBACK")
+
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown migration error"
+        throw new Error(
+          [
+            `Migration failed in ${migration.tag}.sql.`,
+            `Statement preview: ${previewStatement(failedStatement)}`,
+            `Database error: ${errorMessage}`,
+          ].join(" "),
+          { cause: error instanceof Error ? error : undefined },
+        )
+      }
+    }
+  } finally {
+    client.release()
+    await pool.end()
+  }
 }
 
 async function main(): Promise<void> {
   await assertMigrationStateIsSafe()
-  await runDrizzleMigrate()
+  await runDeployMigrations()
 }
 
 main().catch((error: unknown) => {
