@@ -22,7 +22,7 @@ services:
     name: ink-wave-branding-api
     runtime: node
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/pdfs build && pnpm --filter @workspace/api build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/emails build && pnpm --filter @workspace/pdfs build && pnpm --filter @workspace/api build
     preDeployCommand: pnpm --filter @workspace/api db:migrate:deploy
     startCommand: pnpm --filter @workspace/api start
     healthCheckPath: /health
@@ -74,3 +74,37 @@ services:
         value: "5242880"
       - key: UPLOAD_MAX_REQUEST_BYTES
         value: "52428800"
+
+  - type: cron
+    name: ink-wave-branding-daily-digest
+    runtime: node
+    rootDir: .
+    # 17:30 Asia/Manila is 09:30 UTC. Manila has no DST, so the UTC schedule is stable.
+    schedule: "30 9 * * 1-5"
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/emails build
+    startCommand: pnpm --filter @workspace/api exec node --import tsx src/modules/notifications/run-scheduled-daily-digest.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_HOST
+        sync: false
+      - key: DATABASE_PORT
+        value: "5432"
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_NAME
+        sync: false
+      - key: DATABASE_SSL_MODE
+        value: require
+      - key: WEB_ORIGIN
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: RESEND_REPLY_TO_EMAIL
+        sync: false
