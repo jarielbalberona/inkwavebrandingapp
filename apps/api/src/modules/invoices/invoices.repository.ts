@@ -106,6 +106,10 @@ export class InvoicesRepository {
     return invoiceWithRelations
   }
 
+  async deleteInvoiceItems(invoiceId: string): Promise<void> {
+    await this.db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId))
+  }
+
   async findByIdWithRelations(id: string) {
     return this.db.query.invoices.findFirst({
       where: eq(invoices.id, id),

@@ -20,6 +20,7 @@ import {
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
+import { InvoicePaidLockError, InvoiceVoidLockError } from "../invoices/invoices.service.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
@@ -41,12 +42,14 @@ import {
   OrderCustomerInactiveError,
   OrderCustomerNotFoundError,
   OrderLineItemNotFoundError,
+  OrderLineItemProgressLockedError,
   OrderNotFoundError,
   OrderPrintedQuantityNotReservedError,
   OrderPrintedQuantityInsufficientStockError,
   OrderPriorityValidationError,
   OrderProgressClosedError,
   OrderProgressValidationError,
+  OrderStructuralEditStatusError,
   OrdersService,
 } from "./orders.service.js"
 
@@ -204,8 +207,10 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderLidInactiveError ||
     error instanceof DuplicateOrderItemError ||
     error instanceof OrderLineItemNotFoundError ||
+    error instanceof OrderLineItemProgressLockedError ||
     error instanceof OrderNotFoundError ||
     error instanceof OrderClosedUpdateError ||
+    error instanceof OrderStructuralEditStatusError ||
     error instanceof OrderPriorityValidationError ||
     error instanceof OrderCompletedCancellationError ||
     error instanceof OrderCustomerReassignmentProgressError ||
@@ -213,6 +218,8 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderPrintedQuantityInsufficientStockError ||
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||
+    error instanceof InvoicePaidLockError ||
+    error instanceof InvoiceVoidLockError ||
     error instanceof InventoryBalanceItemNotFoundError ||
     error instanceof InventoryItemInactiveError ||
     error instanceof InventoryReservationInsufficientStockError

@@ -366,6 +366,280 @@ describe("inventory, order, and invoice integration", () => {
     )
   })
 
+  it("allows unpaid pending orders to be structurally edited and resyncs the same invoice", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup({
+      sku: "CUP-EDIT-001",
+      defaultSellPrice: "15.00",
+      costPrice: "7.00",
+    })
+    const replacementCup = await seedCup({
+      sku: "CUP-EDIT-002",
+      defaultSellPrice: "18.00",
+      costPrice: "9.00",
+    })
+    const lid = await seedLid({
+      sku: "LID-EDIT-001",
+      defaultSellPrice: "5.00",
+      costPrice: "2.00",
+    })
+    const nonStockItem = await seedNonStockItem({
+      name: "Layout Fee",
+      defaultSellPrice: "7.50",
+      costPrice: "3.00",
+    })
+    const db = await getIntegrationDb()
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 20,
+    })
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: replacementCup.id,
+      quantity: 10,
+    })
+    await stockIntake(api, adminCookie, {
+      itemType: "lid",
+      lidId: lid.id,
+      quantity: 20,
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        notes: "Editable unpaid order",
+        line_items: [
+          { item_type: "cup", cup_id: cup.id, quantity: 10 },
+          { item_type: "lid", lid_id: lid.id, quantity: 8 },
+          { item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 2 },
+        ],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const existingCupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const existingNonStockLineItem = findOrderItem(createOrderResponse.body.order.items, "non_stock_item")
+    const initialInvoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(initialInvoiceResponse.status).toBe(200)
+    const initialInvoiceId = initialInvoiceResponse.body.invoice.id as string
+
+    const updateResponse = await api
+      .patch(`/orders/${orderId}`)
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        notes: "Editable unpaid order updated",
+        line_items: [
+          {
+            id: existingCupLineItem.id,
+            item_type: "cup",
+            cup_id: cup.id,
+            quantity: 6,
+          },
+          {
+            id: existingNonStockLineItem.id,
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 5,
+          },
+          {
+            item_type: "cup",
+            cup_id: replacementCup.id,
+            quantity: 4,
+          },
+          {
+            item_type: "custom_charge",
+            description_snapshot: "Rush fee",
+            quantity: 1,
+            unit_sell_price: "50.00",
+          },
+        ],
+      })
+
+    expect(updateResponse.status).toBe(200)
+    expect(updateResponse.body.order.status).toBe("pending")
+    expect(updateResponse.body.order.items).toHaveLength(4)
+
+    const invoiceAfterUpdateResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceAfterUpdateResponse.status).toBe(200)
+    expect(invoiceAfterUpdateResponse.body.invoice.id).toBe(initialInvoiceId)
+    expect(invoiceAfterUpdateResponse.body.invoice.subtotal).toBe("249.50")
+    expect(
+      invoiceAfterUpdateResponse.body.invoice.items.map((item: { item_type: string }) => item.item_type),
+    ).toEqual(expect.arrayContaining(["cup", "cup", "non_stock_item", "custom_charge"]))
+
+    const invoiceRows = await db.query.invoices.findMany({
+      where: eq(schema.invoices.orderId, orderId),
+    })
+
+    expect(invoiceRows).toHaveLength(1)
+
+    const originalCupBalance = await getCupBalance(api, adminCookie, cup.id)
+    expect(originalCupBalance).toMatchObject({
+      on_hand: 20,
+      reserved: 6,
+      available: 14,
+    })
+
+    const replacementCupBalance = await getCupBalance(api, adminCookie, replacementCup.id)
+    expect(replacementCupBalance).toMatchObject({
+      on_hand: 10,
+      reserved: 4,
+      available: 6,
+    })
+
+    const lidBalance = await getLidBalance(api, adminCookie, lid.id)
+    expect(lidBalance).toMatchObject({
+      on_hand: 20,
+      reserved: 0,
+      available: 20,
+    })
+  })
+
+  it("allows same-source quantity updates for unpaid in-progress orders and resyncs the invoice", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup({
+      sku: "CUP-PROGRESS-001",
+      defaultSellPrice: "15.00",
+      costPrice: "7.00",
+    })
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 30,
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "cup", cup_id: cup.id, quantity: 10 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const initialInvoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(initialInvoiceResponse.status).toBe(200)
+
+    const printResponse = await api
+      .post(`/order-line-items/${cupLineItem.id}/progress-events`)
+      .set("Cookie", adminCookie)
+      .send({
+        stage: "printed",
+        quantity: 4,
+        note: "Printed first batch",
+        event_date: new Date("2026-04-24T09:00:00.000Z").toISOString(),
+      })
+
+    expect(printResponse.status).toBe(201)
+    expect(printResponse.body.order_status).toBe("in_progress")
+
+    const updateResponse = await api
+      .patch(`/orders/${orderId}`)
+      .set("Cookie", adminCookie)
+      .send({
+        line_items: [
+          {
+            id: cupLineItem.id,
+            item_type: "cup",
+            cup_id: cup.id,
+            quantity: 12,
+          },
+        ],
+      })
+
+    expect(updateResponse.status).toBe(200)
+    expect(updateResponse.body.order.status).toBe("in_progress")
+    expect(updateResponse.body.order.items[0].quantity).toBe(12)
+
+    const invoiceAfterUpdateResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceAfterUpdateResponse.status).toBe(200)
+    expect(invoiceAfterUpdateResponse.body.invoice.id).toBe(initialInvoiceResponse.body.invoice.id)
+    expect(invoiceAfterUpdateResponse.body.invoice.subtotal).toBe("180.00")
+    expect(invoiceAfterUpdateResponse.body.invoice.items[0].quantity).toBe(12)
+
+    const balance = await getCupBalance(api, adminCookie, cup.id)
+    expect(balance).toMatchObject({
+      on_hand: 26,
+      reserved: 8,
+      available: 18,
+    })
+  })
+
+  it("rejects structural edits when the linked invoice has been paid", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup()
+    const db = await getIntegrationDb()
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 20,
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "cup", cup_id: cup.id, quantity: 10 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+
+    await db
+      .update(schema.invoices)
+      .set({ status: "paid" })
+      .where(eq(schema.invoices.orderId, orderId))
+
+    const updateResponse = await api
+      .patch(`/orders/${orderId}`)
+      .set("Cookie", adminCookie)
+      .send({
+        line_items: [
+          {
+            id: cupLineItem.id,
+            item_type: "cup",
+            cup_id: cup.id,
+            quantity: 8,
+          },
+        ],
+      })
+
+    expect(updateResponse.status).toBe(409)
+    expect(updateResponse.body.error).toBe("Invoice is locked because it has been paid")
+  })
+
   it("keeps custom_charge out of inventory movements and product-oriented reports", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()

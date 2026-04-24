@@ -9,7 +9,12 @@ import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
 import { InventoryService } from "../inventory/inventory.service.js"
 import { InvoicesRepository } from "../invoices/invoices.repository.js"
-import { syncInvoiceSnapshotForOrder } from "../invoices/invoices.service.js"
+import {
+  InvoicePaidLockError,
+  InvoiceVoidLockError,
+  assertInvoiceAllowsStructuralChanges,
+  syncInvoiceSnapshotForOrder,
+} from "../invoices/invoices.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
 import {
@@ -145,6 +150,14 @@ export class OrderClosedUpdateError extends Error {
   }
 }
 
+export class OrderStructuralEditStatusError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Structural order edits are only allowed while the order is pending or in progress")
+  }
+}
+
 export class OrderCustomerReassignmentProgressError extends Error {
   readonly statusCode = 409
 
@@ -190,6 +203,14 @@ export class OrderPrintedQuantityInsufficientStockError extends Error {
 
   constructor() {
     super("Printed quantity exceeds current on-hand stock")
+  }
+}
+
+export class OrderLineItemProgressLockedError extends Error {
+  readonly statusCode = 409
+
+  constructor(message: string) {
+    super(message)
   }
 }
 
@@ -239,6 +260,210 @@ type ResolvedOrderLineItem =
       notes?: string
     }
 
+type CreateOrderLineItemInput = CreateOrderInput["line_items"][number]
+type UpdateOrderLineItemInput = NonNullable<UpdateOrderInput["line_items"]>[number]
+
+interface ExistingTrackedItemProgress {
+  hasProgress: boolean
+  consumedQuantity: number
+  minimumAllowedQuantity: number
+}
+
+function assertNoDuplicateSourceItems(
+  items: Array<CreateOrderLineItemInput | UpdateOrderLineItemInput>,
+): void {
+  const duplicateIndexesByKey = new Map<string, number[]>()
+
+  for (const [index, item] of items.entries()) {
+    if (item.item_type === "custom_charge") {
+      continue
+    }
+
+    const key =
+      item.item_type === "cup"
+        ? `cup:${item.cup_id}`
+        : item.item_type === "lid"
+          ? `lid:${item.lid_id}`
+          : `non_stock_item:${item.non_stock_item_id}`
+    const duplicateIndexes = duplicateIndexesByKey.get(key) ?? []
+    duplicateIndexes.push(index)
+    duplicateIndexesByKey.set(key, duplicateIndexes)
+  }
+
+  const duplicateLineItemDetails = Array.from(duplicateIndexesByKey.entries()).flatMap(
+    ([key, indexes]) => {
+      if (indexes.length < 2) {
+        return []
+      }
+
+      const [itemType, itemId] = key.split(":") as [
+        "cup" | "lid" | "non_stock_item",
+        string,
+      ]
+
+      return indexes.map((lineItemIndex) => ({
+        lineItemIndex,
+        itemType,
+        itemId,
+        field: "item_id" as const,
+        message: `Line item ${lineItemIndex + 1} duplicates another selected ${itemType}. Each source item can only appear once per order.`,
+      }))
+    },
+  )
+
+  if (duplicateLineItemDetails.length > 0) {
+    throw new OrderCreateValidationError(
+      "Duplicate source items found in order line items",
+      400,
+      duplicateLineItemDetails,
+    )
+  }
+}
+
+async function resolveOrderLineItems(
+  items: Array<CreateOrderLineItemInput | UpdateOrderLineItemInput>,
+  dependencies: {
+    cupsRepository: CupsRepository
+    lidsRepository: LidsRepository
+    nonStockItemsRepository: NonStockItemsRepository
+  },
+): Promise<ResolvedOrderLineItem[]> {
+  assertNoDuplicateSourceItems(items)
+
+  const resolvedItems: ResolvedOrderLineItem[] = []
+
+  for (const [index, item] of items.entries()) {
+    if (item.item_type === "cup") {
+      const cup = await dependencies.cupsRepository.findById(item.cup_id)
+
+      if (!cup) {
+        throw new OrderCreateValidationError("Some order line items are invalid", 404, [
+          {
+            lineItemIndex: index,
+            itemType: "cup",
+            itemId: item.cup_id,
+            field: "item_id",
+            message: `Line item ${index + 1} references a cup that no longer exists.`,
+          },
+        ])
+      }
+
+      if (!cup.isActive) {
+        throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+          {
+            lineItemIndex: index,
+            itemType: "cup",
+            itemId: item.cup_id,
+            field: "item_id",
+            itemLabel: cup.sku,
+            message: `Line item ${index + 1} uses inactive cup ${cup.sku}.`,
+          },
+        ])
+      }
+
+      resolvedItems.push({
+        requestLineItemIndex: index,
+        itemType: "cup",
+        cup,
+        quantity: item.quantity,
+        notes: item.notes,
+      })
+      continue
+    }
+
+    if (item.item_type === "lid") {
+      const lid = await dependencies.lidsRepository.findById(item.lid_id)
+
+      if (!lid) {
+        throw new OrderCreateValidationError("Some order line items are invalid", 404, [
+          {
+            lineItemIndex: index,
+            itemType: "lid",
+            itemId: item.lid_id,
+            field: "item_id",
+            message: `Line item ${index + 1} references a lid that no longer exists.`,
+          },
+        ])
+      }
+
+      if (!lid.isActive) {
+        const lidLabel = lid.sku.trim() || `${lid.brand} ${lid.diameter} ${lid.shape} ${lid.color}`
+        throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+          {
+            lineItemIndex: index,
+            itemType: "lid",
+            itemId: item.lid_id,
+            field: "item_id",
+            itemLabel: lidLabel,
+            message: `Line item ${index + 1} uses inactive lid ${lidLabel}.`,
+          },
+        ])
+      }
+
+      resolvedItems.push({
+        requestLineItemIndex: index,
+        itemType: "lid",
+        lid,
+        quantity: item.quantity,
+        notes: item.notes,
+      })
+      continue
+    }
+
+    if (item.item_type === "non_stock_item") {
+      const nonStockItem = await dependencies.nonStockItemsRepository.findById(
+        item.non_stock_item_id,
+      )
+
+      if (!nonStockItem) {
+        throw new OrderCreateValidationError("Some order line items are invalid", 404, [
+          {
+            lineItemIndex: index,
+            itemType: "non_stock_item",
+            itemId: item.non_stock_item_id,
+            field: "item_id",
+            message: `Line item ${index + 1} references a general item that no longer exists.`,
+          },
+        ])
+      }
+
+      if (!nonStockItem.isActive) {
+        throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+          {
+            lineItemIndex: index,
+            itemType: "non_stock_item",
+            itemId: item.non_stock_item_id,
+            field: "item_id",
+            itemLabel: nonStockItem.name,
+            message: `Line item ${index + 1} uses inactive general item ${nonStockItem.name}.`,
+          },
+        ])
+      }
+
+      resolvedItems.push({
+        requestLineItemIndex: index,
+        itemType: "non_stock_item",
+        nonStockItem,
+        quantity: item.quantity,
+        notes: item.notes,
+      })
+      continue
+    }
+
+    resolvedItems.push({
+      requestLineItemIndex: index,
+      itemType: "custom_charge",
+      descriptionSnapshot: item.description_snapshot.trim(),
+      quantity: item.quantity,
+      unitSellPrice: item.unit_sell_price,
+      unitCostPrice: item.unit_cost_price ?? "0.00",
+      notes: item.notes,
+    })
+  }
+
+  return resolvedItems
+}
+
 export class OrdersService {
   constructor(
     private readonly ordersRepository: OrdersRepository,
@@ -284,183 +509,11 @@ export class OrdersService {
       assertAdmin(user)
     }
 
-    const duplicateIndexesByKey = new Map<string, number[]>()
-
-    for (const [index, item] of parsedInput.line_items.entries()) {
-      if (item.item_type === "custom_charge") {
-        continue
-      }
-
-      const key =
-        item.item_type === "cup"
-          ? `cup:${item.cup_id}`
-          : item.item_type === "lid"
-            ? `lid:${item.lid_id}`
-            : `non_stock_item:${item.non_stock_item_id}`
-      const duplicateIndexes = duplicateIndexesByKey.get(key) ?? []
-      duplicateIndexes.push(index)
-      duplicateIndexesByKey.set(key, duplicateIndexes)
-    }
-
-    const duplicateLineItemDetails = Array.from(duplicateIndexesByKey.entries()).flatMap(
-      ([key, indexes]) => {
-        if (indexes.length < 2) {
-          return []
-        }
-
-        const [itemType, itemId] = key.split(":") as [
-          "cup" | "lid" | "non_stock_item",
-          string,
-        ]
-
-        return indexes.map((lineItemIndex) => ({
-          lineItemIndex,
-          itemType,
-          itemId,
-          field: "item_id" as const,
-          message: `Line item ${lineItemIndex + 1} duplicates another selected ${itemType}. Each source item can only appear once per order.`,
-        }))
-      },
-    )
-
-    if (duplicateLineItemDetails.length > 0) {
-      throw new OrderCreateValidationError(
-        "Duplicate source items found in order line items",
-        400,
-        duplicateLineItemDetails,
-      )
-    }
-
-    const resolvedItems: ResolvedOrderLineItem[] = []
-
-    for (const [index, item] of parsedInput.line_items.entries()) {
-      if (item.item_type === "cup") {
-        const cup = await this.cupsRepository.findById(item.cup_id)
-
-        if (!cup) {
-          throw new OrderCreateValidationError("Some order line items are invalid", 404, [
-            {
-              lineItemIndex: index,
-              itemType: "cup",
-              itemId: item.cup_id,
-              field: "item_id",
-              message: `Line item ${index + 1} references a cup that no longer exists.`,
-            },
-          ])
-        }
-
-        if (!cup.isActive) {
-          throw new OrderCreateValidationError("Some order line items are invalid", 409, [
-            {
-              lineItemIndex: index,
-              itemType: "cup",
-              itemId: item.cup_id,
-              field: "item_id",
-              itemLabel: cup.sku,
-              message: `Line item ${index + 1} uses inactive cup ${cup.sku}.`,
-            },
-          ])
-        }
-
-        resolvedItems.push({
-          requestLineItemIndex: index,
-          itemType: "cup",
-          cup,
-          quantity: item.quantity,
-          notes: item.notes,
-        })
-        continue
-      }
-
-      if (item.item_type === "lid") {
-        const lid = await this.lidsRepository.findById(item.lid_id)
-
-        if (!lid) {
-          throw new OrderCreateValidationError("Some order line items are invalid", 404, [
-            {
-              lineItemIndex: index,
-              itemType: "lid",
-              itemId: item.lid_id,
-              field: "item_id",
-              message: `Line item ${index + 1} references a lid that no longer exists.`,
-            },
-          ])
-        }
-
-        if (!lid.isActive) {
-          const lidLabel = lid.sku.trim() || `${lid.brand} ${lid.diameter} ${lid.shape} ${lid.color}`
-          throw new OrderCreateValidationError("Some order line items are invalid", 409, [
-            {
-              lineItemIndex: index,
-              itemType: "lid",
-              itemId: item.lid_id,
-              field: "item_id",
-              itemLabel: lidLabel,
-              message: `Line item ${index + 1} uses inactive lid ${lidLabel}.`,
-            },
-          ])
-        }
-
-        resolvedItems.push({
-          requestLineItemIndex: index,
-          itemType: "lid",
-          lid,
-          quantity: item.quantity,
-          notes: item.notes,
-        })
-
-        continue
-      }
-
-      if (item.item_type === "non_stock_item") {
-        const nonStockItem = await this.nonStockItemsRepository.findById(item.non_stock_item_id)
-
-        if (!nonStockItem) {
-          throw new OrderCreateValidationError("Some order line items are invalid", 404, [
-            {
-              lineItemIndex: index,
-              itemType: "non_stock_item",
-              itemId: item.non_stock_item_id,
-              field: "item_id",
-              message: `Line item ${index + 1} references a general item that no longer exists.`,
-            },
-          ])
-        }
-
-        if (!nonStockItem.isActive) {
-          throw new OrderCreateValidationError("Some order line items are invalid", 409, [
-            {
-              lineItemIndex: index,
-              itemType: "non_stock_item",
-              itemId: item.non_stock_item_id,
-              field: "item_id",
-              itemLabel: nonStockItem.name,
-              message: `Line item ${index + 1} uses inactive general item ${nonStockItem.name}.`,
-            },
-          ])
-        }
-
-        resolvedItems.push({
-          requestLineItemIndex: index,
-          itemType: "non_stock_item",
-          nonStockItem,
-          quantity: item.quantity,
-          notes: item.notes,
-        })
-        continue
-      }
-
-      resolvedItems.push({
-        requestLineItemIndex: index,
-        itemType: "custom_charge",
-        descriptionSnapshot: item.description_snapshot.trim(),
-        quantity: item.quantity,
-        unitSellPrice: item.unit_sell_price,
-        unitCostPrice: item.unit_cost_price ?? "0.00",
-        notes: item.notes,
-      })
-      continue
-    }
+    const resolvedItems = await resolveOrderLineItems(parsedInput.line_items, {
+      cupsRepository: this.cupsRepository,
+      lidsRepository: this.lidsRepository,
+      nonStockItemsRepository: this.nonStockItemsRepository,
+    })
 
     return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
       const order = await ordersRepository.createOrderWithItems({
@@ -473,59 +526,7 @@ export class OrdersService {
           createdByUserId: user.id,
         },
         items: resolvedItems.map((item) => {
-          if (item.itemType === "cup") {
-            return {
-              itemType: "cup",
-              cupId: item.cup.id,
-              lidId: undefined,
-              nonStockItemId: undefined,
-              descriptionSnapshot: item.cup.sku,
-              quantity: item.quantity,
-              unitCostPrice: item.cup.costPrice,
-              unitSellPrice: item.cup.defaultSellPrice,
-              notes: item.notes,
-            }
-          }
-
-          if (item.itemType === "lid") {
-            return {
-              itemType: "lid",
-              cupId: undefined,
-              lidId: item.lid.id,
-              nonStockItemId: undefined,
-              descriptionSnapshot: buildLidDescriptionSnapshot(item.lid),
-              quantity: item.quantity,
-              unitCostPrice: item.lid.costPrice,
-              unitSellPrice: item.lid.defaultSellPrice,
-              notes: item.notes,
-            }
-          }
-
-          if (item.itemType === "non_stock_item") {
-            return {
-              itemType: "non_stock_item",
-              cupId: undefined,
-              lidId: undefined,
-              nonStockItemId: item.nonStockItem.id,
-              descriptionSnapshot: buildNonStockItemDescriptionSnapshot(item.nonStockItem),
-              quantity: item.quantity,
-              unitCostPrice: item.nonStockItem.costPrice ?? "0",
-              unitSellPrice: item.nonStockItem.defaultSellPrice,
-              notes: item.notes,
-            }
-          }
-
-          return {
-            itemType: "custom_charge",
-            cupId: undefined,
-            lidId: undefined,
-            nonStockItemId: undefined,
-            descriptionSnapshot: item.descriptionSnapshot,
-            quantity: item.quantity,
-            unitCostPrice: item.unitCostPrice,
-            unitSellPrice: item.unitSellPrice,
-            notes: item.notes,
-          }
+          return toOrderItemInsert(item)
         }),
       })
 
@@ -815,8 +816,22 @@ export class OrdersService {
         throw new OrderNotFoundError()
       }
 
-      if (order.status === "canceled" || order.status === "completed") {
+      const hasStructuralChanges =
+        parsedInput.customer_id !== undefined || parsedInput.line_items !== undefined
+
+      if (!hasStructuralChanges && (order.status === "canceled" || order.status === "completed")) {
         throw new OrderClosedUpdateError()
+      }
+
+      if (hasStructuralChanges && order.status !== "pending" && order.status !== "in_progress") {
+        throw new OrderStructuralEditStatusError()
+      }
+
+      const invoicesRepository = new InvoicesRepository(db)
+      const existingInvoice = await invoicesRepository.findByOrderId(order.id)
+
+      if (hasStructuralChanges && existingInvoice) {
+        assertInvoiceAllowsStructuralChanges(existingInvoice.status)
       }
 
       if (parsedInput.customer_id && parsedInput.customer_id !== order.customerId) {
@@ -837,6 +852,284 @@ export class OrdersService {
         }
       }
 
+      if (parsedInput.line_items) {
+        const includesCustomCharge = parsedInput.line_items.some((item) => item.item_type === "custom_charge")
+
+        if (includesCustomCharge) {
+          assertAdmin(user)
+        }
+
+        const resolvedItems = await resolveOrderLineItems(parsedInput.line_items, {
+          cupsRepository: new CupsRepository(db),
+          lidsRepository: new LidsRepository(db),
+          nonStockItemsRepository: new NonStockItemsRepository(db),
+        })
+        const existingOrderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
+        const existingItemsById = new Map(existingOrderItems.map((item) => [item.id, item]))
+        const seenExistingIds = new Set<string>()
+
+        const itemsToUpdateInPlace: Array<{
+          orderItemId: string
+          item: Omit<ReturnType<typeof toOrderItemInsert>, "orderId">
+        }> = []
+        const itemsToCreate: Array<Omit<ReturnType<typeof toOrderItemInsert>, "orderId">> = []
+        const orderItemIdsToDelete: string[] = []
+        const reservationAdjustments: Array<{
+          action: "reserve" | "release"
+          itemType: "cup" | "lid"
+          cupId?: string
+          lidId?: string
+          orderItemId?: string
+          quantity: number
+          requestLineItemIndex: number
+        }> = []
+
+        for (const [index, inputItem] of parsedInput.line_items.entries()) {
+          const resolvedItem = resolvedItems[index]
+
+          if (!resolvedItem) {
+            throw new Error("Resolved order line item missing")
+          }
+
+          const persistedItem = toOrderItemInsert(resolvedItem)
+          const existingItemId = "id" in inputItem ? inputItem.id : undefined
+
+          if (!existingItemId) {
+            itemsToCreate.push(persistedItem)
+
+            if (persistedItem.itemType === "cup" || persistedItem.itemType === "lid") {
+              reservationAdjustments.push({
+                action: "reserve",
+                itemType: persistedItem.itemType,
+                cupId: persistedItem.cupId ?? undefined,
+                lidId: persistedItem.lidId ?? undefined,
+                quantity: persistedItem.quantity,
+                requestLineItemIndex: index,
+              })
+            }
+
+            continue
+          }
+
+          if (seenExistingIds.has(existingItemId)) {
+            throw new OrderCreateValidationError("Duplicate source items found in order line items", 400, [
+              {
+                lineItemIndex: index,
+                itemType: persistedItem.itemType,
+                itemId:
+                  persistedItem.itemType === "cup"
+                    ? persistedItem.cupId!
+                    : persistedItem.itemType === "lid"
+                      ? persistedItem.lidId!
+                      : persistedItem.nonStockItemId ?? undefined,
+                field: "item_id",
+                message: `Line item ${index + 1} references the same existing order line twice.`,
+              },
+            ])
+          }
+
+          seenExistingIds.add(existingItemId)
+
+          const existingItem = existingItemsById.get(existingItemId)
+
+          if (!existingItem) {
+            throw new OrderLineItemNotFoundError()
+          }
+
+          const progress = getExistingTrackedItemProgress(existingItem)
+          const isSameIdentity = isSameOrderItemIdentity(existingItem, persistedItem)
+
+          if (progress?.hasProgress && !isSameIdentity) {
+            throw new OrderLineItemProgressLockedError(
+              "Tracked line items with fulfillment progress cannot change their source item",
+            )
+          }
+
+          if (progress?.hasProgress && persistedItem.quantity < progress.minimumAllowedQuantity) {
+            throw new OrderLineItemProgressLockedError(
+              "Tracked line item quantity cannot be reduced below recorded fulfillment progress",
+            )
+          }
+
+          if (!isSameIdentity) {
+            orderItemIdsToDelete.push(existingItem.id)
+            itemsToCreate.push(persistedItem)
+
+            const currentReserved = getTrackedReservationTarget(existingItem)
+
+            if (currentReserved > 0 && (existingItem.itemType === "cup" || existingItem.itemType === "lid")) {
+              reservationAdjustments.push({
+                action: "release",
+                itemType: existingItem.itemType,
+                cupId: existingItem.cupId ?? undefined,
+                lidId: existingItem.lidId ?? undefined,
+                orderItemId: existingItem.id,
+                quantity: currentReserved,
+                requestLineItemIndex: index,
+              })
+            }
+
+            if (persistedItem.itemType === "cup" || persistedItem.itemType === "lid") {
+              reservationAdjustments.push({
+                action: "reserve",
+                itemType: persistedItem.itemType,
+                cupId: persistedItem.cupId ?? undefined,
+                lidId: persistedItem.lidId ?? undefined,
+                quantity: persistedItem.quantity,
+                requestLineItemIndex: index,
+              })
+            }
+
+            continue
+          }
+
+          itemsToUpdateInPlace.push({
+            orderItemId: existingItem.id,
+            item: persistedItem,
+          })
+
+          if (existingItem.itemType === "cup" || existingItem.itemType === "lid") {
+            const currentReserved = getTrackedReservationTarget(existingItem)
+            const nextReserved = getTrackedReservationTarget(existingItem, persistedItem.quantity)
+            const delta = nextReserved - currentReserved
+
+            if (delta !== 0) {
+              reservationAdjustments.push({
+                action: delta > 0 ? "reserve" : "release",
+                itemType: existingItem.itemType,
+                cupId: existingItem.cupId ?? undefined,
+                lidId: existingItem.lidId ?? undefined,
+                orderItemId: existingItem.id,
+                quantity: Math.abs(delta),
+                requestLineItemIndex: index,
+              })
+            }
+          }
+        }
+
+        for (const existingItem of existingOrderItems) {
+          if (seenExistingIds.has(existingItem.id)) {
+            continue
+          }
+
+          const progress = getExistingTrackedItemProgress(existingItem)
+
+          if (progress?.hasProgress) {
+            throw new OrderLineItemProgressLockedError(
+              "Tracked line items with fulfillment progress cannot be removed from the order",
+            )
+          }
+
+          orderItemIdsToDelete.push(existingItem.id)
+
+          const currentReserved = getTrackedReservationTarget(existingItem)
+
+          if (
+            currentReserved > 0 &&
+            (existingItem.itemType === "cup" || existingItem.itemType === "lid")
+          ) {
+            reservationAdjustments.push({
+              action: "release",
+              itemType: existingItem.itemType,
+              cupId: existingItem.cupId ?? undefined,
+              lidId: existingItem.lidId ?? undefined,
+              orderItemId: existingItem.id,
+              quantity: currentReserved,
+              requestLineItemIndex: parsedInput.line_items.length,
+            })
+          }
+        }
+
+        if (existingInvoice) {
+          await invoicesRepository.deleteInvoiceItems(existingInvoice.id)
+        }
+
+        for (const item of itemsToUpdateInPlace) {
+          await ordersRepository.updateOrderItem(item.orderItemId, item.item)
+        }
+
+        if (orderItemIdsToDelete.length > 0) {
+          await ordersRepository.deleteOrderItems(orderItemIdsToDelete)
+        }
+
+        await ordersRepository.createOrderItems(order.id, itemsToCreate)
+
+        const refreshedOrder = await ordersRepository.findByIdWithRelations(order.id)
+
+        if (!refreshedOrder) {
+          throw new OrderNotFoundError()
+        }
+
+        const inventoryRepository = new InventoryRepository(db)
+        const claimedReserveOrderItemIds = new Set<string>()
+
+        for (const adjustment of reservationAdjustments) {
+          if (adjustment.quantity === 0) {
+            continue
+          }
+
+          if (adjustment.action === "reserve") {
+            const targetOrderItem = refreshedOrder.items.find((item) => {
+              if (adjustment.orderItemId && item.id === adjustment.orderItemId) {
+                return true
+              }
+
+              if (claimedReserveOrderItemIds.has(item.id)) {
+                return false
+              }
+
+              if (item.itemType !== adjustment.itemType) {
+                return false
+              }
+
+              if (adjustment.itemType === "cup") {
+                return item.cupId === adjustment.cupId
+              }
+
+              return item.lidId === adjustment.lidId
+            })
+
+            if (!targetOrderItem) {
+              throw new Error("Failed to match updated order item to reservation request")
+            }
+
+            claimedReserveOrderItemIds.add(targetOrderItem.id)
+
+            await this.createInventoryService(db).reserveOrderItems(
+              {
+                orderId: refreshedOrder.id,
+                createdByUserId: user.id,
+                items: [
+                  {
+                    orderItemId: targetOrderItem.id,
+                    requestLineItemIndex: adjustment.requestLineItemIndex,
+                    itemType: adjustment.itemType,
+                    cupId: adjustment.cupId,
+                    lidId: adjustment.lidId,
+                    quantity: adjustment.quantity,
+                  },
+                ],
+              },
+              { useExistingTransaction: true },
+            )
+            continue
+          }
+
+          await inventoryRepository.appendMovement({
+            itemType: adjustment.itemType,
+            cupId: adjustment.cupId,
+            lidId: adjustment.lidId,
+            movementType: "release_reservation",
+            quantity: adjustment.quantity,
+            orderId: refreshedOrder.id,
+            orderItemId: adjustment.orderItemId!,
+            note: "Released reservation after unpaid order edit",
+            reference: refreshedOrder.id,
+            createdByUserId: user.id,
+          })
+        }
+      }
+
       await ordersRepository.updateOrderMetadata(order.id, {
         customerId: parsedInput.customer_id,
         notes: parsedInput.notes,
@@ -846,6 +1139,10 @@ export class OrdersService {
 
       if (!updatedOrder) {
         throw new OrderNotFoundError()
+      }
+
+      if (hasStructuralChanges) {
+        await syncInvoiceSnapshotForOrder(invoicesRepository, updatedOrder, user.id)
       }
 
       return toOrderDto(updatedOrder, user)
@@ -889,6 +1186,127 @@ function createOrderNumber(): string {
   const datePrefix = new Date().toISOString().slice(0, 10).replaceAll("-", "")
 
   return `IW-${datePrefix}-${randomUUID().slice(0, 8).toUpperCase()}`
+}
+
+function toOrderItemInsert(item: ResolvedOrderLineItem) {
+  if (item.itemType === "cup") {
+    return {
+      itemType: "cup" as const,
+      cupId: item.cup.id,
+      lidId: undefined,
+      nonStockItemId: undefined,
+      descriptionSnapshot: item.cup.sku,
+      quantity: item.quantity,
+      unitCostPrice: item.cup.costPrice,
+      unitSellPrice: item.cup.defaultSellPrice,
+      notes: item.notes,
+    }
+  }
+
+  if (item.itemType === "lid") {
+    return {
+      itemType: "lid" as const,
+      cupId: undefined,
+      lidId: item.lid.id,
+      nonStockItemId: undefined,
+      descriptionSnapshot: buildLidDescriptionSnapshot(item.lid),
+      quantity: item.quantity,
+      unitCostPrice: item.lid.costPrice,
+      unitSellPrice: item.lid.defaultSellPrice,
+      notes: item.notes,
+    }
+  }
+
+  if (item.itemType === "non_stock_item") {
+    return {
+      itemType: "non_stock_item" as const,
+      cupId: undefined,
+      lidId: undefined,
+      nonStockItemId: item.nonStockItem.id,
+      descriptionSnapshot: buildNonStockItemDescriptionSnapshot(item.nonStockItem),
+      quantity: item.quantity,
+      unitCostPrice: item.nonStockItem.costPrice ?? "0",
+      unitSellPrice: item.nonStockItem.defaultSellPrice,
+      notes: item.notes,
+    }
+  }
+
+  return {
+    itemType: "custom_charge" as const,
+    cupId: undefined,
+    lidId: undefined,
+    nonStockItemId: undefined,
+    descriptionSnapshot: item.descriptionSnapshot,
+    quantity: item.quantity,
+    unitCostPrice: item.unitCostPrice,
+    unitSellPrice: item.unitSellPrice,
+    notes: item.notes,
+  }
+}
+
+function isSameOrderItemIdentity(
+  existingItem: OrderItemWithProgressEvents,
+  nextItem: ReturnType<typeof toOrderItemInsert>,
+): boolean {
+  if (existingItem.itemType !== nextItem.itemType) {
+    return false
+  }
+
+  if (existingItem.itemType === "cup") {
+    return existingItem.cupId === nextItem.cupId
+  }
+
+  if (existingItem.itemType === "lid") {
+    return existingItem.lidId === nextItem.lidId
+  }
+
+  if (existingItem.itemType === "non_stock_item") {
+    return existingItem.nonStockItemId === nextItem.nonStockItemId
+  }
+
+  return existingItem.descriptionSnapshot === nextItem.descriptionSnapshot
+}
+
+function getExistingTrackedItemProgress(
+  item: OrderItemWithProgressEvents,
+): ExistingTrackedItemProgress | null {
+  if (item.itemType !== "cup" && item.itemType !== "lid") {
+    return null
+  }
+
+  const totals = calculateProgressTotals(item.itemType, item.quantity, item.progressEvents)
+  const minimumAllowedQuantity =
+    item.itemType === "cup"
+      ? Math.max(
+          totals.total_printed,
+          totals.total_qa_passed,
+          totals.total_packed,
+          totals.total_ready_for_release,
+          totals.total_released,
+        )
+      : Math.max(totals.total_packed, totals.total_ready_for_release, totals.total_released)
+
+  return {
+    hasProgress:
+      item.itemType === "cup"
+        ? minimumAllowedQuantity > 0
+        : minimumAllowedQuantity > 0,
+    consumedQuantity: item.itemType === "cup" ? totals.total_printed : totals.total_released,
+    minimumAllowedQuantity,
+  }
+}
+
+function getTrackedReservationTarget(
+  item: OrderItemWithProgressEvents,
+  nextQuantity = item.quantity,
+): number {
+  const progress = getExistingTrackedItemProgress(item)
+
+  if (!progress) {
+    return 0
+  }
+
+  return Math.max(nextQuantity - progress.consumedQuantity, 0)
 }
 
 function buildLidDescriptionSnapshot(lid: Lid): string {

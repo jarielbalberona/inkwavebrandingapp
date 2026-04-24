@@ -22,6 +22,68 @@ const nullableOptionalText = (max: number) =>
 
 const moneyStringSchema = z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid non-negative money amount")
 
+const createOrderLineItemSchema = z.discriminatedUnion("item_type", [
+  z.object({
+    item_type: z.literal("cup"),
+    cup_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    item_type: z.literal("lid"),
+    lid_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    item_type: z.literal("non_stock_item"),
+    non_stock_item_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    item_type: z.literal("custom_charge"),
+    description_snapshot: z.string().trim().min(1).max(500),
+    quantity: z.number().int().positive(),
+    unit_sell_price: moneyStringSchema,
+    unit_cost_price: moneyStringSchema.optional(),
+    notes: optionalText(500),
+  }),
+])
+
+const updateOrderLineItemSchema = z.discriminatedUnion("item_type", [
+  z.object({
+    id: z.string().uuid().optional(),
+    item_type: z.literal("cup"),
+    cup_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    id: z.string().uuid().optional(),
+    item_type: z.literal("lid"),
+    lid_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    id: z.string().uuid().optional(),
+    item_type: z.literal("non_stock_item"),
+    non_stock_item_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    id: z.string().uuid().optional(),
+    item_type: z.literal("custom_charge"),
+    description_snapshot: z.string().trim().min(1).max(500),
+    quantity: z.number().int().positive(),
+    unit_sell_price: moneyStringSchema,
+    unit_cost_price: moneyStringSchema.optional(),
+    notes: optionalText(500),
+  }),
+])
+
 export const orderStatusSchema = z.enum([
   "pending",
   "in_progress",
@@ -41,38 +103,7 @@ export const orderLineItemProgressStageSchema = z.enum([
 export const createOrderSchema = z.object({
   customer_id: z.string().uuid(),
   notes: optionalText(1000),
-  line_items: z
-    .array(
-      z.discriminatedUnion("item_type", [
-        z.object({
-          item_type: z.literal("cup"),
-          cup_id: z.string().uuid(),
-          quantity: z.number().int().positive(),
-          notes: optionalText(500),
-        }),
-      z.object({
-        item_type: z.literal("lid"),
-        lid_id: z.string().uuid(),
-        quantity: z.number().int().positive(),
-        notes: optionalText(500),
-      }),
-      z.object({
-        item_type: z.literal("non_stock_item"),
-        non_stock_item_id: z.string().uuid(),
-        quantity: z.number().int().positive(),
-        notes: optionalText(500),
-      }),
-      z.object({
-        item_type: z.literal("custom_charge"),
-        description_snapshot: z.string().trim().min(1).max(500),
-        quantity: z.number().int().positive(),
-        unit_sell_price: moneyStringSchema,
-        unit_cost_price: moneyStringSchema.optional(),
-        notes: optionalText(500),
-      }),
-    ]),
-    )
-    .min(1),
+  line_items: z.array(createOrderLineItemSchema).min(1),
 })
 
 export const createOrderLineItemProgressEventSchema = z.object({
@@ -86,9 +117,15 @@ export const updateOrderSchema = z
   .object({
     customer_id: z.string().uuid().optional(),
     notes: nullableOptionalText(1000),
+    line_items: z.array(updateOrderLineItemSchema).min(1).optional(),
   })
   .strict()
-  .refine((input) => input.customer_id !== undefined || input.notes !== undefined, {
+  .refine(
+    (input) =>
+      input.customer_id !== undefined ||
+      input.notes !== undefined ||
+      input.line_items !== undefined,
+    {
     message: "At least one supported order field is required",
   })
 

@@ -60,6 +60,17 @@ export class OrdersRepository {
     return orderWithRelations
   }
 
+  async createOrderItems(
+    orderId: string,
+    items: Omit<NewOrderItem, "orderId">[],
+  ): Promise<void> {
+    if (items.length === 0) {
+      return
+    }
+
+    await this.db.insert(orderItems).values(items.map((item) => ({ ...item, orderId })))
+  }
+
   async findByIdWithRelations(id: string) {
     return this.db.query.orders.findFirst({
       where: eq(orders.id, id),
@@ -145,6 +156,35 @@ export class OrdersRepository {
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId))
+  }
+
+  async updateOrderItem(
+    orderItemId: string,
+    input: Omit<NewOrderItem, "orderId">,
+  ): Promise<void> {
+    await this.db
+      .update(orderItems)
+      .set({
+        itemType: input.itemType,
+        cupId: input.cupId,
+        lidId: input.lidId,
+        nonStockItemId: input.nonStockItemId,
+        descriptionSnapshot: input.descriptionSnapshot,
+        quantity: input.quantity,
+        unitCostPrice: input.unitCostPrice,
+        unitSellPrice: input.unitSellPrice,
+        notes: input.notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(orderItems.id, orderItemId))
+  }
+
+  async deleteOrderItems(orderItemIds: string[]): Promise<void> {
+    if (orderItemIds.length === 0) {
+      return
+    }
+
+    await this.db.delete(orderItems).where(inArray(orderItems.id, orderItemIds))
   }
 
   async listAllOrderIdsByPriority(): Promise<string[]> {
