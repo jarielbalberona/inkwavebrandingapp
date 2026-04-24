@@ -38,6 +38,6 @@ server.listen(env.port, () => {
     resendConfigured: Boolean(env.resendApiKey && env.resendFromEmail),
     storageProvider: storageConfig.provider,
     storagePublicUrlConfigured: Boolean(storageConfig.r2?.publicUrl),
-    webOriginConfigured: Boolean(env.webOrigin),
+    webOriginConfigured: env.webOrigins.length > 0,
   })
 })

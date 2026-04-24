@@ -2,7 +2,7 @@ export const lidTypes = ["paper", "plastic"] as const
 export const lidBrands = [
   "dabba",
   "grecoopack",
-  "china_supplier",
+  "brand_1",
   "other_supplier",
 ] as const
 export const lidDiameters = ["80mm", "90mm", "95mm", "98mm"] as const

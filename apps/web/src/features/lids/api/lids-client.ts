@@ -7,7 +7,7 @@ const lidBaseSchema = z.object({
   id: z.string().uuid(),
   sku: z.string().optional(),
   type: z.enum(["paper", "plastic"]),
-  brand: z.enum(["dabba", "grecoopack", "china_supplier", "other_supplier"]),
+  brand: z.enum(["dabba", "grecoopack", "brand_1", "other_supplier"]),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   shape: z.enum(["dome", "flat", "strawless", "coffee_lid", "tall_lid"]),
   color: z.enum(["transparent", "black", "white"]),
@@ -60,7 +60,7 @@ export type Lid = z.infer<typeof lidSchema>
 
 export interface LidPayload {
   type: "paper" | "plastic"
-  brand: "dabba" | "grecoopack" | "china_supplier" | "other_supplier"
+  brand: "dabba" | "grecoopack" | "brand_1" | "other_supplier"
   diameter: "80mm" | "90mm" | "95mm" | "98mm"
   shape: "dome" | "flat" | "strawless" | "coffee_lid" | "tall_lid"
   color: "transparent" | "black" | "white"

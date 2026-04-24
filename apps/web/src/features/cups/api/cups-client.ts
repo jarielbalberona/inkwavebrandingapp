@@ -6,7 +6,7 @@ export const cupSchema = z.object({
   id: z.string().uuid(),
   sku: z.string(),
   type: z.enum(["paper", "plastic"]),
-  brand: z.enum(["dabba", "grecoopack", "china_supplier", "other_supplier"]),
+  brand: z.enum(["dabba", "grecoopack", "brand_1", "other_supplier"]),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   size: z.enum(["6.5oz", "8oz", "12oz", "16oz", "20oz", "22oz"]),
   color: z.enum(["transparent", "black", "white", "kraft"]),
@@ -36,7 +36,7 @@ export type Cup = z.infer<typeof cupSchema>
 
 export interface CupPayload {
   type: "paper" | "plastic"
-  brand: "dabba" | "grecoopack" | "china_supplier" | "other_supplier"
+  brand: "dabba" | "grecoopack" | "brand_1" | "other_supplier"
   diameter: "80mm" | "90mm" | "95mm" | "98mm"
   size: "6.5oz" | "8oz" | "12oz" | "16oz" | "20oz" | "22oz"
   color: "transparent" | "black" | "white" | "kraft"

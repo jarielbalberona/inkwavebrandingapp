@@ -183,6 +183,20 @@
       "when": 1777064635519,
       "tag": "0026_tranquil_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1777065000000,
+      "tag": "0027_brand_1_supplier_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1777066491448,
+      "tag": "0028_quick_nova",
+      "breakpoints": true
     }
   ]
 }

@@ -67,7 +67,7 @@ export async function seedLid(overrides: Partial<typeof schema.lids.$inferInsert
     .values({
       sku: `INT-LID-${suffix}`,
       type: "plastic",
-      brand: "china_supplier",
+      brand: "brand_1",
       diameter: "98mm",
       shape: "dome",
       color: "transparent",

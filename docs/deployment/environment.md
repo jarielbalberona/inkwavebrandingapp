@@ -18,7 +18,7 @@ Frontend-safe variables must use the `VITE_` prefix.
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | yes | Public API base URL consumed by the browser. This is not a secret. |
+| `VITE_API_BASE_URL` | yes in production builds | When unset in local Vite dev, the app uses same-origin `/api` (Vite proxy) for session cookies. Set to the public API base URL in deployed builds. |
 
 Web variables belong in:
 
@@ -45,7 +45,7 @@ Backend variables must not be exposed to the frontend bundle.
 | `AUTH_SESSION_SECRET` | yes for API runtime | At least 32 random characters. Used only for signing HTTP-only auth session cookies. |
 | `AUTH_SESSION_TTL_SECONDS` | no | Session cookie lifetime. Defaults to 8 hours. |
 | `AUTH_SESSION_SAME_SITE` | no | `lax`, `strict`, or `none`. If omitted, defaults to `lax` in development and `none` in production so session cookies are sent on cross-site API calls (typical when the static site and API use different hostnames, for example on Render). |
-| `WEB_ORIGIN` | yes for browser API calls | Exact frontend origin allowed for credentialed CORS, for example the Render web URL or `http://localhost:5173`. |
+| `WEB_ORIGIN` | yes for browser API calls | Comma-separated list of allowed browser `Origin` values (each must match the address bar exactly). The first entry is used for email dashboard links. |
 | `SENTRY_DSN` | no | Empty value disables Sentry initialization. |
 | `SENTRY_TRACES_SAMPLE_RATE` | no | Number from `0` to `1`; default `0`. |
 | `OPENAI_API_KEY` | no | Reserved for future API work. No OpenAI API calls exist yet. |

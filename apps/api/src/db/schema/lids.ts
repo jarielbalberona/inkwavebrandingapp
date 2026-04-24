@@ -16,7 +16,7 @@ export const lidTypeEnum = pgEnum("lid_type", ["paper", "plastic"])
 export const lidBrandEnum = pgEnum("lid_brand", [
   "dabba",
   "grecoopack",
-  "china_supplier",
+  "brand_1",
   "other_supplier",
 ])
 export const lidDiameterEnum = pgEnum("lid_diameter", ["80mm", "90mm", "95mm", "98mm"])
@@ -100,7 +100,7 @@ export const lids = pgTable(
         OR
         (
           ${table.type} = 'plastic'
-          AND ${table.brand} IN ('china_supplier', 'other_supplier')
+          AND ${table.brand} IN ('brand_1', 'other_supplier')
           AND ${table.color} IN ('transparent', 'black')
         )
       )`,

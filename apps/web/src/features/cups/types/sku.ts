@@ -5,7 +5,7 @@ export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9_-]{0,79}$/
 const cupBrandCodes = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
-  china_supplier: "CHNSPLR",
+  brand_1: "BRND1",
   other_supplier: "OTHSPLR",
 } as const
 

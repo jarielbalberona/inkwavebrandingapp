@@ -2,7 +2,7 @@ export const cupTypes = ["paper", "plastic"] as const
 export const cupBrands = [
   "dabba",
   "grecoopack",
-  "china_supplier",
+  "brand_1",
   "other_supplier",
 ] as const
 export const cupDiameters = ["80mm", "90mm", "95mm", "98mm"] as const

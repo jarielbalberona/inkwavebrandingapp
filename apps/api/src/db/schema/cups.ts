@@ -16,7 +16,7 @@ export const cupTypeEnum = pgEnum("cup_type", ["paper", "plastic"])
 export const cupBrandEnum = pgEnum("cup_brand", [
   "dabba",
   "grecoopack",
-  "china_supplier",
+  "brand_1",
   "other_supplier",
 ])
 export const cupDiameterEnum = pgEnum("cup_diameter", ["80mm", "90mm", "95mm", "98mm"])
@@ -71,7 +71,7 @@ export const cups = pgTable(
         OR
         (
           ${table.type} = 'plastic'
-          AND ${table.brand} IN ('china_supplier', 'other_supplier')
+          AND ${table.brand} IN ('brand_1', 'other_supplier')
           AND ${table.diameter} IN ('95mm', '98mm')
         )
       )`,
@@ -97,7 +97,7 @@ export const cups = pgTable(
         OR
         (
           ${table.type} = 'plastic'
-          AND ${table.brand} IN ('china_supplier', 'other_supplier')
+          AND ${table.brand} IN ('brand_1', 'other_supplier')
           AND ${table.color} IN ('transparent', 'black')
         )
       )`,

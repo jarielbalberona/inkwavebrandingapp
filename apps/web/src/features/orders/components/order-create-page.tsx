@@ -49,6 +49,7 @@ import type { Cup } from "@/features/cups/api/cups-client"
 import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import type { Customer } from "@/features/customers/api/customers-client"
 import { useCustomersQuery } from "@/features/customers/hooks/use-customers"
+import { useInventoryBalancesQuery } from "@/features/inventory/hooks/use-inventory"
 import type { Lid } from "@/features/lids/api/lids-client"
 import { useLidsQuery } from "@/features/lids/hooks/use-lids"
 import type { NonStockItem } from "@/features/non-stock-items/api/non-stock-items-client"
@@ -315,6 +316,7 @@ function OrderCreateLineItemFields({
   activeCups,
   activeLids,
   activeNonStockItems,
+  availableQuantityByTrackedItemKey,
   cupsLoading,
   lidsLoading,
   nonStockItemsLoading,
@@ -325,6 +327,7 @@ function OrderCreateLineItemFields({
   activeCups: Cup[]
   activeLids: Lid[]
   activeNonStockItems: NonStockItem[]
+  availableQuantityByTrackedItemKey: Map<string, number>
   cupsLoading: boolean
   lidsLoading: boolean
   nonStockItemsLoading: boolean
@@ -356,6 +359,10 @@ function OrderCreateLineItemFields({
         ? activeLids
         : activeNonStockItems
   const selectedCatalogItem = availableItems.find((item) => item.id === itemId)
+  const selectedAvailableQuantity =
+    itemType === "cup" || itemType === "lid"
+      ? availableQuantityByTrackedItemKey.get(toTrackedItemKey(itemType, itemId))
+      : undefined
   const unitAmount =
     itemType === "custom_charge"
       ? customChargeUnitSellPrice ?? null
@@ -538,9 +545,15 @@ function OrderCreateLineItemFields({
                     {availableItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {itemType === "cup"
-                          ? formatCupOption(item as Cup)
+                          ? formatCupOption(
+                              item as Cup,
+                              availableQuantityByTrackedItemKey.get(toTrackedItemKey("cup", item.id)),
+                            )
                           : itemType === "lid"
-                            ? formatLidOption(item as Lid)
+                            ? formatLidOption(
+                                item as Lid,
+                                availableQuantityByTrackedItemKey.get(toTrackedItemKey("lid", item.id)),
+                              )
                             : formatNonStockItemOption(item as NonStockItem)}
                       </SelectItem>
                     ))}
@@ -580,10 +593,23 @@ function OrderCreateLineItemFields({
             )}
           />
 
-          {lineTotal !== null ? (
+          {lineTotal !== null || selectedAvailableQuantity !== undefined ? (
             <div className="md:col-span-4">
               <p className="text-muted-foreground text-sm">
-                Line total: <span className="font-medium text-foreground">{formatCurrency(lineTotal)}</span>
+                {lineTotal !== null ? (
+                  <>
+                    Line total:{" "}
+                    <span className="font-medium text-foreground">{formatCurrency(lineTotal)}</span>
+                  </>
+                ) : null}
+                {selectedAvailableQuantity !== undefined ? (
+                  <span className={lineTotal !== null ? "ml-3" : undefined}>
+                    Available stock:{" "}
+                    <span className={selectedAvailableQuantity < quantity ? "font-medium text-destructive" : "font-medium text-foreground"}>
+                      {selectedAvailableQuantity.toLocaleString()}
+                    </span>
+                  </span>
+                ) : null}
               </p>
             </div>
           ) : null}
@@ -600,6 +626,7 @@ export function OrderCreatePage() {
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
+  const inventoryBalancesQuery = useInventoryBalancesQuery()
   const createOrderMutation = useCreateOrderMutation()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const canManageCustomCharges = hasPermission(
@@ -618,6 +645,20 @@ export function OrderCreatePage() {
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
     [nonStockItemsQuery.data],
   )
+  const availableQuantityByTrackedItemKey = useMemo(() => {
+    const quantities = new Map<string, number>()
+
+    for (const balance of inventoryBalancesQuery.data ?? []) {
+      if (balance.item_type === "cup") {
+        quantities.set(toTrackedItemKey("cup", balance.cup.id), balance.available)
+        continue
+      }
+
+      quantities.set(toTrackedItemKey("lid", balance.lid.id), balance.available)
+    }
+
+    return quantities
+  }, [inventoryBalancesQuery.data])
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -650,6 +691,12 @@ export function OrderCreatePage() {
     control: form.control,
     name: "line_items",
   })
+  const systemNotes = buildOrderCreationSystemNotes(
+    form.watch("line_items"),
+    activeCups,
+    activeLids,
+    availableQuantityByTrackedItemKey,
+  )
 
   function handleDragEnd(result: DropResult) {
     const { source, destination } = result
@@ -847,6 +894,7 @@ export function OrderCreatePage() {
                                 activeCups={activeCups}
                                 activeLids={activeLids}
                                 activeNonStockItems={activeNonStockItems}
+                                availableQuantityByTrackedItemKey={availableQuantityByTrackedItemKey}
                                 cupsLoading={cupsQuery.isLoading}
                                 lidsLoading={lidsQuery.isLoading}
                                 nonStockItemsLoading={nonStockItemsQuery.isLoading}
@@ -896,9 +944,32 @@ export function OrderCreatePage() {
               )}
             />
 
+            {systemNotes.length > 0 ? (
+              <Alert>
+                <AlertDescription>
+                  <div className="grid gap-2">
+                    <p>
+                      System note: this order will reserve more stock than is currently available.
+                      Creation is allowed so purchasing can catch up with committed orders.
+                    </p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {systemNotes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
             <Button
               type="submit"
-              disabled={createOrderMutation.isPending || cupsQuery.isLoading || lidsQuery.isLoading}
+              disabled={
+                createOrderMutation.isPending ||
+                cupsQuery.isLoading ||
+                lidsQuery.isLoading ||
+                inventoryBalancesQuery.isLoading
+              }
             >
               {createOrderMutation.isPending ? "Creating order..." : "Create pending order"}
             </Button>
@@ -909,15 +980,77 @@ export function OrderCreatePage() {
   )
 }
 
-function formatCupOption(cup: Cup): string {
-  return `${cup.sku} · ${cup.type} · ${cup.brand} · ${cup.size} · ${cup.diameter}`
+function toTrackedItemKey(itemType: "cup" | "lid", itemId: string | undefined): string {
+  return `${itemType}:${itemId ?? ""}`
 }
 
-function formatLidOption(lid: Lid): string {
+function formatAvailableQuantity(availableQuantity: number | undefined): string {
+  return availableQuantity === undefined
+    ? "Available: not loaded"
+    : `Available: ${availableQuantity.toLocaleString()}`
+}
+
+function formatCupOption(cup: Cup, availableQuantity?: number): string {
+  return `${cup.sku} · ${cup.type} · ${cup.brand} · ${cup.size} · ${cup.diameter} · ${formatAvailableQuantity(availableQuantity)}`
+}
+
+function formatLidOption(lid: Lid, availableQuantity?: number): string {
   const skuPart = lid.sku.trim() ? `${lid.sku.trim()} · ` : ""
-  return `${skuPart}${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color}`
+  return `${skuPart}${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color} · ${formatAvailableQuantity(availableQuantity)}`
 }
 
 function formatNonStockItemOption(item: NonStockItem): string {
   return item.description?.trim() ? `${item.name} · ${item.description}` : item.name
+}
+
+function buildOrderCreationSystemNotes(
+  lineItems: OrderCreateValues["line_items"],
+  activeCups: Cup[],
+  activeLids: Lid[],
+  availableQuantityByTrackedItemKey: Map<string, number>,
+): string[] {
+  return lineItems.flatMap((item, index) => {
+    if (item.item_type !== "cup" && item.item_type !== "lid") {
+      return []
+    }
+
+    if (!item.item_id || !Number.isFinite(item.quantity)) {
+      return []
+    }
+
+    const availableQuantity = availableQuantityByTrackedItemKey.get(
+      toTrackedItemKey(item.item_type, item.item_id),
+    )
+
+    if (availableQuantity === undefined || availableQuantity >= item.quantity) {
+      return []
+    }
+
+    const label =
+      item.item_type === "cup"
+        ? formatCupShortLabel(activeCups.find((cup) => cup.id === item.item_id))
+        : formatLidShortLabel(activeLids.find((lid) => lid.id === item.item_id))
+
+    const shortage = item.quantity - availableQuantity
+
+    return [
+      `Line item ${index + 1}: ${label} has ${availableQuantity.toLocaleString()} available, quantity is ${item.quantity.toLocaleString()}, shortage is ${shortage.toLocaleString()}.`,
+    ]
+  })
+}
+
+function formatCupShortLabel(cup: Cup | undefined): string {
+  return cup ? `cup ${cup.sku}` : "selected cup"
+}
+
+function formatLidShortLabel(lid: Lid | undefined): string {
+  if (!lid) {
+    return "selected lid"
+  }
+
+  if (lid.sku.trim()) {
+    return `lid ${lid.sku.trim()}`
+  }
+
+  return `lid ${lid.brand} ${lid.diameter} ${lid.shape} ${lid.color}`
 }

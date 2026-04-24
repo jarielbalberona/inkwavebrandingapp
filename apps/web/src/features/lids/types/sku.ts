@@ -1,7 +1,7 @@
 const lidBrandCodes = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
-  china_supplier: "CHNSPLR",
+  brand_1: "BRND1",
   other_supplier: "OTHSPLR",
 } as const
 

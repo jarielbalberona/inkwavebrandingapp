@@ -142,6 +142,91 @@ describe("inventory, order, and invoice integration", () => {
     ])
   })
 
+  it("allows order creation when tracked items have no available stock and offsets the negative available balance on intake", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup()
+    const lid = await seedLid()
+    const nonStockItem = await seedNonStockItem()
+    const db = await getIntegrationDb()
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        notes: "Backordered mixed item test",
+        line_items: [
+          { item_type: "cup", cup_id: cup.id, quantity: 50 },
+          { item_type: "lid", lid_id: lid.id, quantity: 50 },
+          { item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 },
+          {
+            item_type: "custom_charge",
+            description_snapshot: "Rush fee",
+            quantity: 1,
+            unit_sell_price: "100.00",
+          },
+        ],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+    expect(createOrderResponse.body.order.status).toBe("pending")
+
+    expect(await getCupBalance(api, adminCookie, cup.id)).toMatchObject({
+      item_type: "cup",
+      on_hand: 0,
+      reserved: 50,
+      available: -50,
+    })
+    expect(await getLidBalance(api, adminCookie, lid.id)).toMatchObject({
+      item_type: "lid",
+      on_hand: 0,
+      reserved: 50,
+      available: -50,
+    })
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 50,
+    })
+    await stockIntake(api, adminCookie, {
+      itemType: "lid",
+      lidId: lid.id,
+      quantity: 50,
+    })
+
+    expect(await getCupBalance(api, adminCookie, cup.id)).toMatchObject({
+      item_type: "cup",
+      on_hand: 50,
+      reserved: 50,
+      available: 0,
+    })
+    expect(await getLidBalance(api, adminCookie, lid.id)).toMatchObject({
+      item_type: "lid",
+      on_hand: 50,
+      reserved: 50,
+      available: 0,
+    })
+
+    const movementsForOrder = await db.query.inventoryMovements.findMany({
+      where: eq(schema.inventoryMovements.orderId, createOrderResponse.body.order.id),
+      orderBy: (inventoryMovements, { asc }) => [asc(inventoryMovements.createdAt)],
+    })
+
+    expect(
+      movementsForOrder.map((movement) => ({
+        itemType: movement.itemType,
+        movementType: movement.movementType,
+        quantity: movement.quantity,
+      })),
+    ).toEqual([
+      { itemType: "cup", movementType: "reserve", quantity: 50 },
+      { itemType: "lid", movementType: "reserve", quantity: 50 },
+    ])
+  })
+
   it("consumes cup stock on printed progress and releases the remainder on cancellation", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()

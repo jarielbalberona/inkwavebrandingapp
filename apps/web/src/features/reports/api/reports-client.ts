@@ -1,6 +1,8 @@
 import { z } from "zod"
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
+import { getApiBaseUrl } from "@/lib/api-base-url"
+
+const apiBaseUrl = getApiBaseUrl()
 
 const reportInventoryItemSchema = z.object({
   id: z.string().uuid(),

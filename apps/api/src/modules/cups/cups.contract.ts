@@ -4,7 +4,7 @@ export const cupTypes = ["paper", "plastic"] as const
 export const cupBrands = [
   "dabba",
   "grecoopack",
-  "china_supplier",
+  "brand_1",
   "other_supplier",
 ] as const
 export const cupDiameters = ["80mm", "90mm", "95mm", "98mm"] as const
@@ -86,7 +86,7 @@ export function addCupContractIssues(input: CupContractShape, context: z.Refinem
           ? "Paper cups must use 80mm or 90mm."
           : input.brand === "dabba" || input.brand === "grecoopack"
             ? "Dabba and Grecoopack plastic cups must use 95mm."
-            : "China supplier and other supplier plastic cups must use 95mm or 98mm.",
+            : "Brand 1 and other supplier plastic cups must use 95mm or 98mm.",
     })
   }
 
@@ -110,7 +110,7 @@ export function addCupContractIssues(input: CupContractShape, context: z.Refinem
           ? "Paper cups must use white, black, or kraft."
           : input.brand === "dabba" || input.brand === "grecoopack"
             ? "Dabba and Grecoopack plastic cups must be transparent."
-            : "China supplier and other supplier plastic cups must be transparent or black.",
+            : "Brand 1 and other supplier plastic cups must be transparent or black.",
     })
   }
 }

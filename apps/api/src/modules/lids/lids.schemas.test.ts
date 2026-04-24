@@ -29,8 +29,8 @@ test("createLidRequestSchema accepts a valid plastic lid contract", () => {
   })
 })
 
-test("createLidRequestSchema accepts black plastic lids for China supplier and other supplier", () => {
-  for (const brand of ["china_supplier", "other_supplier"] as const) {
+test("createLidRequestSchema accepts black plastic lids for Brand 1 and other supplier", () => {
+  for (const brand of ["brand_1", "other_supplier"] as const) {
     const result = createLidRequestSchema.parse({
       type: "plastic",
       brand,

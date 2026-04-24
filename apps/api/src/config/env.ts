@@ -89,6 +89,7 @@ export const apiEnvSchema = z.object({
   /** `lax` (default in dev) or `none`+Secure for credentialed cross-origin (typical production SPA on another host). */
   AUTH_SESSION_SAME_SITE: z.enum(["lax", "strict", "none"]).optional(),
   AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
+  /** Comma-separated browser origins for credentialed CORS (first entry is used for email dashboard links). */
   WEB_ORIGIN: optionalNonEmptyString,
   SENTRY_DSN: optionalNonEmptyString,
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
@@ -113,6 +114,17 @@ export type ParsedApiEnv = z.output<typeof apiEnvSchema>
 export type DatabaseSslMode = ParsedApiEnv["DATABASE_SSL_MODE"]
 
 export type AuthSessionSameSite = "Lax" | "Strict" | "None"
+
+export function parseWebOrigins(raw: string | undefined): string[] {
+  if (!raw) {
+    return []
+  }
+
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+}
 
 function mapAuthSessionSameSite(
   raw: ParsedApiEnv["AUTH_SESSION_SAME_SITE"],
@@ -143,7 +155,10 @@ export interface ApiEnv {
   authSessionSecret?: string
   authSessionSameSite: AuthSessionSameSite
   authSessionTtlSeconds: number
+  /** First `WEB_ORIGIN` entry; used for absolute links (e.g. digest emails). */
   webOrigin?: string
+  /** Parsed `WEB_ORIGIN` list (comma-separated); CORS allows any of these. */
+  webOrigins: string[]
   sentryDsn?: string
   sentryTracesSampleRate: number
   openaiApiKey?: string
@@ -190,6 +205,8 @@ export function parseApiEnv(input: unknown): ApiEnv {
     throw new Error(`Invalid API environment: ${details}`)
   }
 
+  const webOrigins = parseWebOrigins(result.data.WEB_ORIGIN)
+
   const env = {
     nodeEnv: result.data.NODE_ENV,
     port: result.data.PORT,
@@ -206,7 +223,8 @@ export function parseApiEnv(input: unknown): ApiEnv {
       result.data.NODE_ENV,
     ),
     authSessionTtlSeconds: result.data.AUTH_SESSION_TTL_SECONDS,
-    webOrigin: result.data.WEB_ORIGIN,
+    webOrigins,
+    webOrigin: webOrigins[0],
     sentryDsn: result.data.SENTRY_DSN,
     sentryTracesSampleRate: result.data.SENTRY_TRACES_SAMPLE_RATE,
     openaiApiKey: result.data.OPENAI_API_KEY,

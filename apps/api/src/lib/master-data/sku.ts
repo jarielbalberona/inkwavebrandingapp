@@ -6,7 +6,7 @@ export const SKU_PATTERN = /^[A-Z0-9][A-Z0-9_-]{0,79}$/
 const cupBrandCodes: Record<CupContractShape["brand"], string> = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
-  china_supplier: "CHNSPLR",
+  brand_1: "BRND1",
   other_supplier: "OTHSPLR",
 }
 
@@ -20,7 +20,7 @@ const cupColorCodes: Record<CupContractShape["color"], string> = {
 const lidBrandCodes: Record<LidContractShape["brand"], string> = {
   dabba: "DBBA",
   grecoopack: "GRCPCK",
-  china_supplier: "CHNSPLR",
+  brand_1: "BRND1",
   other_supplier: "OTHSPLR",
 }
 

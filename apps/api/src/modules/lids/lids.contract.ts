@@ -4,7 +4,7 @@ export const lidTypes = ["paper", "plastic"] as const
 export const lidBrands = [
   "dabba",
   "grecoopack",
-  "china_supplier",
+  "brand_1",
   "other_supplier",
 ] as const
 export const lidDiameters = ["80mm", "90mm", "95mm", "98mm"] as const
@@ -97,7 +97,7 @@ export function addLidContractIssues(input: LidContractShape, context: z.Refinem
           ? "Paper lids must use black or white."
           : input.brand === "dabba" || input.brand === "grecoopack"
             ? "Dabba and Grecoopack plastic lids must be transparent."
-            : "China supplier and other supplier plastic lids must be transparent or black.",
+            : "Brand 1 and other supplier plastic lids must be transparent or black.",
     })
   }
 }

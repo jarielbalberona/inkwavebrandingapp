@@ -91,7 +91,7 @@ export async function handleApiRequest(
 function applyCors(request: IncomingMessage, response: ServerResponse, env: ApiEnv) {
   const origin = request.headers.origin
 
-  if (!origin || !env.webOrigin || origin !== env.webOrigin) {
+  if (!origin || env.webOrigins.length === 0 || !env.webOrigins.includes(origin)) {
     return
   }
 

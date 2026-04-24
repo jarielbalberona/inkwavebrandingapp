@@ -14,7 +14,7 @@ import { InventoryRepository } from "../inventory/inventory.repository.js"
 import {
   InventoryBalanceItemNotFoundError,
   InventoryItemInactiveError,
-  InventoryReservationInsufficientStockError,
+  InventoryItemNotFoundError,
   InventoryService,
 } from "../inventory/inventory.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
@@ -191,8 +191,22 @@ async function withAuthenticatedUser(
 }
 
 function handleOrdersError(response: ServerResponse, error: unknown) {
-  if (error instanceof ZodError || error instanceof SyntaxError) {
-    sendJson(response, 400, { error: "Invalid order request" })
+  if (error instanceof ZodError) {
+    sendJson(response, 400, {
+      error: "Invalid order request",
+      issues: error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      })),
+    })
+    return
+  }
+
+  if (error instanceof SyntaxError) {
+    sendJson(response, 400, {
+      error: "Invalid order request",
+      message: error.message,
+    })
     return
   }
 
@@ -226,27 +240,10 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof InvoicePaymentLockError ||
     error instanceof InvoiceVoidLockError ||
     error instanceof InventoryBalanceItemNotFoundError ||
-    error instanceof InventoryItemInactiveError ||
-    error instanceof InventoryReservationInsufficientStockError
+    error instanceof InventoryItemNotFoundError ||
+    error instanceof InventoryItemInactiveError
   ) {
     if (error instanceof OrderCreateValidationError) {
-      sendJson(response, error.statusCode, {
-        error: error.message,
-        line_items: error.details.map((detail) => ({
-          line_item_index: detail.lineItemIndex,
-          item_type: detail.itemType,
-          item_id: detail.itemId,
-          field: detail.field,
-          item_label: detail.itemLabel,
-          requested_quantity: detail.requestedQuantity,
-          available_quantity: detail.availableQuantity,
-          message: detail.message,
-        })),
-      })
-      return
-    }
-
-    if (error instanceof InventoryReservationInsufficientStockError) {
       sendJson(response, error.statusCode, {
         error: error.message,
         line_items: error.details.map((detail) => ({

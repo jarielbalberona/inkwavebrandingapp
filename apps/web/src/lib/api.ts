@@ -6,7 +6,9 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios"
 
-const baseURL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
+import { getApiBaseUrl } from "@/lib/api-base-url"
+
+const baseURL = getApiBaseUrl()
 
 interface ApiRequestMeta {
   skipErrorToast?: boolean
