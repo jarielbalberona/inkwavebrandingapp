@@ -135,7 +135,7 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
         {invoice.items.map((item) => (
           <View key={item.id} style={[styles.row, styles.tableRow]}>
             <Text style={styles.colDescription}>{item.description_snapshot}</Text>
-            <Text style={styles.colType}>{item.item_type}</Text>
+            <Text style={styles.colType}>{formatInvoiceItemType(item.item_type)}</Text>
             <Text style={styles.colQty}>{item.quantity.toLocaleString()}</Text>
             <Text style={styles.colUnit}>{formatMoney(item.unit_price)}</Text>
             <Text style={styles.colLine}>{formatMoney(item.line_total)}</Text>
@@ -152,4 +152,17 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
       </Page>
     </Document>
   )
+}
+
+function formatInvoiceItemType(itemType: InvoicePdfData["items"][number]["item_type"]) {
+  switch (itemType) {
+    case "cup":
+      return "Cup"
+    case "lid":
+      return "Lid"
+    case "non_stock_item":
+      return "General"
+    case "custom_charge":
+      return "Charge"
+  }
 }
