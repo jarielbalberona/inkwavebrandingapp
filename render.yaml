@@ -18,7 +18,7 @@ services:
     name: ink-wave-branding-api
     runtime: node
     rootDir: .
-    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/api build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/pdfs build && pnpm --filter @workspace/api build
     startCommand: pnpm --filter @workspace/api start
     healthCheckPath: /health
     envVars:
