@@ -42,6 +42,7 @@ import {
 } from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
 
+import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import type { Cup } from "@/features/cups/api/cups-client"
 import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import type { Customer } from "@/features/customers/api/customers-client"
@@ -58,12 +59,45 @@ const orderCreateSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
   line_items: z
     .array(
-      z.object({
-        item_type: z.enum(["cup", "lid", "non_stock_item"]),
-        item_id: z.string().uuid({ message: "Select a source item." }),
-        quantity: z.number().int().positive("Quantity must be a positive whole number."),
-        notes: z.string().trim().max(500).optional(),
-      }),
+      z
+        .object({
+          item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge"]),
+          item_id: z.string().uuid().optional(),
+          description_snapshot: z.string().trim().max(500).optional(),
+          quantity: z.number().int().positive("Quantity must be a positive whole number."),
+          unit_sell_price: z.number().nonnegative().optional(),
+          unit_cost_price: z.number().nonnegative().optional(),
+          notes: z.string().trim().max(500).optional(),
+        })
+        .superRefine((value, context) => {
+          if (value.item_type === "custom_charge") {
+            if (!value.description_snapshot?.trim()) {
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["description_snapshot"],
+                message: "Enter a custom charge description.",
+              })
+            }
+
+            if (value.unit_sell_price === undefined) {
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["unit_sell_price"],
+                message: "Enter a unit sell price.",
+              })
+            }
+
+            return
+          }
+
+          if (!value.item_id) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["item_id"],
+              message: "Select a source item.",
+            })
+          }
+        }),
     )
     .min(1, "Add at least one line item."),
 })
@@ -72,8 +106,11 @@ type OrderCreateValues = z.infer<typeof orderCreateSchema>
 
 const emptyLineItem: OrderCreateValues["line_items"][number] = {
   item_type: "cup",
-  item_id: "",
+  item_id: undefined,
+  description_snapshot: "",
   quantity: 1,
+  unit_sell_price: undefined,
+  unit_cost_price: undefined,
   notes: "",
 }
 
@@ -256,6 +293,7 @@ function OrderCreateLineItemFields({
   cupsLoading,
   lidsLoading,
   nonStockItemsLoading,
+  isAdmin,
 }: {
   index: number
   fieldId: string
@@ -265,6 +303,7 @@ function OrderCreateLineItemFields({
   cupsLoading: boolean
   lidsLoading: boolean
   nonStockItemsLoading: boolean
+  isAdmin: boolean
 }) {
   const { control, setValue, getValues } = useFormContext<OrderCreateValues>()
   const itemType =
@@ -280,14 +319,18 @@ function OrderCreateLineItemFields({
         : activeNonStockItems
 
   useEffect(() => {
+    if (itemType === "custom_charge") {
+      return
+    }
+
     const currentId = getValues(`line_items.${index}.item_id`)
     if (currentId && !availableItems.some((item) => item.id === currentId)) {
-      setValue(`line_items.${index}.item_id`, "", { shouldValidate: true })
+      setValue(`line_items.${index}.item_id`, undefined, { shouldValidate: true })
     }
-  }, [availableItems, getValues, index, setValue])
+  }, [availableItems, getValues, index, itemType, setValue])
 
   return (
-    <div className="grid w-full min-w-0 gap-3 md:grid-cols-[15%_35%_10%_40%]">
+    <div className="grid w-full min-w-0 gap-3">
       <FormField
         control={control}
         name={`line_items.${index}.item_type`}
@@ -298,9 +341,10 @@ function OrderCreateLineItemFields({
               value={itemTypeField.value}
               onValueChange={(value) => {
                 itemTypeField.onChange(value)
-                setValue(`line_items.${index}.item_id`, "", {
-                  shouldValidate: true,
-                })
+                setValue(`line_items.${index}.item_id`, undefined, { shouldValidate: true })
+                setValue(`line_items.${index}.description_snapshot`, "", { shouldValidate: false })
+                setValue(`line_items.${index}.unit_sell_price`, undefined, { shouldValidate: false })
+                setValue(`line_items.${index}.unit_cost_price`, undefined, { shouldValidate: false })
               }}
             >
               <FormControl>
@@ -312,107 +356,192 @@ function OrderCreateLineItemFields({
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
+                <SelectItem value="custom_charge" disabled={!isAdmin}>
+                  Custom Charge
+                </SelectItem>
               </SelectContent>
             </Select>
-            
           </FormItem>
         )}
       />
 
-      <FormField
-        control={control}
-        name={`line_items.${index}.item_id`}
-        render={({ field: itemIdField }) => (
-          <FormItem>
-            <FormLabel>
-              {itemType === "cup"
-                ? "Cup SKU"
-                : itemType === "lid"
-                  ? "Lid"
-                  : "General Item"}
-            </FormLabel>
-            <Select
-              key={`${fieldId}-${itemType}`}
-              value={resolveSelectableItemId(itemIdField.value, availableItems)}
-              onValueChange={itemIdField.onChange}
-            >
-              <FormControl>
-                <SelectTrigger className="w-full rounded-none">
-                  <SelectValue
-                    placeholder={
-                      itemType === "cup"
-                        ? cupsLoading
-                          ? "Loading cups..."
-                          : "Select cup"
-                        : itemType === "lid"
-                          ? lidsLoading
-                            ? "Loading lids..."
-                            : "Select lid"
-                          : nonStockItemsLoading
-                            ? "Loading general items..."
-                            : "Select general item"
-                    }
+      {itemType === "custom_charge" ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <FormField
+            control={control}
+            name={`line_items.${index}.description_snapshot`}
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value ?? ""} placeholder="Rush fee, correction fee, labor charge" />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name={`line_items.${index}.quantity`}
+            render={({ field: quantityField }) => (
+              <FormItem>
+                <FormLabel>Quantity</FormLabel>
+                <FormControl>
+                  <Input.Number
+                    min={1}
+                    value={quantityField.value}
+                    onChange={(value) => quantityField.onChange(value ?? 0)}
                   />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent className="rounded-none">
-                {availableItems.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {itemType === "cup"
-                      ? formatCupOption(item as Cup)
-                      : itemType === "lid"
-                        ? formatLidOption(item as Lid)
-                        : formatNonStockItemOption(item as NonStockItem)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-          </FormItem>
-        )}
-      />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-      <FormField
-        control={control}
-        name={`line_items.${index}.quantity`}
-        render={({ field: quantityField }) => (
-          <FormItem>
-            <FormLabel>Quantity</FormLabel>
-            <FormControl>
-              <Input.Number
-                min={1}
-                value={quantityField.value}
-                onChange={(value) => quantityField.onChange(value ?? 0)}
-              />
-            </FormControl>
-            
-          </FormItem>
-        )}
-      />
+          <FormField
+            control={control}
+            name={`line_items.${index}.unit_sell_price`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Unit sell price</FormLabel>
+                <FormControl>
+                  <Input.Currency
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="0.00"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-      <FormField
-        control={control}
-        name={`line_items.${index}.notes`}
-        render={({ field: notesField }) => (
-          <FormItem>
-            <FormLabel>Line note</FormLabel>
-            <FormControl>
-              <Input {...notesField} value={notesField.value ?? ""} />
-            </FormControl>
-          </FormItem>
-        )}
-      />
+          <FormField
+            control={control}
+            name={`line_items.${index}.unit_cost_price`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Unit cost price</FormLabel>
+                <FormControl>
+                  <Input.Currency
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="0.00"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name={`line_items.${index}.notes`}
+            render={({ field: notesField }) => (
+              <FormItem>
+                <FormLabel>Line note</FormLabel>
+                <FormControl>
+                  <Input {...notesField} value={notesField.value ?? ""} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-[15%_35%_10%_40%]">
+          <FormField
+            control={control}
+            name={`line_items.${index}.item_id`}
+            render={({ field: itemIdField }) => (
+              <FormItem>
+                <FormLabel>
+                  {itemType === "cup"
+                    ? "Cup SKU"
+                    : itemType === "lid"
+                      ? "Lid"
+                      : "General Item"}
+                </FormLabel>
+                <Select
+                  key={`${fieldId}-${itemType}`}
+                  value={resolveSelectableItemId(itemIdField.value, availableItems)}
+                  onValueChange={itemIdField.onChange}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full rounded-none">
+                      <SelectValue
+                        placeholder={
+                          itemType === "cup"
+                            ? cupsLoading
+                              ? "Loading cups..."
+                              : "Select cup"
+                            : itemType === "lid"
+                              ? lidsLoading
+                                ? "Loading lids..."
+                                : "Select lid"
+                              : nonStockItemsLoading
+                                ? "Loading general items..."
+                                : "Select general item"
+                        }
+                      />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent className="rounded-none">
+                    {availableItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {itemType === "cup"
+                          ? formatCupOption(item as Cup)
+                          : itemType === "lid"
+                            ? formatLidOption(item as Lid)
+                            : formatNonStockItemOption(item as NonStockItem)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name={`line_items.${index}.quantity`}
+            render={({ field: quantityField }) => (
+              <FormItem>
+                <FormLabel>Quantity</FormLabel>
+                <FormControl>
+                  <Input.Number
+                    min={1}
+                    value={quantityField.value}
+                    onChange={(value) => quantityField.onChange(value ?? 0)}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name={`line_items.${index}.notes`}
+            render={({ field: notesField }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Line note</FormLabel>
+                <FormControl>
+                  <Input {...notesField} value={notesField.value ?? ""} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
+      )}
     </div>
   )
 }
 
 export function OrderCreatePage() {
   const navigate = useNavigate()
+  const currentUser = useCurrentUser()
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
   const createOrderMutation = useCreateOrderMutation()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const isAdmin = currentUser.data?.role === "admin"
   const activeCups = useMemo(
     () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
     [cupsQuery.data],
@@ -454,7 +583,9 @@ export function OrderCreatePage() {
     setSubmitError(null)
     form.clearErrors()
 
-    const uniqueKeys = values.line_items.map((item) => `${item.item_type}:${item.item_id}`)
+    const uniqueKeys = values.line_items
+      .filter((item) => item.item_type !== "custom_charge" && item.item_id)
+      .map((item) => `${item.item_type}:${item.item_id}`)
 
     if (new Set(uniqueKeys).size !== uniqueKeys.length) {
       const duplicateIndexesByKey = new Map<string, number[]>()
@@ -488,25 +619,35 @@ export function OrderCreatePage() {
         notes: values.notes?.trim() || undefined,
         line_items: values.line_items.map((item) =>
           item.item_type === "cup"
-            ? {
-                item_type: "cup",
-                cup_id: item.item_id,
-                quantity: item.quantity,
-                notes: item.notes?.trim() || undefined,
-              }
-            : item.item_type === "lid"
-              ? {
-                item_type: "lid",
-                lid_id: item.item_id,
-                quantity: item.quantity,
-                notes: item.notes?.trim() || undefined,
-              }
-              : {
-                item_type: "non_stock_item",
-                non_stock_item_id: item.item_id,
-                quantity: item.quantity,
-                notes: item.notes?.trim() || undefined,
-              },
+                ? {
+                    item_type: "cup",
+                    cup_id: item.item_id!,
+                    quantity: item.quantity,
+                    notes: item.notes?.trim() || undefined,
+                  }
+                : item.item_type === "lid"
+                  ? {
+                    item_type: "lid",
+                    lid_id: item.item_id!,
+                    quantity: item.quantity,
+                    notes: item.notes?.trim() || undefined,
+                  }
+              : item.item_type === "non_stock_item"
+                ? {
+                  item_type: "non_stock_item",
+                  non_stock_item_id: item.item_id!,
+                  quantity: item.quantity,
+                  notes: item.notes?.trim() || undefined,
+                }
+                : {
+                  item_type: "custom_charge",
+                  description_snapshot: item.description_snapshot!.trim(),
+                  quantity: item.quantity,
+                  unit_sell_price: item.unit_sell_price!.toFixed(2),
+                  unit_cost_price:
+                    item.unit_cost_price === undefined ? undefined : item.unit_cost_price.toFixed(2),
+                  notes: item.notes?.trim() || undefined,
+                },
         ),
       })
 
@@ -627,6 +768,7 @@ export function OrderCreatePage() {
                                 cupsLoading={cupsQuery.isLoading}
                                 lidsLoading={lidsQuery.isLoading}
                                 nonStockItemsLoading={nonStockItemsQuery.isLoading}
+                                isAdmin={isAdmin}
                               />
                             </div>
                           )}
