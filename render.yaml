@@ -21,10 +21,19 @@ services:
     buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @workspace/pdfs build && pnpm --filter @workspace/api build
     startCommand: pnpm --filter @workspace/api start
     healthCheckPath: /health
+    # DB connection uses split vars (passwords with @/# are safe). Set these in the dashboard; do not commit values.
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
+      - key: DATABASE_HOST
+        sync: false
+      - key: DATABASE_PORT
+        value: "5432"
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_NAME
         sync: false
       - key: DATABASE_SSL_MODE
         value: require
@@ -43,17 +52,17 @@ services:
       - key: STORAGE_PROVIDER
         value: r2
       - key: R2_ACCOUNT_ID
-        sync: true
+        sync: false
       - key: R2_ACCESS_KEY_ID
-        sync: true
+        sync: false
       - key: R2_SECRET_ACCESS_KEY
-        sync: true
+        sync: false
       - key: R2_BUCKET_NAME
-        sync: true
+        sync: false
       - key: R2_ENDPOINT
-        sync: true
+        sync: false
       - key: R2_PUBLIC_URL
-        sync: true
+        sync: false
       - key: R2_USE_PUBLIC_CDN
         value: "true"
       - key: UPLOAD_MAX_FILE_BYTES
