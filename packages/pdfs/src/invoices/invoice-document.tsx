@@ -17,44 +17,41 @@ import {
   sharedStyles,
 } from "../shared/index.js"
 import type { InvoicePdfData } from "../shared/types/index.js"
-import { toInkWaveInvoiceViewModel } from "./invoice-view-model.js"
 
 export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
-  const viewModel = toInkWaveInvoiceViewModel(invoice)
-
   return (
     <Document>
       <PdfPageShell
         header={
           <PdfHeader
-            brand={<Text style={sharedStyles.hero}>{viewModel.brandName}</Text>}
-            title={viewModel.documentTitle}
-            reference={viewModel.invoiceNumber}
-            subtitle={viewModel.orderReference}
-            status={<PdfStatusBadge label={viewModel.status.label} tone={viewModel.status.tone} />}
+            brand={<Text style={sharedStyles.hero}>{invoice.brand_name}</Text>}
+            title={invoice.document_title}
+            reference={invoice.invoice_number}
+            subtitle={invoice.order_reference}
+            status={<PdfStatusBadge label={invoice.status.label} tone={invoice.status.tone} />}
           />
         }
-        footerLeft={`Generated ${viewModel.generatedAt}`}
-        footerCenter={viewModel.supportLines[0]}
+        footerLeft={`Generated ${invoice.generated_at}`}
+        footerCenter={invoice.support_lines[0]}
       >
         <View style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <Text style={sharedStyles.invoiceRef}>{viewModel.invoiceNumber}</Text>
+          <Text style={sharedStyles.invoiceRef}>{invoice.invoice_number}</Text>
           <Text style={sharedStyles.muted}>Print order invoice</Text>
         </View>
 
         <PdfSection>
           <PdfPartiesBlock
-            left={viewModel.from}
-            right={viewModel.to}
+            left={invoice.from}
+            right={invoice.to}
           />
         </PdfSection>
 
         <PdfSection>
           <PdfMetaGrid
             leftTitle="Invoice details"
-            leftItems={viewModel.leftMeta}
+            leftItems={invoice.left_meta}
             rightTitle="Order details"
-            rightItems={viewModel.rightMeta}
+            rightItems={invoice.right_meta}
           />
         </PdfSection>
 
@@ -88,7 +85,7 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
                 title: "Unit Price",
                 width: "17%",
                 align: "right",
-                render: (item) => formatMoney(item.unitPrice),
+                render: (item) => formatMoney(item.unit_price),
               },
               {
                 key: "total",
@@ -98,30 +95,30 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
                 render: (item) => formatMoney(item.total),
               },
             ]}
-            rows={viewModel.lineItems}
+            rows={invoice.line_items}
           />
 
           <PdfSummaryBlock
             rows={[
               {
                 label: "Subtotal",
-                value: formatMoney(viewModel.summary.subtotal),
+                value: formatMoney(invoice.subtotal),
               },
               {
                 label: "Discount",
-                value: formatMoney(viewModel.summary.discount),
+                value: formatMoney(invoice.discount),
               },
               {
                 label: "Total",
-                value: formatMoney(viewModel.summary.total),
+                value: formatMoney(invoice.total),
               },
               {
                 label: "Paid amount",
-                value: formatMoney(viewModel.summary.paidAmount),
+                value: formatMoney(invoice.paid_amount),
               },
               {
                 label: "Remaining balance",
-                value: formatMoney(viewModel.summary.remainingBalance),
+                value: formatMoney(invoice.remaining_balance),
                 emphasis: true,
               },
             ]}
@@ -130,7 +127,7 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
 
         <PdfSection title="Payment and support">
           <View style={sharedStyles.footerBlock}>
-            {viewModel.paymentInstructions.map((line) => (
+            {invoice.payment_instructions.map((line) => (
               <Text key={line} style={sharedStyles.body}>
                 {line}
               </Text>
@@ -138,14 +135,14 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
           </View>
 
           <View style={sharedStyles.footerBlock}>
-            {viewModel.supportLines.map((line) => (
+            {invoice.support_lines.map((line) => (
               <Text key={line} style={sharedStyles.muted}>
                 {line}
               </Text>
             ))}
           </View>
 
-          <Text style={sharedStyles.muted}>{viewModel.footerNote}</Text>
+          {invoice.footer_note ? <Text style={sharedStyles.muted}>{invoice.footer_note}</Text> : null}
         </PdfSection>
       </PdfPageShell>
     </Document>

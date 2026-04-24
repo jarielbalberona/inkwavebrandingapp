@@ -1,26 +1,45 @@
-export interface InvoicePdfItem {
-  id: string
-  item_type: "cup" | "lid" | "non_stock_item" | "custom_charge"
-  description_snapshot: string
-  quantity: number
-  unit_price: string
-  line_total: string
+export type InvoicePdfStatusTone = "warning" | "success" | "danger" | "neutral"
+
+export interface InvoicePdfParty {
+  label: string
+  name: string
+  lines: string[]
 }
 
-export interface InvoicePdfCustomer {
-  customer_code: string | null
-  business_name: string
-  contact_person: string | null
-  contact_number: string | null
-  email: string | null
-  address: string | null
+export interface InvoicePdfMetaItem {
+  label: string
+  value: string
+}
+
+export interface InvoicePdfLineItem {
+  item: string
+  specs: string
+  quantity: number
+  unit_price: string
+  total: string
 }
 
 export interface InvoicePdfData {
+  brand_name: string
+  document_title: string
   invoice_number: string
-  order_number_snapshot: string
+  order_reference: string
+  generated_at: string
+  status: {
+    label: string
+    tone: InvoicePdfStatusTone
+  }
+  from: InvoicePdfParty
+  to: InvoicePdfParty
+  left_meta: InvoicePdfMetaItem[]
+  right_meta: InvoicePdfMetaItem[]
+  line_items: InvoicePdfLineItem[]
   subtotal: string
-  created_at: string
-  customer: InvoicePdfCustomer
-  items: InvoicePdfItem[]
+  discount: string
+  total: string
+  paid_amount: string
+  remaining_balance: string
+  payment_instructions: string[]
+  support_lines: string[]
+  footer_note: string | null
 }

@@ -5,36 +5,65 @@ import { renderInvoicePdf } from "./render-invoice-pdf.js"
 
 test("renderInvoicePdf returns a PDF buffer for invoice data", async () => {
   const pdf = await renderInvoicePdf({
+    brand_name: "Ink Wave Branding App",
+    document_title: "Invoice",
     invoice_number: "INV-20260424-ABCDEFGH",
-    order_number_snapshot: "ORD-001",
-    subtotal: "2400.00",
-    created_at: "2026-04-24T00:00:00.000Z",
-    customer: {
-      customer_code: "CUST-001",
-      business_name: "Ink Wave Cafe",
-      contact_person: "Jane Doe",
-      contact_number: "09170000000",
-      email: "jane@example.com",
-      address: "Manila",
+    order_reference: "ORD-001",
+    generated_at: "Apr 24, 2026",
+    status: {
+      label: "Pending",
+      tone: "warning",
     },
-    items: [
+    from: {
+      label: "From",
+      name: "Ink Wave Branding App",
+      lines: ["Cup printing operations"],
+    },
+    to: {
+      label: "To",
+      name: "Ink Wave Cafe",
+      lines: ["Jane Doe", "09170000000", "jane@example.com", "Manila"],
+    },
+    left_meta: [
+      { label: "Invoice number", value: "INV-20260424-ABCDEFGH" },
+      { label: "Generated", value: "Apr 24, 2026" },
+      { label: "Invoice status", value: "Pending" },
+    ],
+    right_meta: [
+      { label: "Order reference", value: "ORD-001" },
+      { label: "Customer code", value: "CUST-001" },
+      { label: "Line items", value: "2" },
+    ],
+    line_items: [
       {
-        id: "item-1",
-        item_type: "cup",
-        description_snapshot: "12oz kraft paper cup",
+        item: "12oz kraft paper cup",
+        specs: "Cup item",
         quantity: 100,
         unit_price: "15.00",
-        line_total: "1500.00",
+        total: "1500.00",
       },
       {
-        id: "item-2",
-        item_type: "lid",
-        description_snapshot: "80mm coffee lid",
+        item: "80mm coffee lid",
+        specs: "Lid item",
         quantity: 180,
         unit_price: "5.00",
-        line_total: "900.00",
+        total: "900.00",
       },
     ],
+    subtotal: "2400.00",
+    discount: "0.00",
+    total: "2400.00",
+    paid_amount: "0.00",
+    remaining_balance: "2400.00",
+    payment_instructions: [
+      "Use the invoice number as the payment reference.",
+      "Coordinate payment confirmation with Ink Wave operations before production starts.",
+    ],
+    support_lines: [
+      "Ink Wave Branding App",
+      "Coordinate through the assigned order contact for invoice follow-up.",
+    ],
+    footer_note: "Thank you for your order.",
   })
 
   assert.ok(Buffer.isBuffer(pdf))
@@ -44,28 +73,55 @@ test("renderInvoicePdf returns a PDF buffer for invoice data", async () => {
 
 test("renderInvoicePdf supports custom_charge invoice lines", async () => {
   const pdf = await renderInvoicePdf({
+    brand_name: "Ink Wave Branding App",
+    document_title: "Invoice",
     invoice_number: "INV-20260424-CUSTOM01",
-    order_number_snapshot: "ORD-002",
-    subtotal: "500.00",
-    created_at: "2026-04-24T00:00:00.000Z",
-    customer: {
-      customer_code: "CUST-001",
-      business_name: "Ink Wave Cafe",
-      contact_person: "Jane Doe",
-      contact_number: "09170000000",
-      email: "jane@example.com",
-      address: "Manila",
+    order_reference: "ORD-002",
+    generated_at: "Apr 24, 2026",
+    status: {
+      label: "Paid",
+      tone: "success",
     },
-    items: [
+    from: {
+      label: "From",
+      name: "Ink Wave Branding App",
+      lines: ["Cup printing operations"],
+    },
+    to: {
+      label: "To",
+      name: "Ink Wave Cafe",
+      lines: ["Jane Doe", "09170000000", "jane@example.com", "Manila"],
+    },
+    left_meta: [
+      { label: "Invoice number", value: "INV-20260424-CUSTOM01" },
+      { label: "Generated", value: "Apr 24, 2026" },
+      { label: "Invoice status", value: "Paid" },
+    ],
+    right_meta: [
+      { label: "Order reference", value: "ORD-002" },
+      { label: "Customer code", value: "CUST-001" },
+      { label: "Line items", value: "1" },
+    ],
+    line_items: [
       {
-        id: "item-1",
-        item_type: "custom_charge",
-        description_snapshot: "Rush fee",
+        item: "Rush fee",
+        specs: "Custom charge",
         quantity: 1,
         unit_price: "500.00",
-        line_total: "500.00",
+        total: "500.00",
       },
     ],
+    subtotal: "500.00",
+    discount: "0.00",
+    total: "500.00",
+    paid_amount: "500.00",
+    remaining_balance: "0.00",
+    payment_instructions: ["Payment recorded for this invoice."],
+    support_lines: [
+      "Ink Wave Branding App",
+      "Coordinate through the assigned order contact for invoice follow-up.",
+    ],
+    footer_note: "Thank you for your order.",
   })
 
   assert.ok(Buffer.isBuffer(pdf))
