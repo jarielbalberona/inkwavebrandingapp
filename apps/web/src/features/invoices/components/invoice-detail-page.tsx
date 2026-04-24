@@ -364,7 +364,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                       </DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                    <div className="grid">
                       <Form {...paymentForm}>
                         <form className="grid gap-4" onSubmit={paymentForm.handleSubmit(handleRecordPayment)}>
                           <div className="grid gap-4 md:grid-cols-2">
@@ -440,8 +440,8 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                           </div>
                         </form>
                       </Form>
-
-                      <div className="grid gap-3 rounded-md border p-4 text-sm">
+                    </div>
+                    <div className="grid gap-3 rounded-md border p-4 text-sm">
                         <div className="grid gap-1">
                           <p className="font-medium">Invoice state</p>
                           <p className="text-muted-foreground">
@@ -474,7 +474,6 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                           </p>
                         ) : null}
                       </div>
-                    </div>
                   </DialogContent>
                 </Dialog>
               </div>

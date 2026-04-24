@@ -9,5 +9,6 @@ export function formatMoney(value: string) {
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
+    currencyDisplay: "code",
   }).format(numeric)
 }

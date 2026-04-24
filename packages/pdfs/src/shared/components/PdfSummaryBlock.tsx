@@ -34,6 +34,7 @@ export function PdfSummaryBlock({
                 color: invoiceTokens.colors.textPrimary,
                 fontFamily: invoiceTokens.fonts.bold,
                 fontSize: row.emphasis ? invoiceTokens.type.lg : invoiceTokens.type.md,
+                paddingRight: 4,
               }}
             >
               {row.value}
