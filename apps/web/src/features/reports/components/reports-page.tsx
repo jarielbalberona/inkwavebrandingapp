@@ -88,13 +88,14 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="grid gap-4">
-      <Card>
+    <div className="grid min-w-0 gap-4">
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Reports</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid min-w-0 gap-4">
           <Tabs
+            className="min-w-0"
             value={activeTab}
             onValueChange={(value) => {
               if (
@@ -108,7 +109,7 @@ export function ReportsPage() {
               }
             }}
           >
-            <div className="-mx-1 min-w-0 touch-pan-x overflow-x-auto px-1 pb-0.5 [scrollbar-gutter:stable]">
+            <div className="w-full max-w-full min-w-0 touch-pan-x overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-gutter:stable] [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
               <TabsList className="w-max min-w-0 max-w-none flex-nowrap justify-start">
                 <TabsTrigger className="shrink-0 flex-none" value="inventory-summary">
                   Summary
