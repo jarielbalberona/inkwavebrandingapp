@@ -1,8 +1,13 @@
 import type { ProductBundle, SellableProductPriceRule } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission, AuthorizationError } from "../auth/authorization.js"
+import {
+  findMatchingActiveRange,
+  findOverlappingRange,
+} from "./sellable-product-price-rules.ranges.js"
 import type {
   CreateSellableProductPriceRuleInput,
+  SellableProductPriceRuleDefaultQuery,
   SellableProductPriceRuleListQuery,
   UpdateSellableProductPriceRuleInput,
 } from "./sellable-product-price-rules.schemas.js"
@@ -17,6 +22,7 @@ interface SellableProductPriceRulesDataStore {
     productBundleId?: string
   }): Promise<SellableProductPriceRule[]>
   findById(id: string): Promise<SellableProductPriceRule | undefined>
+  listActiveByProductBundle(productBundleId: string): Promise<SellableProductPriceRule[]>
   create(input: CreateSellableProductPriceRuleInput): Promise<SellableProductPriceRule>
   update(
     id: string,
@@ -76,6 +82,28 @@ export class SellableProductPriceRulesService {
     return toSellableProductPriceRuleDto(priceRule)
   }
 
+  async resolveDefaultPriceRule(
+    query: SellableProductPriceRuleDefaultQuery,
+    user: SafeUser,
+  ): Promise<SellableProductPriceRuleDto | null> {
+    assertPermission(user, "sellable_product_price_rules.view")
+
+    const activeRules = await this.priceRulesRepository.listActiveByProductBundle(
+      query.product_bundle_id,
+    )
+
+    try {
+      const matchingRule = findMatchingActiveRange(query.quantity, activeRules)
+      return matchingRule ? toSellableProductPriceRuleDto(matchingRule) : null
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new SellableProductPriceRuleValidationError(error.message)
+      }
+
+      throw error
+    }
+  }
+
   async create(
     input: CreateSellableProductPriceRuleInput,
     user: SafeUser,
@@ -84,6 +112,7 @@ export class SellableProductPriceRulesService {
 
     try {
       await this.assertProductBundleCanReceiveRule(input.productBundleId, input.isActive)
+      await this.assertNoActiveRangeOverlap(input)
 
       return toSellableProductPriceRuleDto(await this.priceRulesRepository.create(input))
     } catch (error) {
@@ -119,10 +148,19 @@ export class SellableProductPriceRulesService {
           input.productBundleId === undefined
             ? existingPriceRule.productBundleId
             : input.productBundleId,
+        minQty: input.minQty === undefined ? existingPriceRule.minQty : input.minQty,
+        maxQty: input.maxQty === undefined ? existingPriceRule.maxQty : input.maxQty,
         isActive: input.isActive === undefined ? existingPriceRule.isActive : input.isActive,
       }
 
       await this.assertProductBundleCanReceiveRule(merged.productBundleId, merged.isActive)
+      await this.assertNoActiveRangeOverlap({
+        id,
+        productBundleId: merged.productBundleId,
+        minQty: merged.minQty,
+        maxQty: merged.maxQty,
+        isActive: merged.isActive,
+      })
 
       const priceRule = await this.priceRulesRepository.update(id, input)
 
@@ -163,6 +201,38 @@ export class SellableProductPriceRulesService {
         "Active sellable product price rules cannot reference inactive product bundles.",
       )
     }
+  }
+
+  private async assertNoActiveRangeOverlap(input: {
+    id?: string
+    productBundleId: string
+    minQty: number
+    maxQty?: number | null
+    isActive: boolean
+  }) {
+    if (!input.isActive) {
+      return
+    }
+
+    const activeRules = await this.priceRulesRepository.listActiveByProductBundle(
+      input.productBundleId,
+    )
+    const overlappingRule = findOverlappingRange(
+      {
+        id: input.id,
+        minQty: input.minQty,
+        maxQty: input.maxQty ?? null,
+      },
+      activeRules,
+    )
+
+    if (!overlappingRule) {
+      return
+    }
+
+    throw new SellableProductPriceRuleValidationError(
+      `Active price rule range overlaps existing active rule ${overlappingRule.id}.`,
+    )
   }
 }
 

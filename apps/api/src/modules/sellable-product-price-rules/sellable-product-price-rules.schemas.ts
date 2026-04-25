@@ -51,6 +51,11 @@ export const sellableProductPriceRuleListQuerySchema = z.object({
     .transform((value) => value === "true"),
 })
 
+export const sellableProductPriceRuleDefaultQuerySchema = z.object({
+  product_bundle_id: z.string().uuid(),
+  quantity: z.coerce.number().int().positive(),
+})
+
 const createSellableProductPriceRuleRequestObjectSchema = z.object({
   product_bundle_id: baseSellableProductPriceRuleObjectSchema.shape.productBundleId,
   min_qty: baseSellableProductPriceRuleObjectSchema.shape.minQty,
@@ -97,6 +102,9 @@ export type UpdateSellableProductPriceRuleInput = z.infer<
 >
 export type SellableProductPriceRuleListQuery = z.infer<
   typeof sellableProductPriceRuleListQuerySchema
+>
+export type SellableProductPriceRuleDefaultQuery = z.infer<
+  typeof sellableProductPriceRuleDefaultQuerySchema
 >
 
 function addQuantityRangeIssues(

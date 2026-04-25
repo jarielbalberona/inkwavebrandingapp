@@ -13,6 +13,7 @@ import { UsersRepository } from "../users/users.repository.js"
 import { SellableProductPriceRulesRepository } from "./sellable-product-price-rules.repository.js"
 import {
   createSellableProductPriceRuleRequestSchema,
+  sellableProductPriceRuleDefaultQuerySchema,
   sellableProductPriceRuleIdSchema,
   sellableProductPriceRuleListQuerySchema,
   updateSellableProductPriceRuleRequestSchema,
@@ -50,6 +51,19 @@ export async function handleSellableProductPriceRulesRoute(
       const input = createSellableProductPriceRuleRequestSchema.parse(await readJsonBody(request))
 
       sendJson(response, 201, { sellable_product_price_rule: await service.create(input, user) })
+    })
+    return true
+  }
+
+  if (path === "/sellable-product-price-rules/default" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const query = sellableProductPriceRuleDefaultQuerySchema.parse(
+        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
+      )
+
+      sendJson(response, 200, {
+        sellable_product_price_rule: await service.resolveDefaultPriceRule(query, user),
+      })
     })
     return true
   }

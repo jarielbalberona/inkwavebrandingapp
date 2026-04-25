@@ -54,6 +54,7 @@ test("SellableProductPriceRulesService creates rules for active bundles", async 
     {
       list: async () => [],
       findById: async () => undefined,
+      listActiveByProductBundle: async () => [],
       create: async () => createPriceRule(),
       update: async () => undefined,
     },
@@ -82,6 +83,7 @@ test("SellableProductPriceRulesService rejects active rules for inactive bundles
     {
       list: async () => [],
       findById: async () => undefined,
+      listActiveByProductBundle: async () => [],
       create: async () => createPriceRule(),
       update: async () => undefined,
     },
@@ -111,6 +113,7 @@ test("SellableProductPriceRulesService allows inactive rules for inactive bundle
     {
       list: async () => [],
       findById: async () => undefined,
+      listActiveByProductBundle: async () => [],
       create: async () => createPriceRule({ isActive: false }),
       update: async () => undefined,
     },
@@ -131,4 +134,114 @@ test("SellableProductPriceRulesService allows inactive rules for inactive bundle
   )
 
   assert.equal(result.is_active, false)
+})
+
+test("SellableProductPriceRulesService rejects overlapping active ranges", async () => {
+  const service = new SellableProductPriceRulesService(
+    {
+      list: async () => [],
+      findById: async () => undefined,
+      listActiveByProductBundle: async () => [
+        createPriceRule({
+          id: "66666666-6666-4666-8666-666666666666",
+          minQty: 1,
+          maxQty: 999,
+        }),
+      ],
+      create: async () => createPriceRule(),
+      update: async () => undefined,
+    },
+    {
+      findById: async () => createProductBundle(),
+    },
+  )
+
+  await assert.rejects(
+    () =>
+      service.create(
+        {
+          productBundleId,
+          minQty: 999,
+          maxQty: 1999,
+          unitPrice: "6.00",
+          isActive: true,
+        },
+        adminUser,
+      ),
+    /overlaps existing active rule/,
+  )
+})
+
+test("SellableProductPriceRulesService resolves default price rules by quantity", async () => {
+  const service = new SellableProductPriceRulesService(
+    {
+      list: async () => [],
+      findById: async () => undefined,
+      listActiveByProductBundle: async () => [
+        createPriceRule({
+          id: "66666666-6666-4666-8666-666666666666",
+          minQty: 1,
+          maxQty: 999,
+          unitPrice: "6.50",
+        }),
+        createPriceRule({
+          id: "77777777-7777-4777-8777-777777777777",
+          minQty: 1000,
+          maxQty: 1999,
+          unitPrice: "6.00",
+        }),
+        createPriceRule({
+          id: "88888888-8888-4888-8888-888888888888",
+          minQty: 2000,
+          maxQty: null,
+          unitPrice: "5.50",
+        }),
+      ],
+      create: async () => createPriceRule(),
+      update: async () => undefined,
+    },
+    {
+      findById: async () => createProductBundle(),
+    },
+  )
+
+  const result = await service.resolveDefaultPriceRule(
+    {
+      product_bundle_id: productBundleId,
+      quantity: 2000,
+    },
+    adminUser,
+  )
+
+  assert.equal(result?.unit_price, "5.50")
+})
+
+test("SellableProductPriceRulesService returns null when no default rule matches", async () => {
+  const service = new SellableProductPriceRulesService(
+    {
+      list: async () => [],
+      findById: async () => undefined,
+      listActiveByProductBundle: async () => [
+        createPriceRule({
+          minQty: 1,
+          maxQty: 999,
+        }),
+      ],
+      create: async () => createPriceRule(),
+      update: async () => undefined,
+    },
+    {
+      findById: async () => createProductBundle(),
+    },
+  )
+
+  const result = await service.resolveDefaultPriceRule(
+    {
+      product_bundle_id: productBundleId,
+      quantity: 1000,
+    },
+    adminUser,
+  )
+
+  assert.equal(result, null)
 })

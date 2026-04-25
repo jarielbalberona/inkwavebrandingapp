@@ -43,6 +43,19 @@ export class SellableProductPriceRulesRepository {
     return rows[0]
   }
 
+  async listActiveByProductBundle(productBundleId: string): Promise<SellableProductPriceRule[]> {
+    return this.db
+      .select()
+      .from(sellableProductPriceRules)
+      .where(
+        and(
+          eq(sellableProductPriceRules.productBundleId, productBundleId),
+          eq(sellableProductPriceRules.isActive, true),
+        ),
+      )
+      .orderBy(asc(sellableProductPriceRules.minQty))
+  }
+
   async create(input: CreateSellableProductPriceRuleInput): Promise<SellableProductPriceRule> {
     const rows = await this.db.insert(sellableProductPriceRules).values(input).returning()
     return requirePriceRule(rows[0], "Failed to create sellable product price rule")

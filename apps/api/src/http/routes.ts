@@ -25,6 +25,7 @@ export const routeDefinitions = [
   { access: "protected", method: "POST", path: "/product-bundles" },
   { access: "protected", method: "GET", path: "/sellable-product-price-rules" },
   { access: "protected", method: "POST", path: "/sellable-product-price-rules" },
+  { access: "protected", method: "GET", path: "/sellable-product-price-rules/default" },
   { access: "protected", method: "GET", path: "/inventory/balances" },
   { access: "protected", method: "GET", path: "/inventory/movements" },
   { access: "protected", method: "POST", path: "/inventory/adjustments" },
