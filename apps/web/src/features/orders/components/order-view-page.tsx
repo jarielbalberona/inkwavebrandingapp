@@ -557,6 +557,10 @@ function formatOrderItemLabel(item: Order["items"][number]): string {
     return item.description_snapshot
   }
 
+  if (item.item_type === "product_bundle") {
+    return item.description_snapshot
+  }
+
   return item.non_stock_item.name
 }
 
@@ -571,6 +575,10 @@ function formatOrderItemDetails(item: Order["items"][number]): string {
 
   if (item.item_type === "custom_charge") {
     return "Custom charge"
+  }
+
+  if (item.item_type === "product_bundle") {
+    return item.product_bundle.description?.trim() || "Product bundle"
   }
 
   return item.non_stock_item.description?.trim() || item.description_snapshot

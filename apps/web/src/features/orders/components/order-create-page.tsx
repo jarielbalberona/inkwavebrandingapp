@@ -56,6 +56,10 @@ import type { NonStockItem } from "@/features/non-stock-items/api/non-stock-item
 import { useNonStockItemsQuery } from "@/features/non-stock-items/hooks/use-non-stock-items"
 import { CreateOrderError } from "@/features/orders/api/orders-client"
 import { useCreateOrderMutation } from "@/features/orders/hooks/use-orders"
+import type { ProductBundle } from "@/features/product-bundles/api/product-bundles-client"
+import { useProductBundlesQuery } from "@/features/product-bundles/hooks/use-product-bundles"
+import type { SellableProductPriceRule } from "@/features/sellable-product-price-rules/api/sellable-product-price-rules-client"
+import { useSellableProductPriceRulesQuery } from "@/features/sellable-product-price-rules/hooks/use-sellable-product-price-rules"
 
 const orderCreateSchema = z.object({
   customer_id: z.string().uuid({ message: "Select a customer." }),
@@ -64,7 +68,7 @@ const orderCreateSchema = z.object({
     .array(
       z
         .object({
-          item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge"]),
+          item_type: z.enum(["product_bundle", "cup", "lid", "non_stock_item", "custom_charge"]),
           item_id: z.string().uuid().optional(),
           description_snapshot: z.string().trim().max(500).optional(),
           quantity: z.number().int().positive("Quantity must be a positive whole number."),
@@ -108,7 +112,7 @@ const orderCreateSchema = z.object({
 type OrderCreateValues = z.infer<typeof orderCreateSchema>
 
 const emptyLineItem: OrderCreateValues["line_items"][number] = {
-  item_type: "cup",
+  item_type: "product_bundle",
   item_id: undefined,
   description_snapshot: "",
   quantity: 1,
@@ -140,6 +144,25 @@ function resolveCatalogLineItemUnitAmount(
   return parseMoneyAmount(item.default_sell_price)
 }
 
+function resolveBundleDefaultUnitAmount(
+  pricingRules: SellableProductPriceRule[],
+  productBundleId: string | undefined,
+  quantity: number,
+): number | null {
+  if (!productBundleId || !Number.isInteger(quantity) || quantity <= 0) {
+    return null
+  }
+
+  const matchingRule = pricingRules.find((rule) => {
+    if (!rule.is_active || rule.product_bundle_id !== productBundleId) {
+      return false
+    }
+
+    return rule.min_qty <= quantity && (rule.max_qty === null || quantity <= rule.max_qty)
+  })
+
+  return parseMoneyAmount(matchingRule?.unit_price)
+}
 
 function formatCustomerComboboxLabel(customer: Customer): string {
   return `${customer.business_name} (${customer.contact_person ? `${customer.contact_person}` : ""} ${customer.contact_number ? ` · ${customer.contact_number}` : ""})`
@@ -316,6 +339,8 @@ function OrderCreateLineItemFields({
   activeCups,
   activeLids,
   activeNonStockItems,
+  activeProductBundles,
+  activePricingRules,
   availableQuantityByTrackedItemKey,
   cupsLoading,
   lidsLoading,
@@ -327,6 +352,8 @@ function OrderCreateLineItemFields({
   activeCups: Cup[]
   activeLids: Lid[]
   activeNonStockItems: NonStockItem[]
+  activeProductBundles: ProductBundle[]
+  activePricingRules: SellableProductPriceRule[]
   availableQuantityByTrackedItemKey: Map<string, number>
   cupsLoading: boolean
   lidsLoading: boolean
@@ -353,7 +380,9 @@ function OrderCreateLineItemFields({
     name: `line_items.${index}.unit_sell_price`,
   })
   const availableItems =
-    itemType === "cup"
+    itemType === "product_bundle"
+      ? activeProductBundles
+      : itemType === "cup"
       ? activeCups
       : itemType === "lid"
         ? activeLids
@@ -366,7 +395,10 @@ function OrderCreateLineItemFields({
   const unitAmount =
     itemType === "custom_charge"
       ? customChargeUnitSellPrice ?? null
-      : resolveCatalogLineItemUnitAmount(selectedCatalogItem)
+      : itemType === "product_bundle"
+        ? (customChargeUnitSellPrice ??
+          resolveBundleDefaultUnitAmount(activePricingRules, itemId, quantity))
+        : resolveCatalogLineItemUnitAmount(selectedCatalogItem)
   const lineTotal = unitAmount !== null ? quantity * unitAmount : null
 
   useEffect(() => {
@@ -404,6 +436,7 @@ function OrderCreateLineItemFields({
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
+                <SelectItem value="product_bundle">Product Bundle</SelectItem>
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
@@ -511,7 +544,9 @@ function OrderCreateLineItemFields({
             render={({ field: itemIdField }) => (
               <FormItem>
                 <FormLabel>
-                  {itemType === "cup"
+                  {itemType === "product_bundle"
+                    ? "Product bundle"
+                    : itemType === "cup"
                     ? "Cup SKU"
                     : itemType === "lid"
                       ? "Lid"
@@ -526,7 +561,9 @@ function OrderCreateLineItemFields({
                     <SelectTrigger className="w-full">
                       <SelectValue
                         placeholder={
-                          itemType === "cup"
+                          itemType === "product_bundle"
+                            ? "Select product bundle"
+                            : itemType === "cup"
                             ? cupsLoading
                               ? "Loading cups..."
                               : "Select cup"
@@ -544,7 +581,9 @@ function OrderCreateLineItemFields({
                   <SelectContent>
                     {availableItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
-                        {itemType === "cup"
+                        {itemType === "product_bundle"
+                          ? formatProductBundleOption(item as ProductBundle)
+                          : itemType === "cup"
                           ? formatCupOption(
                               item as Cup,
                               availableQuantityByTrackedItemKey.get(toTrackedItemKey("cup", item.id)),
@@ -580,11 +619,30 @@ function OrderCreateLineItemFields({
             )}
           />
 
+          {itemType === "product_bundle" ? (
+            <FormField
+              control={control}
+              name={`line_items.${index}.unit_sell_price`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Override price</FormLabel>
+                  <FormControl>
+                    <Input.Currency
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Default"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          ) : null}
+
           <FormField
             control={control}
             name={`line_items.${index}.notes`}
             render={({ field: notesField }) => (
-              <FormItem className="md:col-span-2">
+              <FormItem className={itemType === "product_bundle" ? undefined : "md:col-span-2"}>
                 <FormLabel>Line note</FormLabel>
                 <FormControl>
                   <Input {...notesField} value={notesField.value ?? ""} />
@@ -626,6 +684,8 @@ export function OrderCreatePage() {
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
+  const productBundlesQuery = useProductBundlesQuery()
+  const pricingRulesQuery = useSellableProductPriceRulesQuery()
   const inventoryBalancesQuery = useInventoryBalancesQuery()
   const createOrderMutation = useCreateOrderMutation()
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -644,6 +704,14 @@ export function OrderCreatePage() {
   const activeNonStockItems = useMemo(
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
     [nonStockItemsQuery.data],
+  )
+  const activeProductBundles = useMemo(
+    () => (productBundlesQuery.data ?? []).filter((item) => item.is_active),
+    [productBundlesQuery.data],
+  )
+  const activePricingRules = useMemo(
+    () => (pricingRulesQuery.data ?? []).filter((rule) => rule.is_active),
+    [pricingRulesQuery.data],
   )
   const availableQuantityByTrackedItemKey = useMemo(() => {
     const quantities = new Map<string, number>()
@@ -747,7 +815,16 @@ export function OrderCreatePage() {
         customer_id: values.customer_id,
         notes: values.notes?.trim() || undefined,
         line_items: values.line_items.map((item) =>
-          item.item_type === "cup"
+          item.item_type === "product_bundle"
+            ? {
+                item_type: "product_bundle",
+                product_bundle_id: item.item_id!,
+                quantity: item.quantity,
+                unit_sell_price:
+                  item.unit_sell_price === undefined ? undefined : item.unit_sell_price.toFixed(2),
+                notes: item.notes?.trim() || undefined,
+              }
+            : item.item_type === "cup"
                 ? {
                     item_type: "cup",
                     cup_id: item.item_id!,
@@ -894,6 +971,8 @@ export function OrderCreatePage() {
                                 activeCups={activeCups}
                                 activeLids={activeLids}
                                 activeNonStockItems={activeNonStockItems}
+                                activeProductBundles={activeProductBundles}
+                                activePricingRules={activePricingRules}
                                 availableQuantityByTrackedItemKey={availableQuantityByTrackedItemKey}
                                 cupsLoading={cupsQuery.isLoading}
                                 lidsLoading={lidsQuery.isLoading}
@@ -949,8 +1028,8 @@ export function OrderCreatePage() {
                 <AlertDescription>
                   <div className="grid gap-2">
                     <p>
-                      System note: this order will reserve more stock than is currently available.
-                      Creation is allowed so purchasing can catch up with committed orders.
+                      System note: this order asks for more tracked stock than is currently available.
+                      The backend will reject unsafe reservations.
                     </p>
                     <ul className="list-disc space-y-1 pl-5">
                       {systemNotes.map((note) => (
@@ -1001,6 +1080,16 @@ function formatLidOption(lid: Lid, availableQuantity?: number): string {
 
 function formatNonStockItemOption(item: NonStockItem): string {
   return item.description?.trim() ? `${item.name} · ${item.description}` : item.name
+}
+
+function formatProductBundleOption(item: ProductBundle): string {
+  const parts = [item.name]
+
+  if (item.description?.trim()) {
+    parts.push(item.description.trim())
+  }
+
+  return parts.join(" · ")
 }
 
 function buildOrderCreationSystemNotes(

@@ -239,6 +239,13 @@
       "when": 1777139116411,
       "tag": "0034_happy_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1777154237424,
+      "tag": "0035_new_whiplash",
+      "breakpoints": true
     }
   ]
 }

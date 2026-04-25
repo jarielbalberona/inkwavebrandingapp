@@ -61,6 +61,12 @@ const orderCustomChargeSchema = z.object({
   description_snapshot: z.string(),
 })
 
+const orderProductBundleSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+})
+
 const nullableOmittedField = <T extends z.ZodTypeAny>(schema: T) =>
   schema.nullish().transform((value) => value ?? null)
 
@@ -72,6 +78,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     lid: z.null(),
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
+    product_bundle: nullableOmittedField(z.null()),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -87,6 +94,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     lid: orderLidSchema,
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
+    product_bundle: nullableOmittedField(z.null()),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -102,6 +110,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     lid: z.null(),
     non_stock_item: orderNonStockItemSchema,
     custom_charge: nullableOmittedField(z.null()),
+    product_bundle: nullableOmittedField(z.null()),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -117,6 +126,23 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     lid: z.null(),
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: orderCustomChargeSchema,
+    product_bundle: nullableOmittedField(z.null()),
+    description_snapshot: z.string(),
+    quantity: z.number().int().positive(),
+    notes: z.string().nullable(),
+    unit_cost_price: z.string().optional(),
+    unit_sell_price: z.string().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    item_type: z.literal("product_bundle"),
+    cup: z.null(),
+    lid: z.null(),
+    non_stock_item: nullableOmittedField(z.null()),
+    custom_charge: nullableOmittedField(z.null()),
+    product_bundle: orderProductBundleSchema,
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -143,7 +169,7 @@ const orderSchema = z.object({
 const invoiceItemSchema = z.object({
   id: z.string().uuid(),
   order_line_item_id: z.string().uuid(),
-  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge"]),
+  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge", "product_bundle"]),
   description_snapshot: z.string(),
   quantity: z.number().int().positive(),
   unit_price: z.string(),
@@ -252,7 +278,7 @@ export type ProgressEvent = z.infer<typeof progressEventSchema>
 
 const createOrderLineItemErrorSchema = z.object({
   line_item_index: z.number().int().nonnegative(),
-  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge"]),
+  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge", "product_bundle"]),
   item_id: z.string().uuid().optional(),
   field: z.enum(["item_id", "quantity", "description_snapshot", "unit_sell_price", "unit_cost_price"]),
   item_label: z.string().optional(),
@@ -300,6 +326,13 @@ export interface CreateOrderPayload {
         notes?: string
       }
     | {
+        item_type: "product_bundle"
+        product_bundle_id: string
+        quantity: number
+        unit_sell_price?: string
+        notes?: string
+      }
+    | {
         item_type: "custom_charge"
         description_snapshot: string
         quantity: number
@@ -340,6 +373,14 @@ export interface UpdateOrderPayload {
         item_type: "non_stock_item"
         non_stock_item_id: string
         quantity: number
+        notes?: string
+      }
+    | {
+        id?: string
+        item_type: "product_bundle"
+        product_bundle_id: string
+        quantity: number
+        unit_sell_price?: string
         notes?: string
       }
     | {

@@ -17,6 +17,7 @@ import { cups } from "./cups.js"
 import { customers } from "./customers.js"
 import { lids } from "./lids.js"
 import { nonStockItems } from "./non-stock-items.js"
+import { productBundles } from "./product-bundles.js"
 import { users } from "./users.js"
 
 export const orderStatusEnum = pgEnum("order_status", [
@@ -40,6 +41,7 @@ export const orderLineItemTypeEnum = pgEnum("order_line_item_type", [
   "lid",
   "non_stock_item",
   "custom_charge",
+  "product_bundle",
 ])
 
 export const orders = pgTable(
@@ -85,6 +87,9 @@ export const orderItems = pgTable(
     nonStockItemId: uuid("non_stock_item_id").references(() => nonStockItems.id, {
       onDelete: "restrict",
     }),
+    productBundleId: uuid("product_bundle_id").references(() => productBundles.id, {
+      onDelete: "restrict",
+    }),
     descriptionSnapshot: text("description_snapshot").notNull(),
     quantity: integer("quantity").notNull(),
     unitCostPrice: numeric("unit_cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -98,6 +103,7 @@ export const orderItems = pgTable(
     index("order_items_cup_id_idx").on(table.cupId),
     index("order_items_lid_id_idx").on(table.lidId),
     index("order_items_non_stock_item_id_idx").on(table.nonStockItemId),
+    index("order_items_product_bundle_id_idx").on(table.productBundleId),
     check("order_items_quantity_positive", sql`${table.quantity} > 0`),
     check("order_items_unit_cost_price_non_negative", sql`${table.unitCostPrice} >= 0`),
     check("order_items_unit_sell_price_non_negative", sql`${table.unitSellPrice} >= 0`),
@@ -105,13 +111,15 @@ export const orderItems = pgTable(
     check(
       "order_items_exactly_one_item",
       sql`(
-        (${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL)
+        (${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL AND ${table.productBundleId} IS NULL)
         OR
-        (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL AND ${table.nonStockItemId} IS NULL)
+        (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL AND ${table.nonStockItemId} IS NULL AND ${table.productBundleId} IS NULL)
         OR
-        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NOT NULL)
+        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NOT NULL AND ${table.productBundleId} IS NULL)
         OR
-        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL)
+        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL AND ${table.productBundleId} IS NOT NULL)
+        OR
+        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL AND ${table.productBundleId} IS NULL)
       )`,
     ),
     check(
@@ -122,6 +130,7 @@ export const orderItems = pgTable(
           AND ${table.cupId} IS NOT NULL
           AND ${table.lidId} IS NULL
           AND ${table.nonStockItemId} IS NULL
+          AND ${table.productBundleId} IS NULL
         )
         OR
         (
@@ -129,6 +138,7 @@ export const orderItems = pgTable(
           AND ${table.lidId} IS NOT NULL
           AND ${table.cupId} IS NULL
           AND ${table.nonStockItemId} IS NULL
+          AND ${table.productBundleId} IS NULL
         )
         OR
         (
@@ -136,6 +146,15 @@ export const orderItems = pgTable(
           AND ${table.nonStockItemId} IS NOT NULL
           AND ${table.cupId} IS NULL
           AND ${table.lidId} IS NULL
+          AND ${table.productBundleId} IS NULL
+        )
+        OR
+        (
+          ${table.itemType} = 'product_bundle'
+          AND ${table.productBundleId} IS NOT NULL
+          AND ${table.cupId} IS NULL
+          AND ${table.lidId} IS NULL
+          AND ${table.nonStockItemId} IS NULL
         )
         OR
         (
@@ -143,6 +162,7 @@ export const orderItems = pgTable(
           AND ${table.nonStockItemId} IS NULL
           AND ${table.cupId} IS NULL
           AND ${table.lidId} IS NULL
+          AND ${table.productBundleId} IS NULL
         )
       )`,
     ),
@@ -201,6 +221,10 @@ export const orderItemsRelations = relations(orderItems, ({ many, one }) => ({
   nonStockItem: one(nonStockItems, {
     fields: [orderItems.nonStockItemId],
     references: [nonStockItems.id],
+  }),
+  productBundle: one(productBundles, {
+    fields: [orderItems.productBundleId],
+    references: [productBundles.id],
   }),
   progressEvents: many(orderLineItemProgressEvents),
 }))

@@ -17,6 +17,8 @@ function createOrdersService(overrides: {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
+    {} as never,
     (() => ({})) as never,
   )
 }
@@ -108,6 +110,8 @@ test("OrdersService.cancel leaves an unpaid pending linked invoice pending for a
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
+    {} as never,
     (() => ({})) as never,
   )
 
@@ -154,6 +158,8 @@ test("OrdersService.cancel rejects a linked pending invoice once payments exist"
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
+    {} as never,
     (() => ({})) as never,
   )
 
@@ -172,6 +178,8 @@ test("OrdersService.archive rejects orders that are not canceled", async () => {
   }
   const service = new OrdersService(
     ordersRepository as never,
+    {} as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never,
@@ -195,6 +203,8 @@ test("OrdersService.archive archives canceled orders", async () => {
   }
   const service = new OrdersService(
     ordersRepository as never,
+    {} as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never,

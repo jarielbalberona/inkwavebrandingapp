@@ -1,4 +1,4 @@
-import type { Cup, Customer, Lid, NonStockItem } from "../../db/schema/index.js"
+import type { Cup, Customer, Lid, NonStockItem, ProductBundle } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 import { toCustomerDto } from "../customers/customers.types.js"
@@ -35,13 +35,20 @@ interface OrderCustomChargeDto {
   description_snapshot: string
 }
 
+interface OrderProductBundleDto {
+  id: string
+  name: string
+  description: string | null
+}
+
 interface BaseOrderItemDto {
   id: string
-  item_type: "cup" | "lid" | "non_stock_item" | "custom_charge"
+  item_type: "cup" | "lid" | "non_stock_item" | "custom_charge" | "product_bundle"
   cup: OrderCupDto | null
   lid: OrderLidDto | null
   non_stock_item: OrderNonStockItemDto | null
   custom_charge: OrderCustomChargeDto | null
+  product_bundle: OrderProductBundleDto | null
   description_snapshot: string
   quantity: number
   notes: string | null
@@ -151,6 +158,7 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
       lid: null,
       non_stock_item: null,
       custom_charge: null,
+      product_bundle: null,
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -167,6 +175,7 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
       lid: toLidDto(item.lid as Lid),
       non_stock_item: null,
       custom_charge: null,
+      product_bundle: null,
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -185,6 +194,24 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
       custom_charge: {
         description_snapshot: item.descriptionSnapshot,
       },
+      product_bundle: null,
+      description_snapshot: item.descriptionSnapshot,
+      quantity: item.quantity,
+      notes: item.notes ?? null,
+      created_at: item.createdAt.toISOString(),
+      updated_at: item.updatedAt.toISOString(),
+    }
+  }
+
+  if (item.itemType === "product_bundle") {
+    return {
+      id: item.id,
+      item_type: "product_bundle",
+      cup: null,
+      lid: null,
+      non_stock_item: null,
+      custom_charge: null,
+      product_bundle: toProductBundleDto(item.productBundle as ProductBundle),
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -200,6 +227,7 @@ function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrd
     lid: null,
     non_stock_item: toNonStockItemDto(item.nonStockItem as NonStockItem),
     custom_charge: null,
+    product_bundle: null,
     description_snapshot: item.descriptionSnapshot,
     quantity: item.quantity,
     notes: item.notes ?? null,
@@ -237,6 +265,14 @@ function toNonStockItemDto(nonStockItem: NonStockItem): OrderNonStockItemDto {
     id: nonStockItem.id,
     name: nonStockItem.name,
     description: nonStockItem.description ?? null,
+  }
+}
+
+function toProductBundleDto(productBundle: ProductBundle): OrderProductBundleDto {
+  return {
+    id: productBundle.id,
+    name: productBundle.name,
+    description: productBundle.description ?? null,
   }
 }
 

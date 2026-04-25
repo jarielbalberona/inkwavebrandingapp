@@ -47,6 +47,8 @@ import {
   useOrderQuery,
   useUpdateOrderMutation,
 } from "@/features/orders/hooks/use-orders"
+import type { ProductBundle } from "@/features/product-bundles/api/product-bundles-client"
+import { useProductBundlesQuery } from "@/features/product-bundles/hooks/use-product-bundles"
 
 const orderEditSchema = z.object({
   customer_id: z.string().uuid({ message: "Select a customer." }),
@@ -56,7 +58,7 @@ const orderEditSchema = z.object({
       z
         .object({
           id: z.string().uuid().optional(),
-          item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge"]),
+          item_type: z.enum(["product_bundle", "cup", "lid", "non_stock_item", "custom_charge"]),
           item_id: z.string().uuid().optional(),
           description_snapshot: z.string().trim().max(500).optional(),
           quantity: z.number().int().positive("Quantity must be a positive whole number."),
@@ -100,7 +102,7 @@ const orderEditSchema = z.object({
 type OrderEditValues = z.infer<typeof orderEditSchema>
 
 const emptyLineItem: OrderEditValues["line_items"][number] = {
-  item_type: "cup",
+  item_type: "product_bundle",
   item_id: undefined,
   description_snapshot: "",
   quantity: 1,
@@ -124,6 +126,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
+  const productBundlesQuery = useProductBundlesQuery()
   const updateOrderMutation = useUpdateOrderMutation()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
@@ -139,6 +142,10 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
   const activeNonStockItems = useMemo(
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
     [nonStockItemsQuery.data],
+  )
+  const activeProductBundles = useMemo(
+    () => (productBundlesQuery.data ?? []).filter((item) => item.is_active),
+    [productBundlesQuery.data],
   )
 
   if (currentUser.isLoading) {
@@ -200,6 +207,8 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
               ? item.lid.id
               : item.item_type === "non_stock_item"
                 ? item.non_stock_item.id
+                : item.item_type === "product_bundle"
+                  ? item.product_bundle.id
                 : undefined,
         description_snapshot:
           item.item_type === "custom_charge" ? item.custom_charge.description_snapshot : "",
@@ -260,7 +269,17 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
               ? values.notes?.trim() || null
               : undefined,
           line_items: values.line_items.map((item) =>
-            item.item_type === "cup"
+            item.item_type === "product_bundle"
+              ? {
+                  id: item.id,
+                  item_type: "product_bundle" as const,
+                  product_bundle_id: item.item_id!,
+                  quantity: item.quantity,
+                  unit_sell_price:
+                    item.unit_sell_price === undefined ? undefined : item.unit_sell_price.toFixed(2),
+                  notes: item.notes?.trim() || undefined,
+                }
+              : item.item_type === "cup"
               ? {
                   id: item.id,
                   item_type: "cup" as const,
@@ -449,6 +468,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                           activeCups={activeCups}
                           activeLids={activeLids}
                           activeNonStockItems={activeNonStockItems}
+                          activeProductBundles={activeProductBundles}
                           cupsLoading={cupsQuery.isLoading}
                           lidsLoading={lidsQuery.isLoading}
                           nonStockItemsLoading={nonStockItemsQuery.isLoading}
@@ -492,6 +512,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                     cupsQuery.isLoading ||
                     lidsQuery.isLoading ||
                     nonStockItemsQuery.isLoading
+                    || productBundlesQuery.isLoading
                   }
                 >
                   {updateOrderMutation.isPending ? "Saving order..." : "Save order changes"}
@@ -511,6 +532,7 @@ function OrderEditLineItemFields({
   activeCups,
   activeLids,
   activeNonStockItems,
+  activeProductBundles,
   cupsLoading,
   lidsLoading,
   nonStockItemsLoading,
@@ -522,6 +544,7 @@ function OrderEditLineItemFields({
   activeCups: Cup[]
   activeLids: Lid[]
   activeNonStockItems: NonStockItem[]
+  activeProductBundles: ProductBundle[]
   cupsLoading: boolean
   lidsLoading: boolean
   nonStockItemsLoading: boolean
@@ -535,7 +558,9 @@ function OrderEditLineItemFields({
       name: `line_items.${index}.item_type`,
     }) ?? "cup"
   const availableItems =
-    itemType === "cup"
+    itemType === "product_bundle"
+      ? activeProductBundles
+      : itemType === "cup"
       ? activeCups
       : itemType === "lid"
         ? activeLids
@@ -566,6 +591,7 @@ function OrderEditLineItemFields({
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
+                <SelectItem value="product_bundle">Product Bundle</SelectItem>
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
@@ -655,6 +681,8 @@ function OrderEditLineItemFields({
                 <FormLabel>
                   {itemType === "cup"
                     ? "Cup SKU"
+                    : itemType === "product_bundle"
+                      ? "Product bundle"
                     : itemType === "lid"
                       ? "Lid"
                       : "General Item"}
@@ -673,6 +701,8 @@ function OrderEditLineItemFields({
                             ? cupsLoading
                               ? "Loading cups..."
                               : "Select cup"
+                            : itemType === "product_bundle"
+                              ? "Select product bundle"
                             : itemType === "lid"
                               ? lidsLoading
                                 ? "Loading lids..."
@@ -689,6 +719,8 @@ function OrderEditLineItemFields({
                       <SelectItem key={item.id} value={item.id}>
                         {itemType === "cup"
                           ? formatCupOption(item as Cup)
+                          : itemType === "product_bundle"
+                            ? formatProductBundleOption(item as ProductBundle)
                           : itemType === "lid"
                             ? formatLidOption(item as Lid)
                             : formatNonStockItemOption(item as NonStockItem)}
@@ -712,6 +744,21 @@ function OrderEditLineItemFields({
               </FormItem>
             )}
           />
+
+          {itemType === "product_bundle" ? (
+            <FormField
+              control={control}
+              name={`line_items.${index}.unit_sell_price`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Override price</FormLabel>
+                  <FormControl>
+                    <Input.Currency disabled={disabled} value={field.value} onChange={field.onChange} placeholder="Default" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          ) : null}
 
           <FormField
             control={control}
@@ -753,4 +800,8 @@ function formatLidOption(lid: Lid): string {
 
 function formatNonStockItemOption(item: NonStockItem): string {
   return item.description?.trim() ? `${item.name} · ${item.description}` : item.name
+}
+
+function formatProductBundleOption(item: ProductBundle): string {
+  return item.description?.trim() ? `${item.name} · ${item.description.trim()}` : item.name
 }

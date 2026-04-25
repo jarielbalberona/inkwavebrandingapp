@@ -42,6 +42,13 @@ const createOrderLineItemSchema = z.discriminatedUnion("item_type", [
     notes: optionalText(500),
   }),
   z.object({
+    item_type: z.literal("product_bundle"),
+    product_bundle_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    unit_sell_price: moneyStringSchema.optional(),
+    notes: optionalText(500),
+  }),
+  z.object({
     item_type: z.literal("custom_charge"),
     description_snapshot: z.string().trim().min(1).max(500),
     quantity: z.number().int().positive(),
@@ -71,6 +78,14 @@ const updateOrderLineItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("non_stock_item"),
     non_stock_item_id: z.string().uuid(),
     quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    id: z.string().uuid().optional(),
+    item_type: z.literal("product_bundle"),
+    product_bundle_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    unit_sell_price: moneyStringSchema.optional(),
     notes: optionalText(500),
   }),
   z.object({

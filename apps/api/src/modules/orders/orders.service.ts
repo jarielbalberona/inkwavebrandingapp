@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import type { DatabaseClient } from "../../db/client.js"
-import type { Cup, Lid, NonStockItem } from "../../db/schema/index.js"
+import type { Cup, Lid, NonStockItem, ProductBundle } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
@@ -17,6 +17,10 @@ import {
 } from "../invoices/invoices.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
+import { ProductBundlesRepository } from "../product-bundles/product-bundles.repository.js"
+import { toProductBundleInventoryComponents } from "../product-bundles/product-bundles.composition.js"
+import { SellableProductPriceRulesRepository } from "../sellable-product-price-rules/sellable-product-price-rules.repository.js"
+import { findMatchingActiveRange } from "../sellable-product-price-rules/sellable-product-price-rules.ranges.js"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
@@ -31,7 +35,11 @@ import {
   type UpdateOrderInput,
   type UpdateOrderPrioritiesInput,
 } from "./orders.schemas.js"
-import { OrdersRepository, type OrderItemWithProgressEvents } from "./orders.repository.js"
+import {
+  OrdersRepository,
+  type OrderItemWithProgressEvents,
+  type OrderWithRelations,
+} from "./orders.repository.js"
 import {
   toOrderDto,
   toProgressEventDto,
@@ -98,7 +106,7 @@ export class DuplicateOrderItemError extends Error {
 
 export interface OrderCreateLineItemErrorDetail {
   lineItemIndex: number
-  itemType: "cup" | "lid" | "non_stock_item" | "custom_charge"
+  itemType: "cup" | "lid" | "non_stock_item" | "custom_charge" | "product_bundle"
   itemId?: string
   field: "item_id" | "quantity" | "description_snapshot" | "unit_sell_price" | "unit_cost_price"
   message: string
@@ -268,6 +276,16 @@ type ResolvedOrderLineItem =
     }
   | {
       requestLineItemIndex: number
+      itemType: "product_bundle"
+      productBundle: ProductBundle
+      quantity: number
+      unitSellPrice: string
+      unitCostPrice: string
+      componentReservations: InventoryComponentReservation[]
+      notes?: string
+    }
+  | {
+      requestLineItemIndex: number
       itemType: "custom_charge"
       descriptionSnapshot: string
       quantity: number
@@ -278,6 +296,16 @@ type ResolvedOrderLineItem =
 
 type CreateOrderLineItemInput = CreateOrderInput["line_items"][number]
 type UpdateOrderLineItemInput = NonNullable<UpdateOrderInput["line_items"]>[number]
+
+type OrderInventoryItemType = "cup" | "lid"
+type OrderTrackedLineItemType = "cup" | "lid" | "product_bundle"
+
+interface InventoryComponentReservation {
+  itemType: OrderInventoryItemType
+  cupId?: string
+  lidId?: string
+  quantity: number
+}
 
 interface ExistingTrackedItemProgress {
   hasProgress: boolean
@@ -300,7 +328,9 @@ function assertNoDuplicateSourceItems(
         ? `cup:${item.cup_id}`
         : item.item_type === "lid"
           ? `lid:${item.lid_id}`
-          : `non_stock_item:${item.non_stock_item_id}`
+          : item.item_type === "non_stock_item"
+            ? `non_stock_item:${item.non_stock_item_id}`
+            : `product_bundle:${item.product_bundle_id}`
     const duplicateIndexes = duplicateIndexesByKey.get(key) ?? []
     duplicateIndexes.push(index)
     duplicateIndexesByKey.set(key, duplicateIndexes)
@@ -313,7 +343,7 @@ function assertNoDuplicateSourceItems(
       }
 
       const [itemType, itemId] = key.split(":") as [
-        "cup" | "lid" | "non_stock_item",
+        "cup" | "lid" | "non_stock_item" | "product_bundle",
         string,
       ]
 
@@ -342,6 +372,9 @@ async function resolveOrderLineItems(
     cupsRepository: CupsRepository
     lidsRepository: LidsRepository
     nonStockItemsRepository: NonStockItemsRepository
+    productBundlesRepository: ProductBundlesRepository
+    sellableProductPriceRulesRepository: SellableProductPriceRulesRepository
+    user: SafeUser
   },
 ): Promise<ResolvedOrderLineItem[]> {
   assertNoDuplicateSourceItems(items)
@@ -466,6 +499,74 @@ async function resolveOrderLineItems(
       continue
     }
 
+    if (item.item_type === "product_bundle") {
+      const productBundle = await dependencies.productBundlesRepository.findById(
+        item.product_bundle_id,
+      )
+
+      if (!productBundle) {
+        throw new OrderCreateValidationError("Some order line items are invalid", 404, [
+          {
+            lineItemIndex: index,
+            itemType: "product_bundle",
+            itemId: item.product_bundle_id,
+            field: "item_id",
+            message: `Line item ${index + 1} references a product bundle that no longer exists.`,
+          },
+        ])
+      }
+
+      if (!productBundle.isActive) {
+        throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+          {
+            lineItemIndex: index,
+            itemType: "product_bundle",
+            itemId: item.product_bundle_id,
+            field: "item_id",
+            itemLabel: productBundle.name,
+            message: `Line item ${index + 1} uses inactive product bundle ${productBundle.name}.`,
+          },
+        ])
+      }
+
+      const components = resolveProductBundleInventoryComponents({
+        lineItemIndex: index,
+        productBundle,
+        quantity: item.quantity,
+      })
+      const componentCostPrice = await resolveProductBundleUnitCostPrice({
+        lineItemIndex: index,
+        productBundle,
+        cupsRepository: dependencies.cupsRepository,
+        lidsRepository: dependencies.lidsRepository,
+      })
+      const unitSellPrice =
+        item.unit_sell_price ??
+        (await resolveProductBundleDefaultUnitSellPrice({
+          lineItemIndex: index,
+          productBundle,
+          quantity: item.quantity,
+          sellableProductPriceRulesRepository:
+            dependencies.sellableProductPriceRulesRepository,
+        }))
+
+      if (item.unit_sell_price) {
+        assertPermission(dependencies.user, "orders.pricing.view")
+      }
+
+      resolvedItems.push({
+        requestLineItemIndex: index,
+        itemType: "product_bundle",
+        productBundle,
+        quantity: item.quantity,
+        unitSellPrice,
+        unitCostPrice: componentCostPrice,
+        componentReservations: components,
+        notes: item.notes,
+      })
+      continue
+    }
+
     resolvedItems.push({
       requestLineItemIndex: index,
       itemType: "custom_charge",
@@ -480,6 +581,138 @@ async function resolveOrderLineItems(
   return resolvedItems
 }
 
+function resolveProductBundleInventoryComponents(input: {
+  lineItemIndex: number
+  productBundle: ProductBundle
+  quantity: number
+}): InventoryComponentReservation[] {
+  try {
+    return toProductBundleInventoryComponents(input.productBundle, input.quantity).map((component) => {
+      if (component.itemType === "cup") {
+        return {
+          itemType: "cup" as const,
+          cupId: component.itemId,
+          quantity: component.quantity,
+        }
+      }
+
+      return {
+        itemType: "lid" as const,
+        lidId: component.itemId,
+        quantity: component.quantity,
+      }
+    })
+  } catch (error) {
+    throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+      {
+        lineItemIndex: input.lineItemIndex,
+        itemType: "product_bundle",
+        itemId: input.productBundle.id,
+        field: "item_id",
+        itemLabel: input.productBundle.name,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Product bundle composition is invalid.",
+      },
+    ])
+  }
+}
+
+async function resolveProductBundleUnitCostPrice(input: {
+  lineItemIndex: number
+  productBundle: ProductBundle
+  cupsRepository: CupsRepository
+  lidsRepository: LidsRepository
+}): Promise<string> {
+  let unitCostPrice = 0
+
+  if (input.productBundle.cupId) {
+    const cup = await input.cupsRepository.findById(input.productBundle.cupId)
+
+    if (!cup || !cup.isActive) {
+      throw new OrderCreateValidationError("Some order line items are invalid", cup ? 409 : 404, [
+        {
+          lineItemIndex: input.lineItemIndex,
+          itemType: "product_bundle",
+          itemId: input.productBundle.id,
+          field: "item_id",
+          itemLabel: input.productBundle.name,
+          message: `Line item ${input.lineItemIndex + 1} references a product bundle with an unavailable cup component.`,
+        },
+      ])
+    }
+
+    unitCostPrice += Number(cup.costPrice) * input.productBundle.cupQtyPerSet
+  }
+
+  if (input.productBundle.lidId) {
+    const lid = await input.lidsRepository.findById(input.productBundle.lidId)
+
+    if (!lid || !lid.isActive) {
+      throw new OrderCreateValidationError("Some order line items are invalid", lid ? 409 : 404, [
+        {
+          lineItemIndex: input.lineItemIndex,
+          itemType: "product_bundle",
+          itemId: input.productBundle.id,
+          field: "item_id",
+          itemLabel: input.productBundle.name,
+          message: `Line item ${input.lineItemIndex + 1} references a product bundle with an unavailable lid component.`,
+        },
+      ])
+    }
+
+    unitCostPrice += Number(lid.costPrice) * input.productBundle.lidQtyPerSet
+  }
+
+  return unitCostPrice.toFixed(2)
+}
+
+async function resolveProductBundleDefaultUnitSellPrice(input: {
+  lineItemIndex: number
+  productBundle: ProductBundle
+  quantity: number
+  sellableProductPriceRulesRepository: SellableProductPriceRulesRepository
+}): Promise<string> {
+  const activeRules = await input.sellableProductPriceRulesRepository.listActiveByProductBundle(
+    input.productBundle.id,
+  )
+  let matchingRule
+
+  try {
+    matchingRule = findMatchingActiveRange(input.quantity, activeRules)
+  } catch (error) {
+    throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+      {
+        lineItemIndex: input.lineItemIndex,
+        itemType: "product_bundle",
+        itemId: input.productBundle.id,
+        field: "unit_sell_price",
+        itemLabel: input.productBundle.name,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Product bundle pricing rules are invalid.",
+      },
+    ])
+  }
+
+  if (!matchingRule) {
+    throw new OrderCreateValidationError("Some order line items are invalid", 409, [
+      {
+        lineItemIndex: input.lineItemIndex,
+        itemType: "product_bundle",
+        itemId: input.productBundle.id,
+        field: "unit_sell_price",
+        itemLabel: input.productBundle.name,
+        message: `Line item ${input.lineItemIndex + 1} has no active default price rule for quantity ${input.quantity}. Enter an authorized override price or configure pricing first.`,
+      },
+    ])
+  }
+
+  return matchingRule.unitPrice
+}
+
 export class OrdersService {
   constructor(
     private readonly ordersRepository: OrdersRepository,
@@ -487,6 +720,8 @@ export class OrdersService {
     private readonly cupsRepository: CupsRepository,
     private readonly lidsRepository: LidsRepository,
     private readonly nonStockItemsRepository: NonStockItemsRepository,
+    private readonly productBundlesRepository: ProductBundlesRepository,
+    private readonly sellableProductPriceRulesRepository: SellableProductPriceRulesRepository,
     private readonly createInventoryService: (db: DatabaseClient) => InventoryService,
   ) {}
 
@@ -565,6 +800,9 @@ export class OrdersService {
       cupsRepository: this.cupsRepository,
       lidsRepository: this.lidsRepository,
       nonStockItemsRepository: this.nonStockItemsRepository,
+      productBundlesRepository: this.productBundlesRepository,
+      sellableProductPriceRulesRepository: this.sellableProductPriceRulesRepository,
+      user,
     })
 
     return this.ordersRepository.transaction(async ({ db, ordersRepository }) => {
@@ -584,36 +822,14 @@ export class OrdersService {
 
       await syncInvoiceSnapshotForOrder(new InvoicesRepository(db), order, user.id)
 
-      const trackedItems = resolvedItems.filter(
-        (item): item is Extract<ResolvedOrderLineItem, { itemType: "cup" | "lid" }> =>
-          item.itemType === "cup" || item.itemType === "lid",
-      )
+      const reservationRequests = buildReservationRequestsForResolvedItems(order, resolvedItems)
 
-      if (trackedItems.length > 0) {
+      if (reservationRequests.length > 0) {
         await this.createInventoryService(db).reserveOrderItems(
           {
             orderId: order.id,
             createdByUserId: user.id,
-            items: trackedItems.map((item) => {
-              const createdOrderItem = order.items.find((orderItem) =>
-                item.itemType === "cup"
-                  ? orderItem.itemType === "cup" && orderItem.cupId === item.cup.id
-                  : orderItem.itemType === "lid" && orderItem.lidId === item.lid.id,
-              )
-
-              if (!createdOrderItem) {
-                throw new Error("Failed to match created order item to reservation request")
-              }
-
-              return {
-                orderItemId: createdOrderItem.id,
-                requestLineItemIndex: item.requestLineItemIndex,
-                itemType: item.itemType,
-                cupId: item.itemType === "cup" ? item.cup.id : undefined,
-                lidId: item.itemType === "lid" ? item.lid.id : undefined,
-                quantity: item.quantity,
-              }
-            }),
+            items: reservationRequests,
           },
           { useExistingTransaction: true },
         )
@@ -787,6 +1003,44 @@ export class OrdersService {
         })
       }
 
+      if (orderItem.itemType === "product_bundle") {
+        const componentsToConsume = getProductBundleProgressConsumptionComponents(
+          orderItem,
+          parsedInput.stage,
+          parsedInput.quantity,
+        )
+
+        for (const component of componentsToConsume) {
+          const balance =
+            component.itemType === "cup"
+              ? await inventoryRepository.getBalanceByCupId(component.cupId!)
+              : await inventoryRepository.getBalanceByLidId(component.lidId!)
+
+          if (!balance) {
+            throw component.itemType === "cup"
+              ? new OrderCupNotFoundError()
+              : new OrderLidNotFoundError()
+          }
+
+          if (balance.reserved < component.quantity || balance.onHand < component.quantity) {
+            throw new OrderPrintedQuantityNotReservedError()
+          }
+
+          await inventoryRepository.appendMovement({
+            itemType: component.itemType,
+            cupId: component.cupId,
+            lidId: component.lidId,
+            movementType: "consume",
+            quantity: component.quantity,
+            orderId: orderItem.orderId,
+            orderItemId: orderItem.id,
+            note: `Consumed reserved ${component.itemType} stock by bundle ${parsedInput.stage} progress event`,
+            reference: event.id,
+            createdByUserId: user.id,
+          })
+        }
+      }
+
       const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(orderItem.orderId)
       const orderStatus = deriveOrderStatus(orderItem.order.status, orderItems)
 
@@ -843,28 +1097,20 @@ export class OrdersService {
           continue
         }
 
-        const totals = calculateProgressTotals(item.itemType, item.quantity, item.progressEvents)
-        const releaseQuantity =
-          item.itemType === "cup"
-            ? Math.max(item.quantity - totals.total_printed, 0)
-            : Math.max(item.quantity - totals.total_released, 0)
-
-        if (releaseQuantity === 0) {
-          continue
+        for (const component of getCancellationReleaseComponents(item)) {
+          await inventoryRepository.appendMovement({
+            itemType: component.itemType,
+            cupId: component.cupId,
+            lidId: component.lidId,
+            movementType: "release_reservation",
+            quantity: component.quantity,
+            orderId: order.id,
+            orderItemId: item.id,
+            note: "Released unconsumed reservation on order cancellation",
+            reference: order.id,
+            createdByUserId: user.id,
+          })
         }
-
-        await inventoryRepository.appendMovement({
-          itemType: item.itemType,
-          cupId: item.cupId ?? undefined,
-          lidId: item.lidId ?? undefined,
-          movementType: "release_reservation",
-          quantity: releaseQuantity,
-          orderId: order.id,
-          orderItemId: item.id,
-          note: "Released unconsumed reservation on order cancellation",
-          reference: order.id,
-          createdByUserId: user.id,
-        })
       }
 
       await ordersRepository.cancelOrder(order.id)
@@ -945,6 +1191,9 @@ export class OrdersService {
           cupsRepository: new CupsRepository(db),
           lidsRepository: new LidsRepository(db),
           nonStockItemsRepository: new NonStockItemsRepository(db),
+          productBundlesRepository: new ProductBundlesRepository(db),
+          sellableProductPriceRulesRepository: new SellableProductPriceRulesRepository(db),
+          user,
         })
         const existingOrderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
         const existingItemsById = new Map(existingOrderItems.map((item) => [item.id, item]))
@@ -978,17 +1227,12 @@ export class OrdersService {
 
           if (!existingItemId) {
             itemsToCreate.push(persistedItem)
-
-            if (persistedItem.itemType === "cup" || persistedItem.itemType === "lid") {
-              reservationAdjustments.push({
-                action: "reserve",
-                itemType: persistedItem.itemType,
-                cupId: persistedItem.cupId ?? undefined,
-                lidId: persistedItem.lidId ?? undefined,
-                quantity: persistedItem.quantity,
-                requestLineItemIndex: index,
-              })
-            }
+            pushReservationAdjustmentsFromComponents(
+              reservationAdjustments,
+              "reserve",
+              getReservationComponentsForResolvedItem(resolvedItem),
+              index,
+            )
 
             continue
           }
@@ -999,11 +1243,7 @@ export class OrdersService {
                 lineItemIndex: index,
                 itemType: persistedItem.itemType,
                 itemId:
-                  persistedItem.itemType === "cup"
-                    ? persistedItem.cupId!
-                    : persistedItem.itemType === "lid"
-                      ? persistedItem.lidId!
-                      : persistedItem.nonStockItemId ?? undefined,
+                  getPersistedItemReferenceId(persistedItem),
                 field: "item_id",
                 message: `Line item ${index + 1} references the same existing order line twice.`,
               },
@@ -1033,34 +1273,33 @@ export class OrdersService {
             )
           }
 
+          if (
+            progress?.hasProgress &&
+            existingItem.itemType === "product_bundle" &&
+            persistedItem.quantity !== existingItem.quantity
+          ) {
+            throw new OrderLineItemProgressLockedError(
+              "Bundle-backed line item quantity cannot change after fulfillment progress has been recorded",
+            )
+          }
+
           if (!isSameIdentity) {
             orderItemIdsToDelete.push(existingItem.id)
             itemsToCreate.push(persistedItem)
 
-            const currentReserved = getTrackedReservationTarget(existingItem)
-
-            if (currentReserved > 0 && (existingItem.itemType === "cup" || existingItem.itemType === "lid")) {
-              reservationAdjustments.push({
-                action: "release",
-                itemType: existingItem.itemType,
-                cupId: existingItem.cupId ?? undefined,
-                lidId: existingItem.lidId ?? undefined,
-                orderItemId: existingItem.id,
-                quantity: currentReserved,
-                requestLineItemIndex: index,
-              })
-            }
-
-            if (persistedItem.itemType === "cup" || persistedItem.itemType === "lid") {
-              reservationAdjustments.push({
-                action: "reserve",
-                itemType: persistedItem.itemType,
-                cupId: persistedItem.cupId ?? undefined,
-                lidId: persistedItem.lidId ?? undefined,
-                quantity: persistedItem.quantity,
-                requestLineItemIndex: index,
-              })
-            }
+            pushReservationAdjustmentsFromComponents(
+              reservationAdjustments,
+              "release",
+              getReservationComponentsForExistingOrderItem(existingItem),
+              index,
+              existingItem.id,
+            )
+            pushReservationAdjustmentsFromComponents(
+              reservationAdjustments,
+              "reserve",
+              getReservationComponentsForResolvedItem(resolvedItem),
+              index,
+            )
 
             continue
           }
@@ -1070,23 +1309,13 @@ export class OrdersService {
             item: persistedItem,
           })
 
-          if (existingItem.itemType === "cup" || existingItem.itemType === "lid") {
-            const currentReserved = getTrackedReservationTarget(existingItem)
-            const nextReserved = getTrackedReservationTarget(existingItem, persistedItem.quantity)
-            const delta = nextReserved - currentReserved
-
-            if (delta !== 0) {
-              reservationAdjustments.push({
-                action: delta > 0 ? "reserve" : "release",
-                itemType: existingItem.itemType,
-                cupId: existingItem.cupId ?? undefined,
-                lidId: existingItem.lidId ?? undefined,
-                orderItemId: existingItem.id,
-                quantity: Math.abs(delta),
-                requestLineItemIndex: index,
-              })
-            }
-          }
+          pushReservationDeltaAdjustments(
+            reservationAdjustments,
+            existingItem,
+            resolvedItem,
+            persistedItem.quantity,
+            index,
+          )
         }
 
         for (const existingItem of existingOrderItems) {
@@ -1104,22 +1333,13 @@ export class OrdersService {
 
           orderItemIdsToDelete.push(existingItem.id)
 
-          const currentReserved = getTrackedReservationTarget(existingItem)
-
-          if (
-            currentReserved > 0 &&
-            (existingItem.itemType === "cup" || existingItem.itemType === "lid")
-          ) {
-            reservationAdjustments.push({
-              action: "release",
-              itemType: existingItem.itemType,
-              cupId: existingItem.cupId ?? undefined,
-              lidId: existingItem.lidId ?? undefined,
-              orderItemId: existingItem.id,
-              quantity: currentReserved,
-              requestLineItemIndex: parsedInput.line_items.length,
-            })
-          }
+          pushReservationAdjustmentsFromComponents(
+            reservationAdjustments,
+            "release",
+            getReservationComponentsForExistingOrderItem(existingItem),
+            parsedInput.line_items.length,
+            existingItem.id,
+          )
         }
 
         if (existingInvoice) {
@@ -1329,6 +1549,7 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
       cupId: item.cup.id,
       lidId: undefined,
       nonStockItemId: undefined,
+      productBundleId: undefined,
       descriptionSnapshot: item.cup.sku,
       quantity: item.quantity,
       unitCostPrice: item.cup.costPrice,
@@ -1343,6 +1564,7 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
       cupId: undefined,
       lidId: item.lid.id,
       nonStockItemId: undefined,
+      productBundleId: undefined,
       descriptionSnapshot: buildLidDescriptionSnapshot(item.lid),
       quantity: item.quantity,
       unitCostPrice: item.lid.costPrice,
@@ -1357,10 +1579,26 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
       cupId: undefined,
       lidId: undefined,
       nonStockItemId: item.nonStockItem.id,
+      productBundleId: undefined,
       descriptionSnapshot: buildNonStockItemDescriptionSnapshot(item.nonStockItem),
       quantity: item.quantity,
       unitCostPrice: item.nonStockItem.costPrice ?? "0",
       unitSellPrice: item.nonStockItem.defaultSellPrice,
+      notes: item.notes,
+    }
+  }
+
+  if (item.itemType === "product_bundle") {
+    return {
+      itemType: "product_bundle" as const,
+      cupId: undefined,
+      lidId: undefined,
+      nonStockItemId: undefined,
+      productBundleId: item.productBundle.id,
+      descriptionSnapshot: buildProductBundleDescriptionSnapshot(item.productBundle),
+      quantity: item.quantity,
+      unitCostPrice: item.unitCostPrice,
+      unitSellPrice: item.unitSellPrice,
       notes: item.notes,
     }
   }
@@ -1370,12 +1608,130 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
     cupId: undefined,
     lidId: undefined,
     nonStockItemId: undefined,
+    productBundleId: undefined,
     descriptionSnapshot: item.descriptionSnapshot,
     quantity: item.quantity,
     unitCostPrice: item.unitCostPrice,
     unitSellPrice: item.unitSellPrice,
     notes: item.notes,
   }
+}
+
+function buildReservationRequestsForResolvedItems(
+  order: OrderWithRelations,
+  resolvedItems: ResolvedOrderLineItem[],
+) {
+  const claimedOrderItemIds = new Set<string>()
+  const reservations: Array<{
+    orderItemId: string
+    requestLineItemIndex: number
+    itemType: OrderInventoryItemType
+    cupId?: string
+    lidId?: string
+    quantity: number
+  }> = []
+
+  for (const resolvedItem of resolvedItems) {
+    const components = getReservationComponentsForResolvedItem(resolvedItem)
+
+    if (components.length === 0) {
+      continue
+    }
+
+    const createdOrderItem = findMatchingCreatedOrderItem(
+      order.items,
+      resolvedItem,
+      claimedOrderItemIds,
+    )
+
+    if (!createdOrderItem) {
+      throw new Error("Failed to match created order item to reservation request")
+    }
+
+    claimedOrderItemIds.add(createdOrderItem.id)
+
+    reservations.push(
+      ...components.map((component) => ({
+        orderItemId: createdOrderItem.id,
+        requestLineItemIndex: resolvedItem.requestLineItemIndex,
+        itemType: component.itemType,
+        cupId: component.cupId,
+        lidId: component.lidId,
+        quantity: component.quantity,
+      })),
+    )
+  }
+
+  return reservations
+}
+
+function getReservationComponentsForResolvedItem(
+  item: ResolvedOrderLineItem,
+): InventoryComponentReservation[] {
+  if (item.itemType === "cup") {
+    return [
+      {
+        itemType: "cup",
+        cupId: item.cup.id,
+        quantity: item.quantity,
+      },
+    ]
+  }
+
+  if (item.itemType === "lid") {
+    return [
+      {
+        itemType: "lid",
+        lidId: item.lid.id,
+        quantity: item.quantity,
+      },
+    ]
+  }
+
+  if (item.itemType === "product_bundle") {
+    return item.componentReservations
+  }
+
+  return []
+}
+
+function findMatchingCreatedOrderItem(
+  orderItems: OrderWithRelations["items"],
+  resolvedItem: ResolvedOrderLineItem,
+  claimedOrderItemIds: Set<string>,
+) {
+  return orderItems.find((orderItem) => {
+    if (claimedOrderItemIds.has(orderItem.id)) {
+      return false
+    }
+
+    if (resolvedItem.itemType === "cup") {
+      return orderItem.itemType === "cup" && orderItem.cupId === resolvedItem.cup.id
+    }
+
+    if (resolvedItem.itemType === "lid") {
+      return orderItem.itemType === "lid" && orderItem.lidId === resolvedItem.lid.id
+    }
+
+    if (resolvedItem.itemType === "product_bundle") {
+      return (
+        orderItem.itemType === "product_bundle" &&
+        orderItem.productBundleId === resolvedItem.productBundle.id
+      )
+    }
+
+    if (resolvedItem.itemType === "non_stock_item") {
+      return (
+        orderItem.itemType === "non_stock_item" &&
+        orderItem.nonStockItemId === resolvedItem.nonStockItem.id
+      )
+    }
+
+    return (
+      orderItem.itemType === "custom_charge" &&
+      orderItem.descriptionSnapshot === resolvedItem.descriptionSnapshot
+    )
+  })
 }
 
 function isSameOrderItemIdentity(
@@ -1398,19 +1754,23 @@ function isSameOrderItemIdentity(
     return existingItem.nonStockItemId === nextItem.nonStockItemId
   }
 
+  if (existingItem.itemType === "product_bundle") {
+    return existingItem.productBundleId === nextItem.productBundleId
+  }
+
   return existingItem.descriptionSnapshot === nextItem.descriptionSnapshot
 }
 
 function getExistingTrackedItemProgress(
   item: OrderItemWithProgressEvents,
 ): ExistingTrackedItemProgress | null {
-  if (item.itemType !== "cup" && item.itemType !== "lid") {
+  if (!isTrackedOrderItemType(item.itemType)) {
     return null
   }
 
   const totals = calculateProgressTotals(item.itemType, item.quantity, item.progressEvents)
   const minimumAllowedQuantity =
-    item.itemType === "cup"
+    item.itemType === "cup" || item.itemType === "product_bundle"
       ? Math.max(
           totals.total_printed,
           totals.total_qa_passed,
@@ -1422,10 +1782,13 @@ function getExistingTrackedItemProgress(
 
   return {
     hasProgress:
-      item.itemType === "cup"
+      item.itemType === "cup" || item.itemType === "product_bundle"
         ? minimumAllowedQuantity > 0
         : minimumAllowedQuantity > 0,
-    consumedQuantity: item.itemType === "cup" ? totals.total_printed : totals.total_released,
+    consumedQuantity:
+      item.itemType === "lid"
+        ? totals.total_released
+        : Math.max(totals.total_printed, totals.total_released),
     minimumAllowedQuantity,
   }
 }
@@ -1443,6 +1806,277 @@ function getTrackedReservationTarget(
   return Math.max(nextQuantity - progress.consumedQuantity, 0)
 }
 
+function getPersistedItemReferenceId(item: ReturnType<typeof toOrderItemInsert>): string | undefined {
+  if (item.itemType === "cup") {
+    return item.cupId
+  }
+
+  if (item.itemType === "lid") {
+    return item.lidId
+  }
+
+  if (item.itemType === "non_stock_item") {
+    return item.nonStockItemId
+  }
+
+  if (item.itemType === "product_bundle") {
+    return item.productBundleId
+  }
+
+  return undefined
+}
+
+function getReservationComponentsForExistingOrderItem(
+  item: OrderItemWithProgressEvents,
+  nextQuantity = getTrackedReservationTarget(item),
+): InventoryComponentReservation[] {
+  if (nextQuantity <= 0) {
+    return []
+  }
+
+  if (item.itemType === "cup") {
+    return [
+      {
+        itemType: "cup",
+        cupId: item.cupId ?? undefined,
+        quantity: nextQuantity,
+      },
+    ]
+  }
+
+  if (item.itemType === "lid") {
+    return [
+      {
+        itemType: "lid",
+        lidId: item.lidId ?? undefined,
+        quantity: nextQuantity,
+      },
+    ]
+  }
+
+  if (item.itemType !== "product_bundle") {
+    return []
+  }
+
+  if (!item.productBundle) {
+    throw new Error("Product bundle order item is missing its bundle relation")
+  }
+
+  return toProductBundleInventoryComponents(item.productBundle, nextQuantity).map((component) =>
+    component.itemType === "cup"
+      ? {
+          itemType: "cup" as const,
+          cupId: component.itemId,
+          quantity: component.quantity,
+        }
+      : {
+          itemType: "lid" as const,
+          lidId: component.itemId,
+          quantity: component.quantity,
+        },
+  )
+}
+
+function pushReservationAdjustmentsFromComponents(
+  adjustments: Array<{
+    action: "reserve" | "release"
+    itemType: "cup" | "lid"
+    cupId?: string
+    lidId?: string
+    orderItemId?: string
+    quantity: number
+    requestLineItemIndex: number
+  }>,
+  action: "reserve" | "release",
+  components: InventoryComponentReservation[],
+  requestLineItemIndex: number,
+  orderItemId?: string,
+): void {
+  for (const component of components) {
+    if (component.quantity <= 0) {
+      continue
+    }
+
+    adjustments.push({
+      action,
+      itemType: component.itemType,
+      cupId: component.cupId,
+      lidId: component.lidId,
+      orderItemId,
+      quantity: component.quantity,
+      requestLineItemIndex,
+    })
+  }
+}
+
+function pushReservationDeltaAdjustments(
+  adjustments: Parameters<typeof pushReservationAdjustmentsFromComponents>[0],
+  existingItem: OrderItemWithProgressEvents,
+  resolvedItem: ResolvedOrderLineItem,
+  nextQuantity: number,
+  requestLineItemIndex: number,
+): void {
+  const currentComponents = getReservationComponentsForExistingOrderItem(existingItem)
+  const nextReservedSetQuantity = getTrackedReservationTarget(existingItem, nextQuantity)
+  const nextComponents =
+    resolvedItem.itemType === "product_bundle"
+      ? getReservationComponentsForResolvedItem({
+          ...resolvedItem,
+          quantity: nextReservedSetQuantity,
+          componentReservations:
+            nextReservedSetQuantity > 0
+              ? resolveProductBundleInventoryComponents({
+                  lineItemIndex: resolvedItem.requestLineItemIndex,
+                  productBundle: resolvedItem.productBundle,
+                  quantity: nextReservedSetQuantity,
+                })
+              : [],
+        })
+      : getReservationComponentsForExistingOrderItem(existingItem, nextReservedSetQuantity)
+  const currentByKey = toReservationComponentQuantityMap(currentComponents)
+  const nextByKey = toReservationComponentQuantityMap(nextComponents)
+  const allKeys = new Set([...currentByKey.keys(), ...nextByKey.keys()])
+
+  for (const key of allKeys) {
+    const currentQuantity = currentByKey.get(key)?.quantity ?? 0
+    const nextComponent = nextByKey.get(key)
+    const nextQuantityForComponent = nextComponent?.quantity ?? 0
+    const delta = nextQuantityForComponent - currentQuantity
+
+    if (delta === 0) {
+      continue
+    }
+
+    const component = nextComponent ?? currentByKey.get(key)
+
+    if (!component) {
+      continue
+    }
+
+    pushReservationAdjustmentsFromComponents(
+      adjustments,
+      delta > 0 ? "reserve" : "release",
+      [
+        {
+          itemType: component.itemType,
+          cupId: component.cupId,
+          lidId: component.lidId,
+          quantity: Math.abs(delta),
+        },
+      ],
+      requestLineItemIndex,
+      existingItem.id,
+    )
+  }
+}
+
+function toReservationComponentQuantityMap(components: InventoryComponentReservation[]) {
+  const byKey = new Map<string, InventoryComponentReservation>()
+
+  for (const component of components) {
+    const key =
+      component.itemType === "cup"
+        ? `cup:${component.cupId ?? ""}`
+        : `lid:${component.lidId ?? ""}`
+    const existing = byKey.get(key)
+
+    byKey.set(key, {
+      ...component,
+      quantity: (existing?.quantity ?? 0) + component.quantity,
+    })
+  }
+
+  return byKey
+}
+
+function getProductBundleProgressConsumptionComponents(
+  item: OrderItemWithProgressEvents | OrderItemWithRelationsForProgress,
+  stage: OrderLineItemProgressStage,
+  setQuantity: number,
+): InventoryComponentReservation[] {
+  if (item.itemType !== "product_bundle") {
+    return []
+  }
+
+  if (!item.productBundle) {
+    throw new Error("Product bundle order item is missing its bundle relation")
+  }
+
+  const components: InventoryComponentReservation[] = []
+
+  if (stage === "printed" && item.productBundle.cupId) {
+    components.push({
+      itemType: "cup",
+      cupId: item.productBundle.cupId,
+      quantity: item.productBundle.cupQtyPerSet * setQuantity,
+    })
+  }
+
+  if (stage === "released" && item.productBundle.lidId) {
+    components.push({
+      itemType: "lid",
+      lidId: item.productBundle.lidId,
+      quantity: item.productBundle.lidQtyPerSet * setQuantity,
+    })
+  }
+
+  return components
+}
+
+type OrderItemWithRelationsForProgress = NonNullable<
+  Awaited<ReturnType<OrdersRepository["findOrderItemWithOrder"]>>
+>
+
+function getCancellationReleaseComponents(
+  item: OrderItemWithProgressEvents,
+): InventoryComponentReservation[] {
+  if (!isTrackedOrderItemType(item.itemType)) {
+    return []
+  }
+
+  const totals = calculateProgressTotals(item.itemType, item.quantity, item.progressEvents)
+
+  if (item.itemType === "cup") {
+    const quantity = Math.max(item.quantity - totals.total_printed, 0)
+    return quantity > 0
+      ? [{ itemType: "cup", cupId: item.cupId ?? undefined, quantity }]
+      : []
+  }
+
+  if (item.itemType === "lid") {
+    const quantity = Math.max(item.quantity - totals.total_released, 0)
+    return quantity > 0
+      ? [{ itemType: "lid", lidId: item.lidId ?? undefined, quantity }]
+      : []
+  }
+
+  if (!item.productBundle) {
+    throw new Error("Product bundle order item is missing its bundle relation")
+  }
+
+  const components: InventoryComponentReservation[] = []
+  const unprintedSets = Math.max(item.quantity - totals.total_printed, 0)
+  const unreleasedSets = Math.max(item.quantity - totals.total_released, 0)
+
+  if (item.productBundle.cupId && unprintedSets > 0) {
+    components.push({
+      itemType: "cup",
+      cupId: item.productBundle.cupId,
+      quantity: item.productBundle.cupQtyPerSet * unprintedSets,
+    })
+  }
+
+  if (item.productBundle.lidId && unreleasedSets > 0) {
+    components.push({
+      itemType: "lid",
+      lidId: item.productBundle.lidId,
+      quantity: item.productBundle.lidQtyPerSet * unreleasedSets,
+    })
+  }
+
+  return components
+}
+
 function buildLidDescriptionSnapshot(lid: Lid): string {
   return lid.sku
 }
@@ -1451,8 +2085,16 @@ function buildNonStockItemDescriptionSnapshot(nonStockItem: NonStockItem): strin
   return nonStockItem.name
 }
 
+function buildProductBundleDescriptionSnapshot(productBundle: ProductBundle): string {
+  return productBundle.name
+}
+
+function isTrackedOrderItemType(itemType: string): itemType is OrderTrackedLineItemType {
+  return itemType === "cup" || itemType === "lid" || itemType === "product_bundle"
+}
+
 function calculateProgressTotals(
-  itemType: "cup" | "lid",
+  itemType: OrderTrackedLineItemType,
   orderedQuantity: number,
   events: Array<{ stage: OrderLineItemProgressStage; quantity: number }>,
 ): ProgressTotalsDto {
@@ -1493,7 +2135,7 @@ function calculateProgressTotals(
 }
 
 function validateProgressTotals(
-  itemType: "cup" | "lid",
+  itemType: OrderTrackedLineItemType,
   orderedQuantity: number,
   totals: ProgressTotalsDto,
 ) {
@@ -1555,12 +2197,12 @@ function totalForStage(totals: ProgressTotalsDto, stage: OrderLineItemProgressSt
   }
 }
 
-function getAllowedProgressStages(itemType: "cup" | "lid"): readonly OrderLineItemProgressStage[] {
+function getAllowedProgressStages(itemType: OrderTrackedLineItemType): readonly OrderLineItemProgressStage[] {
   return itemType === "lid" ? lidProgressStages : cupProgressStages
 }
 
 function deriveLineItemStatus(
-  itemType: "cup" | "lid",
+  itemType: OrderTrackedLineItemType,
   orderedQuantity: number,
   totals: ProgressTotalsDto,
 ): OrderLineItemDerivedStatus {
@@ -1616,8 +2258,8 @@ function deriveOrderStatus(
   }
 
   const trackedItems = items.filter(
-    (item): item is OrderItemWithProgressEvents & { itemType: "cup" | "lid" } =>
-      item.itemType === "cup" || item.itemType === "lid",
+    (item): item is OrderItemWithProgressEvents & { itemType: OrderTrackedLineItemType } =>
+      isTrackedOrderItemType(item.itemType),
   )
 
   if (trackedItems.length === 0) {

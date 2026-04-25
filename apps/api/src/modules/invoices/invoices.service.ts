@@ -176,7 +176,7 @@ interface InvoiceSnapshotOrder {
   }
   items: Array<{
     id: string
-    itemType: "cup" | "lid" | "non_stock_item" | "custom_charge"
+    itemType: "cup" | "lid" | "non_stock_item" | "custom_charge" | "product_bundle"
     descriptionSnapshot: string
     quantity: number
     unitSellPrice: string

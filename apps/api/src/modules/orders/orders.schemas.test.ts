@@ -7,6 +7,27 @@ import { createOrderSchema } from "./orders.schemas.js"
 
 const validCustomerId = "11111111-1111-1111-1111-111111111111"
 
+test("createOrderSchema accepts a valid product_bundle line item with override pricing", () => {
+  const parsed = createOrderSchema.parse({
+    customer_id: validCustomerId,
+    line_items: [
+      {
+        item_type: "product_bundle",
+        product_bundle_id: "22222222-2222-4222-8222-222222222222",
+        quantity: 1000,
+        unit_sell_price: "8.50",
+      },
+    ],
+  })
+
+  assert.deepEqual(parsed.line_items[0], {
+    item_type: "product_bundle",
+    product_bundle_id: "22222222-2222-4222-8222-222222222222",
+    quantity: 1000,
+    unit_sell_price: "8.50",
+  })
+})
+
 test("createOrderSchema accepts a valid custom_charge line item", () => {
   const parsed = createOrderSchema.parse({
     customer_id: validCustomerId,

@@ -436,6 +436,10 @@ function formatOrderItemLabel(item: Order["items"][number]): string {
     return item.description_snapshot
   }
 
+  if (item.item_type === "product_bundle") {
+    return item.description_snapshot
+  }
+
   return item.non_stock_item.name
 }
 
@@ -450,6 +454,10 @@ function formatOrderItemDetails(item: Order["items"][number]): string {
 
   if (item.item_type === "custom_charge") {
     return "Custom charge"
+  }
+
+  if (item.item_type === "product_bundle") {
+    return item.product_bundle.description?.trim() || "Product bundle"
   }
 
   return item.non_stock_item.description?.trim() || item.description_snapshot
@@ -488,10 +496,10 @@ function ProgressTotalsGrid({
           {formatStatus(totals.line_item_status)}
         </p>
       </div>
-      {itemType === "cup" ? (
+      {itemType === "cup" || itemType === "product_bundle" ? (
         <ProgressTotal label="Printed" value={totals.total_printed} />
       ) : null}
-      {itemType === "cup" ? (
+      {itemType === "cup" || itemType === "product_bundle" ? (
         <ProgressTotal label="QA passed" value={totals.total_qa_passed} />
       ) : null}
       <ProgressTotal label="Packed" value={totals.total_packed} />
@@ -663,7 +671,7 @@ function buildProgressQuantityError(
     case "packed":
       return `Packed quantity cannot exceed the current QA-passed balance of ${maxQuantity}.`
     case "printed":
-      return itemType === "cup"
+      return itemType === "cup" || itemType === "product_bundle"
         ? "Printed supports overrun and should not be capped here."
         : `Printed is not supported for ${itemType} line items.`
   }

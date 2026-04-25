@@ -89,6 +89,8 @@ function toInvoicePdfSpecs(itemType: ReturnType<typeof toInvoiceDto>["items"][nu
       return "General item"
     case "custom_charge":
       return "Custom charge"
+    case "product_bundle":
+      return "Bundle"
   }
 }
 

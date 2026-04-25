@@ -16,10 +16,13 @@ import {
   InventoryBalanceItemNotFoundError,
   InventoryItemInactiveError,
   InventoryItemNotFoundError,
+  InventoryReservationInsufficientStockError,
   InventoryService,
 } from "../inventory/inventory.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
+import { ProductBundlesRepository } from "../product-bundles/product-bundles.repository.js"
+import { SellableProductPriceRulesRepository } from "../sellable-product-price-rules/sellable-product-price-rules.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import {
   InvoicePaidLockError,
@@ -188,6 +191,8 @@ async function withAuthenticatedUser(
         new CupsRepository(db),
         new LidsRepository(db),
         new NonStockItemsRepository(db),
+        new ProductBundlesRepository(db),
+        new SellableProductPriceRulesRepository(db),
         (transactionDb) =>
           new InventoryService(
             new InventoryRepository(transactionDb),
@@ -255,7 +260,8 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof InvoiceVoidLockError ||
     error instanceof InventoryBalanceItemNotFoundError ||
     error instanceof InventoryItemNotFoundError ||
-    error instanceof InventoryItemInactiveError
+    error instanceof InventoryItemInactiveError ||
+    error instanceof InventoryReservationInsufficientStockError
   ) {
     if (error instanceof OrderCreateValidationError) {
       sendJson(response, error.statusCode, {

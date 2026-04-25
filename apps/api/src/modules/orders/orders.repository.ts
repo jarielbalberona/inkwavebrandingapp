@@ -81,6 +81,7 @@ export class OrdersRepository {
             cup: true,
             lid: true,
             nonStockItem: true,
+            productBundle: true,
           },
         },
       },
@@ -100,6 +101,7 @@ export class OrdersRepository {
             cup: true,
             lid: true,
             nonStockItem: true,
+            productBundle: true,
           },
         },
       },
@@ -130,6 +132,7 @@ export class OrdersRepository {
         cup: true,
         lid: true,
         nonStockItem: true,
+        productBundle: true,
       },
     })
   }
@@ -139,6 +142,7 @@ export class OrdersRepository {
       where: eq(orderItems.orderId, orderId),
       with: {
         progressEvents: true,
+        productBundle: true,
       },
     })
   }
@@ -188,6 +192,7 @@ export class OrdersRepository {
         cupId: input.cupId,
         lidId: input.lidId,
         nonStockItemId: input.nonStockItemId,
+        productBundleId: input.productBundleId,
         descriptionSnapshot: input.descriptionSnapshot,
         quantity: input.quantity,
         unitCostPrice: input.unitCostPrice,
