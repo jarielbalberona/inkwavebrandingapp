@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { ApiClientError, api, skipErrorToast } from "@/lib/api"
+import { ApiClientError, api, apiBaseUrl, skipErrorToast } from "@/lib/api"
 import { appPermissions } from "@/features/auth/permissions"
 
 const appPermissionSchema = z.enum([
@@ -49,6 +49,8 @@ export interface LoginInput {
   password: string
 }
 
+const sessionVerificationDelaysMs = [0, 150, 500] as const
+
 export class AuthApiError extends Error {
   readonly status: number
 
@@ -86,7 +88,7 @@ export async function login(input: LoginInput): Promise<AuthenticatedUser> {
 
     authResponseSchema.parse(response)
 
-    const verifiedUser = await fetchCurrentUser()
+    const verifiedUser = await verifyCurrentUserSession()
 
     if (!verifiedUser) {
       throw new AuthApiError("Session was not established", 401)
@@ -99,7 +101,7 @@ export async function login(input: LoginInput): Promise<AuthenticatedUser> {
     }
 
     if (error instanceof AuthApiError && error.status === 401) {
-      throw new AuthApiError("Sign in succeeded, but the session was not persisted.", error.status)
+      throw new AuthApiError(getSessionPersistenceErrorMessage(), error.status)
     }
 
     if (error instanceof ApiClientError) {
@@ -107,6 +109,41 @@ export async function login(input: LoginInput): Promise<AuthenticatedUser> {
     }
 
     throw error
+  }
+}
+
+async function verifyCurrentUserSession(): Promise<AuthenticatedUser | null> {
+  for (const delayMs of sessionVerificationDelaysMs) {
+    if (delayMs > 0) {
+      await delay(delayMs)
+    }
+
+    const user = await fetchCurrentUser()
+    if (user) {
+      return user
+    }
+  }
+
+  return null
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function getSessionPersistenceErrorMessage(): string {
+  if (isApiCrossOrigin()) {
+    return "Sign in succeeded, but this browser blocked the session cookie. Use the primary app URL, and make sure the web app and API are same-site or proxied under one origin."
+  }
+
+  return "Sign in succeeded, but the session was not persisted."
+}
+
+function isApiCrossOrigin(): boolean {
+  try {
+    return new URL(apiBaseUrl, window.location.href).origin !== window.location.origin
+  } catch {
+    return false
   }
 }
 

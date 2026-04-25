@@ -98,7 +98,10 @@ Confirm the static web service has:
 
 - `VITE_API_BASE_URL`
 
-That value must point at the real deployed API origin, not localhost and not a stale preview URL.
+That value must point at the real deployed API origin, not localhost and not a
+stale preview URL. For Safari, do not use split `onrender.com` hostnames as the
+long-term production URL; use same-site custom domains such as `app.example.com`
+and `api.example.com`.
 
 ## 4. Database Target Verification
 
@@ -138,7 +141,10 @@ Expected Render behavior from `render.yaml`:
 - static publish path: `apps/web/dist`
 - SPA rewrite sends `/*` to `/index.html`
 
-If the rewrite is missing in the live service, deep links are broken even if the homepage loads.
+If the rewrite is missing in the live service, deep links are broken even if the
+homepage loads. If `VITE_API_BASE_URL` points from the web Render hostname to the
+API Render hostname, Safari can drop the HTTP-only session cookie between
+`/auth/login` and `/auth/me`.
 
 ## 7. Bootstrap Admin
 

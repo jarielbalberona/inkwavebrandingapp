@@ -18,7 +18,7 @@ Frontend-safe variables must use the `VITE_` prefix.
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | yes in production builds | When unset in local Vite dev, the app uses same-origin `/api` (Vite proxy) for session cookies. Set to the public API base URL in deployed builds. |
+| `VITE_API_BASE_URL` | yes in production builds | Set to the public API base URL. For Safari reliability, use an API hostname on the same registrable site as the web app, for example `https://api.example.com` when the web app is `https://app.example.com`. |
 
 Web variables belong in:
 
@@ -26,6 +26,12 @@ Web variables belong in:
 - Render web service: dashboard-managed environment values
 
 If a variable contains a secret and somebody wants to place it in the web app, the design is wrong.
+
+Do not ship production Safari traffic on split `onrender.com` hostnames. Safari
+reports `ink-wave-branding-web.onrender.com` to `ink-wave-branding-api.onrender.com`
+as `Sec-Fetch-Site: cross-site`, and can drop the HTTP-only session cookie between
+`/auth/login` and `/auth/me`. Keep the app static, but put web and API on same-site
+custom domains or accept that Safari login will remain unreliable.
 
 ## API Environment
 
@@ -125,6 +131,7 @@ Expected local workflow:
 
 ## Failure Modes To Avoid
 
+- web points browsers directly from one `onrender.com` hostname to another, which Safari treats as cross-site
 - web points at the wrong API origin because `VITE_API_BASE_URL` drifted
 - API boots against the wrong database because `DATABASE_URL` or split `DATABASE_*` values were copied from another app
 - auth cookies break because `AUTH_SESSION_SECRET` is missing or too short
