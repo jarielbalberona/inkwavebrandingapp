@@ -46,6 +46,7 @@ import {
   useOrderQuery,
   useProgressEventsQuery,
 } from "@/features/orders/hooks/use-orders"
+import { ArrowLeftIcon, BoxIcon } from "lucide-react"
 
 export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
@@ -195,18 +196,17 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
           <div className="grid gap-1">
             <CardTitle>Fulfillment Progress</CardTitle>
             <CardDescription>
-              Record quantity-based line-item progress on a real page instead of
-              burying the workflow in the orders list.
+              Record quantity-based line-item progress.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
-              <Link to="/orders">Back to orders</Link>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/orders"><ArrowLeftIcon className="size-4" />Orders</Link>
             </Button>
             {order ? (
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="sm">
                 <Link to="/orders/$orderId" params={{ orderId: order.id }}>
-                  Order details
+                  <BoxIcon className="size-4" /> Details
                 </Link>
               </Button>
             ) : null}
@@ -252,8 +252,8 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
             ) : (
               <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
                 <div className="grid gap-3">
-                  <div className="grid gap-2">
-                    <Label>Line item</Label>
+                  <div className="grid gap-2 bg-orange-300 p-3">
+                    <Label>Select Order Item</Label>
                     <Select
                       value={selectedLineItem?.id}
                       onValueChange={(lineItemId) => {
