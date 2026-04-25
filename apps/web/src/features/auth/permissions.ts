@@ -11,6 +11,10 @@ export const appPermissions = {
   lidsManage: "lids.manage",
   nonStockItemsView: "non_stock_items.view",
   nonStockItemsManage: "non_stock_items.manage",
+  productBundlesView: "product_bundles.view",
+  productBundlesManage: "product_bundles.manage",
+  sellableProductPriceRulesView: "sellable_product_price_rules.view",
+  sellableProductPriceRulesManage: "sellable_product_price_rules.manage",
   inventoryView: "inventory.view",
   inventoryStockIntake: "inventory.stock_intake",
   inventoryAdjust: "inventory.adjust",
@@ -35,6 +39,8 @@ const productViewPermissions = [
   appPermissions.cupsView,
   appPermissions.lidsView,
   appPermissions.nonStockItemsView,
+  appPermissions.productBundlesView,
+  appPermissions.sellableProductPriceRulesView,
 ] as const
 
 export function hasPermission(

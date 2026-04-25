@@ -14,12 +14,22 @@ import { CupsPage } from "@/features/cups/components/cups-page"
 import { LidsPage } from "@/features/lids/components/lids-page"
 import { GeneralItemsPage } from "@/features/non-stock-items/components/general-items-page"
 
+type ProductTabValue = "cups" | "lids" | "general-items" | "bundles" | "pricing-rules"
+
+type ProductTab = {
+  value: ProductTabValue
+  label: string
+  content: ReactNode
+}
+
 export function ProductsPage() {
   const currentUser = useCurrentUser()
   const productTabs = useMemo(
-    (): Array<{ value: string; label: string; content: ReactNode }> => {
-      const tabs: Array<{ value: string; label: string; content: ReactNode }> = []
+    (): ProductTab[] => {
+      const tabs: ProductTab[] = []
 
+      // Keep the Products surface as one compact tab row:
+      // inventory master data first, commercial bundle/pricing tabs after they land.
       if (hasPermission(currentUser.data, appPermissions.cupsView)) {
         tabs.push({ value: "cups", label: "Cups", content: <CupsPage /> })
       }
@@ -61,12 +71,12 @@ export function ProductsPage() {
       <div className="grid gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
         <p className="text-sm text-muted-foreground">
-          Manage cups, lids, and general chargeable items from one product master-data surface.
+          Manage inventory master data and commercial selling setup from one product surface.
         </p>
       </div>
 
       <Tabs defaultValue={defaultTab.value} className="grid gap-4">
-        <TabsList className="w-full justify-start">
+        <TabsList className="w-full justify-start overflow-x-auto">
           {productTabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
               {tab.label}
