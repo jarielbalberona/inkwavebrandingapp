@@ -9,9 +9,26 @@ import { DailyDigestRunner } from "./daily-digest-runner.js"
 import { getManilaBusinessDate } from "./daily-digest-time.js"
 import { DailyDigestRepository } from "./daily-digest.repository.js"
 
+const args = process.argv.slice(2)
 const env = loadApiEnv()
 const db = getDatabaseClient()
-const businessDate = parseBusinessDateArg(process.argv.slice(2)) ?? getManilaBusinessDate()
+const businessDate = parseBusinessDateArg(args) ?? getManilaBusinessDate()
+const debug = parseDebugFlag(args)
+
+if (debug) {
+  console.log(
+    JSON.stringify({
+      event: "daily_digest_cli_debug_preflight",
+      businessDate,
+      logLevel: process.env.LOG_LEVEL ?? null,
+      nodeEnv: process.env.NODE_ENV ?? null,
+      emailProvider: env.emailProvider,
+      resendApiKeyConfigured: Boolean(env.resendApiKey),
+      resendFromEmail: env.resendFromEmail ?? null,
+      webOrigin: env.webOrigin ?? null,
+    }),
+  )
+}
 
 const runner = new DailyDigestRunner({
   env,
@@ -23,9 +40,15 @@ const runner = new DailyDigestRunner({
 })
 
 runner
-  .runForBusinessDate(businessDate)
+  .runForBusinessDate(businessDate, { includeFailureDetails: debug })
   .then((result) => {
-    console.log(JSON.stringify({ event: "daily_digest_cli_result", ...result }))
+    console.log(
+      JSON.stringify({
+        event: "daily_digest_cli_result",
+        ...result,
+        ...(debug ? { debug: true } : {}),
+      }),
+    )
     process.exitCode = result.status === "failed" ? 1 : 0
   })
   .catch((error) => {
@@ -47,4 +70,12 @@ function parseBusinessDateArg(args: string[]): string | undefined {
   }
 
   return undefined
+}
+
+function parseDebugFlag(args: string[]): boolean {
+  if (args.includes("--debug") || process.env.DAILY_DIGEST_DEBUG === "1") {
+    return true
+  }
+
+  return false
 }

@@ -14,6 +14,21 @@ import {
 import { getManilaBusinessDate } from "./daily-digest-time.js"
 import type { DailyDigestRepository } from "./daily-digest.repository.js"
 
+export interface DailyDigestDeliveryFailureDetail {
+  recipientEmail: string
+  errorCode: string | null
+  errorMessage: string
+  retryable: boolean
+}
+
+export interface DailyDigestRunOptions {
+  /**
+   * When set, the result includes `deliveryFailures` for every catch in `deliverRecipient`
+   * (use from the daily digest CLI with `--debug` to see Resend / provider errors in stdout).
+   */
+  includeFailureDetails?: boolean
+}
+
 export interface DailyDigestRunnerResult {
   businessDate: string
   runId?: string
@@ -27,6 +42,8 @@ export interface DailyDigestRunnerResult {
   recipientCount: number
   sentCount: number
   failedCount: number
+  /** Populated when `includeFailureDetails` is true and at least one send attempt failed */
+  deliveryFailures?: DailyDigestDeliveryFailureDetail[]
 }
 
 interface DailyDigestRunnerDependencies {
@@ -49,7 +66,9 @@ export class DailyDigestRunner {
 
   async runForBusinessDate(
     businessDate: string = getManilaBusinessDate(this.now()),
+    runOptions: DailyDigestRunOptions = {},
   ): Promise<DailyDigestRunnerResult> {
+    const { includeFailureDetails = false } = runOptions
     const digest = await this.deps.aggregationService.build({
       businessDate,
       dashboardUrl: resolveDashboardUrl(this.deps.env.webOrigin),
@@ -149,9 +168,10 @@ export class DailyDigestRunner {
       )
 
       const pendingDeliveries = await repository.listPendingDeliveries(claimedRun.id)
+      const failureDetails = includeFailureDetails ? [] as DailyDigestDeliveryFailureDetail[] : undefined
 
       for (const delivery of pendingDeliveries) {
-        await this.deliverRecipient(repository, delivery, digest)
+        await this.deliverRecipient(repository, delivery, digest, failureDetails)
       }
 
       const deliveries = await repository.listRunDeliveries(claimedRun.id)
@@ -194,6 +214,7 @@ export class DailyDigestRunner {
         recipientCount: deliveries.length,
         sentCount,
         failedCount,
+        ...(failureDetails && failureDetails.length > 0 ? { deliveryFailures: failureDetails } : {}),
       }
     })
   }
@@ -202,6 +223,7 @@ export class DailyDigestRunner {
     repository: DailyDigestRepository,
     delivery: Awaited<ReturnType<DailyDigestRepository["listPendingDeliveries"]>>[number],
     digest: DailyDigestBuildResult,
+    failureDetails?: DailyDigestDeliveryFailureDetail[],
   ) {
     const attemptedAt = this.now()
     const attemptNumber = delivery.attemptCount + 1
@@ -232,6 +254,15 @@ export class DailyDigestRunner {
       })
     } catch (error) {
       const providerError = normalizeDeliveryError(error)
+
+      if (failureDetails) {
+        failureDetails.push({
+          recipientEmail: delivery.recipientEmail,
+          errorCode: providerError.code ?? null,
+          errorMessage: providerError.message,
+          retryable: providerError.retryable,
+        })
+      }
 
       await repository.markDeliveryFailed(delivery.id, {
         retryable: providerError.retryable,

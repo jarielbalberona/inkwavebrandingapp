@@ -264,9 +264,19 @@ test("DailyDigestRunner records retryable provider failures", async () => {
     now: () => new Date("2026-04-27T09:30:00.000Z"),
   })
 
-  const result = await runner.runForBusinessDate("2026-04-27")
+  const result = await runner.runForBusinessDate("2026-04-27", {
+    includeFailureDetails: true,
+  })
 
   assert.equal(result.status, "failed")
   assert.equal(attempts.length, 1)
   assert.match(JSON.stringify(attempts[0]), /failed_retryable/)
+  assert.deepEqual(result.deliveryFailures, [
+    {
+      recipientEmail: "admin@inkwave.test",
+      errorCode: "rate_limit",
+      errorMessage: "Rate limit",
+      retryable: true,
+    },
+  ])
 })
