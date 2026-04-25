@@ -7,7 +7,7 @@ import {
   Droppable,
   type DropResult,
 } from "@hello-pangea/dnd"
-import { GripVertical, ShoppingCartIcon } from "lucide-react"
+import { Archive, GripVertical, ShoppingCartIcon } from "lucide-react"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
@@ -50,6 +50,7 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 import { Skeleton } from "@workspace/ui/components/skeleton"
+import { Switch } from "@workspace/ui/components/switch"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
@@ -83,13 +84,15 @@ export function OrdersPage() {
     appPermissions.ordersFulfillmentRecord,
   )
   const [status, setStatus] = useState<OrderStatus | "all">("all")
+  const [includeArchived, setIncludeArchived] = useState(false)
   const [customerFilterId, setCustomerFilterId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<OrdersSortOption>("priority")
   const query = useMemo(
     () => ({
       status: status === "all" ? undefined : status,
+      includeArchived,
     }),
-    [status]
+    [includeArchived, status]
   )
   const ordersQuery = useOrdersQuery(query)
   const updateOrderPrioritiesMutation = useUpdateOrderPrioritiesMutation()
@@ -130,7 +133,7 @@ export function OrdersPage() {
   }
 
   function handlePriorityDragEnd(result: DropResult) {
-    if (!canManageOrders || sortBy !== "priority" || !result.destination) {
+    if (!canManageOrders || sortBy !== "priority" || includeArchived || !result.destination) {
       return
     }
 
@@ -159,7 +162,7 @@ export function OrdersPage() {
             ) : null}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
             <div className="grid gap-2">
               <Label>Fulfillment status</Label>
               <Select
@@ -202,6 +205,18 @@ export function OrdersPage() {
                   <SelectItem value="created_at">Creation date</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="show-archived-orders">Archive</Label>
+              <div className="flex h-10 items-center justify-between gap-3 border border-input px-3">
+                <span className="text-sm text-muted-foreground">Show archived</span>
+                <Switch
+                  id="show-archived-orders"
+                  checked={includeArchived}
+                  onCheckedChange={setIncludeArchived}
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -256,7 +271,7 @@ export function OrdersPage() {
                         key={order.id}
                         draggableId={order.id}
                         index={index}
-                        isDragDisabled={!canManageOrders || sortBy !== "priority"}
+                        isDragDisabled={!canManageOrders || sortBy !== "priority" || includeArchived}
                       >
                         {(draggableProvided, snapshot) => (
                           <TableRow
@@ -285,7 +300,7 @@ export function OrdersPage() {
                                   type="button"
                                   className={cn(
                                     "inline-flex size-7 items-center justify-center border border-border bg-background text-muted-foreground",
-                                    sortBy !== "priority"
+                                    sortBy !== "priority" || includeArchived
                                       ? "cursor-not-allowed opacity-40"
                                       : "cursor-grab active:cursor-grabbing",
                                     updateOrderPrioritiesMutation.isPending
@@ -296,7 +311,7 @@ export function OrdersPage() {
                                   onClick={(event) => event.stopPropagation()}
                                   onKeyDown={(event) => event.stopPropagation()}
                                   {...draggableProvided.dragHandleProps}
-                                  disabled={updateOrderPrioritiesMutation.isPending}
+                                  disabled={updateOrderPrioritiesMutation.isPending || includeArchived}
                                 >
                                   <GripVertical className="size-4" />
                                 </button>
@@ -310,10 +325,16 @@ export function OrdersPage() {
                                 <span className="font-medium">
                                   {order.order_number}
                                 </span>
+                                {order.archived_at ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Archive className="size-3" />
+                                    Archived
+                                  </span>
+                                ) : null}
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={statusVariant(order.status)}>
+                              <Badge variant={statusVariant(order.status)} className="bg-background p-1">
                                 {formatStatus(order.status)}
                               </Badge>
                             </TableCell>
@@ -338,7 +359,7 @@ export function OrdersPage() {
                               onClick={(event) => event.stopPropagation()}
                               onKeyDown={(event) => event.stopPropagation()}
                             >
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex gap-2">
                                 {canRecordFulfillment ? (
                                   <Button
                                     asChild

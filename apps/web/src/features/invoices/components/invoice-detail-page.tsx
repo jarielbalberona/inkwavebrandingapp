@@ -37,7 +37,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@workspace/ui/components/dialog"
 import {
   Table,
@@ -53,12 +52,15 @@ import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import { getInvoiceShareLink, openInvoicePdfInNewTab } from "@/features/invoices/api/invoices-client"
 import {
+  useArchiveInvoiceMutation,
+  useDeleteInvoicePaymentMutation,
   useInvoiceQuery,
   useRecordInvoicePaymentMutation,
+  useUpdateInvoicePaymentMutation,
   useVoidInvoiceMutation,
 } from "@/features/invoices/hooks/use-invoices"
 import { formatMoneyValue } from "@/lib/money"
-import { ArrowLeftIcon, CopyIcon, EyeIcon } from "lucide-react"
+import { ArrowLeftIcon, CopyIcon, EyeIcon, PencilIcon, Trash2Icon } from "lucide-react"
 
 const paymentFormSchema = z.object({
   amount: z
@@ -77,7 +79,10 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
   const invoiceQuery = useInvoiceQuery(invoiceId)
   const recordInvoicePaymentMutation = useRecordInvoicePaymentMutation()
+  const updateInvoicePaymentMutation = useUpdateInvoicePaymentMutation()
+  const deleteInvoicePaymentMutation = useDeleteInvoicePaymentMutation()
   const voidInvoiceMutation = useVoidInvoiceMutation()
+  const archiveInvoiceMutation = useArchiveInvoiceMutation()
   const [shareMessage, setShareMessage] = useState<string | null>(null)
   const [shareError, setShareError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -85,10 +90,9 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const [isCreatingShareLink, setIsCreatingShareLink] = useState(false)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false)
-
-  if (currentUser.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading access...</p>
-  }
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
 
   const paymentForm = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
@@ -98,6 +102,10 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
       note: "",
     },
   })
+
+  if (currentUser.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading access...</p>
+  }
 
   if (!canViewInvoices) {
     const fallbackRoute = getDefaultAuthorizedRoute(currentUser.data)
@@ -116,13 +124,42 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const invoice = invoiceQuery.data ?? null
   const canRecordPayment =
     canManageInvoices && invoice !== null && invoice.status !== "paid" && invoice.status !== "void"
+  const canMutatePayments = canManageInvoices && invoice !== null && invoice.status !== "void"
   const canVoidInvoice =
     canManageInvoices &&
     invoice !== null &&
     invoice.status === "pending" &&
     Number(invoice.paid_amount) === 0 &&
     !voidInvoiceMutation.isPending
+  const canArchiveInvoice =
+    canManageInvoices &&
+    invoice !== null &&
+    invoice.status === "void" &&
+    invoice.archived_at === null &&
+    !archiveInvoiceMutation.isPending
+  const editingPayment = invoice?.payments.find((payment) => payment.id === editingPaymentId) ?? null
+  const deletingPayment = invoice?.payments.find((payment) => payment.id === deletingPaymentId) ?? null
   const paymentLockStarted = invoice !== null && Number(invoice.paid_amount) > 0
+
+  function openCreatePaymentDialog() {
+    setEditingPaymentId(null)
+    paymentForm.reset({
+      amount: null,
+      payment_date: new Date(),
+      note: "",
+    })
+    setIsPaymentDialogOpen(true)
+  }
+
+  function openEditPaymentDialog(payment: NonNullable<typeof invoice>["payments"][number]) {
+    setEditingPaymentId(payment.id)
+    paymentForm.reset({
+      amount: Number(payment.amount),
+      payment_date: new Date(payment.payment_date),
+      note: payment.note ?? "",
+    })
+    setIsPaymentDialogOpen(true)
+  }
 
   async function handleCopyShareLink() {
     if (!invoice || isCreatingShareLink) {
@@ -145,7 +182,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   }
 
   async function handleRecordPayment(values: PaymentFormValues) {
-    if (!invoice || !canRecordPayment) {
+    if (!invoice || !canManageInvoices) {
       return
     }
 
@@ -153,27 +190,59 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
     setActionMessage(null)
 
     try {
-      const updatedInvoice = await recordInvoicePaymentMutation.mutateAsync({
-        invoiceId: invoice.id,
-        payload: {
-          amount: (values.amount ?? 0).toFixed(2),
-          payment_date: values.payment_date.toISOString(),
-          note: values.note?.trim() ? values.note.trim() : undefined,
-        },
-      })
+      const payload = {
+        amount: (values.amount ?? 0).toFixed(2),
+        payment_date: values.payment_date.toISOString(),
+        note: values.note?.trim() ? values.note.trim() : undefined,
+      }
+
+      const updatedInvoice = editingPaymentId
+        ? await updateInvoicePaymentMutation.mutateAsync({
+            invoiceId: invoice.id,
+            paymentId: editingPaymentId,
+            payload,
+          })
+        : await recordInvoicePaymentMutation.mutateAsync({
+            invoiceId: invoice.id,
+            payload,
+          })
 
       paymentForm.reset({
         amount: null,
         payment_date: new Date(),
         note: "",
       })
+      setEditingPaymentId(null)
+      setIsPaymentDialogOpen(false)
       setActionMessage(
-        updatedInvoice.status === "paid"
-          ? `Recorded payment and settled ${updatedInvoice.invoice_number}.`
-          : `Recorded payment for ${updatedInvoice.invoice_number}.`,
+        editingPaymentId
+          ? `Updated payment for ${updatedInvoice.invoice_number}.`
+          : updatedInvoice.status === "paid"
+            ? `Recorded payment and settled ${updatedInvoice.invoice_number}.`
+            : `Recorded payment for ${updatedInvoice.invoice_number}.`,
       )
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to record payment.")
+      setActionError(error instanceof Error ? error.message : "Unable to save payment.")
+    }
+  }
+
+  async function handleDeletePayment() {
+    if (!invoice || !deletingPaymentId) {
+      return
+    }
+
+    setActionError(null)
+    setActionMessage(null)
+
+    try {
+      const updatedInvoice = await deleteInvoicePaymentMutation.mutateAsync({
+        invoiceId: invoice.id,
+        paymentId: deletingPaymentId,
+      })
+      setDeletingPaymentId(null)
+      setActionMessage(`Deleted payment from ${updatedInvoice.invoice_number}.`)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to delete payment.")
     }
   }
 
@@ -191,6 +260,23 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
       setActionMessage(`Voided ${updatedInvoice.invoice_number}.`)
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Unable to void invoice.")
+    }
+  }
+
+  async function handleArchiveInvoice() {
+    if (!invoice || !canArchiveInvoice) {
+      return
+    }
+
+    setActionError(null)
+    setActionMessage(null)
+
+    try {
+      const updatedInvoice = await archiveInvoiceMutation.mutateAsync(invoice.id)
+      setIsArchiveDialogOpen(false)
+      setActionMessage(`Archived ${updatedInvoice.invoice_number}. It no longer appears in the default invoice table.`)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to archive invoice.")
     }
   }
 
@@ -294,8 +380,9 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                   </div>
                   <div className="grid gap-0.5">
                     <ItemDescription className="text-xs">Status</ItemDescription>
-                    <div>
+                    <div className="flex flex-wrap gap-2">
                       <Badge variant={invoiceStatusVariant(invoice.status)}>{invoice.status}</Badge>
+                      {invoice.archived_at ? <Badge variant="outline">archived</Badge> : null}
                     </div>
                   </div>
                   <div className="grid gap-0.5">
@@ -356,16 +443,16 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                   <Badge variant="secondary">{invoice.payments.length} entries</Badge>
                 </div>
                 <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button type="button" variant="outline">
-                      Payment actions
-                    </Button>
-                  </DialogTrigger>
+                  <Button type="button" variant="outline" onClick={openCreatePaymentDialog}>
+                    Payment actions
+                  </Button>
                   <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
                     <DialogHeader>
-                      <DialogTitle>Payment actions</DialogTitle>
+                      <DialogTitle>{editingPayment ? "Update payment" : "Payment actions"}</DialogTitle>
                       <DialogDescription>
-                        Record real payments here. This does not edit invoice line items or totals.
+                        {editingPayment
+                          ? "Correct the selected payment line. Invoice paid and balance totals will be recalculated."
+                          : "Record real payments here. This does not edit invoice line items or totals."}
                       </DialogDescription>
                     </DialogHeader>
 
@@ -381,7 +468,11 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                                   <FormLabel>Payment amount</FormLabel>
                                   <FormControl>
                                     <Input.Currency
-                                      disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                                      disabled={
+                                        !canMutatePayments ||
+                                        recordInvoicePaymentMutation.isPending ||
+                                        updateInvoicePaymentMutation.isPending
+                                      }
                                       min={0}
                                       value={field.value ?? undefined}
                                       onChange={(value) => field.onChange(value)}
@@ -400,7 +491,11 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                                   <FormLabel>Payment date</FormLabel>
                                   <FormControl>
                                     <DatePicker
-                                      disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                                      disabled={
+                                        !canMutatePayments ||
+                                        recordInvoicePaymentMutation.isPending ||
+                                        updateInvoicePaymentMutation.isPending
+                                      }
                                       value={field.value}
                                       onSelect={(date) => field.onChange(date ?? new Date())}
                                     />
@@ -419,7 +514,11 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                                 <FormLabel>Payment note</FormLabel>
                                 <FormControl>
                                   <Textarea
-                                    disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                                    disabled={
+                                      !canMutatePayments ||
+                                      recordInvoicePaymentMutation.isPending ||
+                                      updateInvoicePaymentMutation.isPending
+                                    }
                                     placeholder="Reference number, payment channel, or short admin note"
                                     value={field.value ?? ""}
                                     onChange={field.onChange}
@@ -433,11 +532,30 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                           <div className="flex flex-wrap gap-2">
                             <Button
                               type="submit"
-                              disabled={!canRecordPayment || recordInvoicePaymentMutation.isPending}
+                              disabled={
+                                (!editingPayment && !canRecordPayment) ||
+                                (editingPayment !== null && !canMutatePayments) ||
+                                recordInvoicePaymentMutation.isPending ||
+                                updateInvoicePaymentMutation.isPending
+                              }
                             >
-                              {recordInvoicePaymentMutation.isPending ? "Recording..." : "Record payment"}
+                              {recordInvoicePaymentMutation.isPending || updateInvoicePaymentMutation.isPending
+                                ? "Saving..."
+                                : editingPayment
+                                  ? "Update payment"
+                                  : "Record payment"}
                             </Button>
-                            {!canRecordPayment ? (
+                            {editingPayment ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={updateInvoicePaymentMutation.isPending}
+                                onClick={openCreatePaymentDialog}
+                              >
+                                New payment
+                              </Button>
+                            ) : null}
+                            {!editingPayment && !canRecordPayment ? (
                               <Button type="button" variant="outline" disabled>
                                 Payments locked
                               </Button>
@@ -478,6 +596,25 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                                 : "Void is only available for unpaid pending invoices."}
                           </p>
                         ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={!canArchiveInvoice}
+                          onClick={() => {
+                            setIsArchiveDialogOpen(true)
+                          }}
+                        >
+                          {archiveInvoiceMutation.isPending ? "Archiving..." : "Archive invoice"}
+                        </Button>
+                        {!canArchiveInvoice ? (
+                          <p className="text-muted-foreground">
+                            {invoice.archived_at
+                              ? "Already archived."
+                              : invoice.status !== "void"
+                                ? "Only void invoices can be archived."
+                                : "Archive requires invoice-manage permission."}
+                          </p>
+                        ) : null}
                       </div>
                   </DialogContent>
                 </Dialog>
@@ -491,6 +628,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                       <TableHead>Amount</TableHead>
                       <TableHead>Recorded by</TableHead>
                       <TableHead>Note</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -500,6 +638,30 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                         <TableCell className="font-medium">{formatMoneyValue(payment.amount)}</TableCell>
                         <TableCell>{payment.created_by?.display_name ?? payment.created_by?.email ?? "Unknown user"}</TableCell>
                         <TableCell>{payment.note?.trim() ? payment.note : "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={!canMutatePayments}
+                              onClick={() => openEditPaymentDialog(payment)}
+                            >
+                              <PencilIcon className="size-4" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              disabled={!canMutatePayments || deleteInvoicePaymentMutation.isPending}
+                              onClick={() => setDeletingPaymentId(payment.id)}
+                            >
+                              <Trash2Icon className="size-4" />
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -557,6 +719,62 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
               }}
             >
               {voidInvoiceMutation.isPending ? "Voiding..." : "Void invoice"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={deletingPaymentId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingPaymentId(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingPayment
+                ? `Delete the ${formatMoneyValue(deletingPayment.amount)} payment from ${new Date(deletingPayment.payment_date).toLocaleString()}? Invoice paid and balance totals will be recalculated.`
+                : "Delete this payment? Invoice paid and balance totals will be recalculated."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteInvoicePaymentMutation.isPending}>
+              Keep payment
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteInvoicePaymentMutation.isPending}
+              onClick={() => {
+                void handleDeletePayment()
+              }}
+            >
+              {deleteInvoicePaymentMutation.isPending ? "Deleting..." : "Delete payment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {invoice
+                ? `Archive ${invoice.invoice_number}? It must already be void. It will be hidden from the default invoice table, but it is not deleted.`
+                : "Archive this invoice? It must already be void. It will be hidden from the default invoice table, but it is not deleted."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveInvoiceMutation.isPending}>Keep invoice</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={archiveInvoiceMutation.isPending}
+              onClick={() => {
+                void handleArchiveInvoice()
+              }}
+            >
+              {archiveInvoiceMutation.isPending ? "Archiving..." : "Archive invoice"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

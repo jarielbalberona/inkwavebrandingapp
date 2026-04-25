@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray, sql } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
@@ -87,9 +87,12 @@ export class OrdersRepository {
     })
   }
 
-  async listWithRelations(options: { status?: Order["status"] } = {}) {
+  async listWithRelations(options: { status?: Order["status"]; includeArchived?: boolean } = {}) {
     return this.db.query.orders.findMany({
-      where: options.status ? eq(orders.status, options.status) : undefined,
+      where: and(
+        options.status ? eq(orders.status, options.status) : undefined,
+        options.includeArchived ? undefined : isNull(orders.archivedAt),
+      ),
       with: {
         customer: true,
         items: {
@@ -150,6 +153,16 @@ export class OrdersRepository {
       .where(eq(orders.id, orderId))
   }
 
+  async archiveOrder(orderId: string): Promise<void> {
+    await this.db
+      .update(orders)
+      .set({
+        archivedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+  }
+
   async updateOrderMetadata(
     orderId: string,
     input: { customerId?: string; notes?: string | null },
@@ -197,6 +210,7 @@ export class OrdersRepository {
     const rows = await this.db
       .select({ id: orders.id })
       .from(orders)
+      .where(isNull(orders.archivedAt))
       .orderBy(asc(orders.priority), desc(orders.createdAt))
 
     return rows.map((row) => row.id)
@@ -210,7 +224,7 @@ export class OrdersRepository {
     const rows = await this.db
       .select({ id: orders.id })
       .from(orders)
-      .where(inArray(orders.id, orderIds))
+      .where(and(inArray(orders.id, orderIds), isNull(orders.archivedAt)))
 
     return rows.length
   }

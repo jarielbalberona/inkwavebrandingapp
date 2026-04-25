@@ -48,6 +48,7 @@ export const invoices = pgTable(
     documentAssetId: uuid("document_asset_id").references(() => assets.id, {
       onDelete: "set null",
     }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -59,6 +60,7 @@ export const invoices = pgTable(
     uniqueIndex("invoices_order_id_unique_idx").on(table.orderId),
     index("invoices_customer_id_idx").on(table.customerId),
     index("invoices_status_idx").on(table.status),
+    index("invoices_archived_at_idx").on(table.archivedAt),
     index("invoices_created_at_idx").on(table.createdAt),
     check("invoices_invoice_number_not_blank", sql`length(trim(${table.invoiceNumber})) > 0`),
     check(

@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission } from "../auth/authorization.js"
 import { OrdersRepository } from "../orders/orders.repository.js"
-import type { CreateInvoicePaymentInput, InvoicesListQuery } from "./invoices.schemas.js"
+import type {
+  CreateInvoicePaymentInput,
+  InvoicesListQuery,
+  UpdateInvoicePaymentInput,
+} from "./invoices.schemas.js"
 import {
   toInvoiceDto,
   toInvoiceListItemDto,
@@ -93,11 +97,35 @@ export class InvoicePaymentVoidError extends Error {
   }
 }
 
+export class InvoicePaymentNotFoundError extends Error {
+  readonly statusCode = 404
+
+  constructor() {
+    super("Invoice payment not found")
+  }
+}
+
 export class InvoiceVoidAfterPaymentError extends Error {
   readonly statusCode = 409
 
   constructor() {
     super("Invoices with recorded payments cannot be voided")
+  }
+}
+
+export class InvoiceArchiveError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Invoice is already archived")
+  }
+}
+
+export class InvoiceArchiveStatusError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Only void invoices can be archived")
   }
 }
 
@@ -338,6 +366,147 @@ export class InvoicesService {
     })
   }
 
+  async updatePayment(
+    invoiceId: string,
+    paymentId: string,
+    input: UpdateInvoicePaymentInput,
+    user: SafeUser,
+  ): Promise<InvoiceDto> {
+    assertPermission(user, "invoices.manage")
+
+    return this.invoicesRepository.transaction(async ({ invoicesRepository }) => {
+      const invoice = await invoicesRepository.findByIdWithRelations(invoiceId)
+
+      if (!invoice) {
+        throw new InvoiceNotFoundError()
+      }
+
+      if (invoice.status === "void") {
+        throw new InvoicePaymentVoidError()
+      }
+
+      const existingPayment = invoice.payments.find((payment) => payment.id === paymentId)
+
+      if (!existingPayment) {
+        throw new InvoicePaymentNotFoundError()
+      }
+
+      const otherPaymentsPaidAmount = invoice.payments.reduce((sum, payment) => {
+        if (payment.id === paymentId) {
+          return sum
+        }
+
+        return sum + moneyToCents(payment.amount)
+      }, 0n)
+
+      const nextPaidAmountCents = otherPaymentsPaidAmount + moneyToCents(input.amount)
+
+      if (nextPaidAmountCents > moneyToCents(invoice.totalAmount)) {
+        throw new InvoicePaymentOverpaymentError()
+      }
+
+      const updatedPayment = await invoicesRepository.updatePayment({
+        invoiceId,
+        paymentId,
+        payment: {
+          amount: input.amount,
+          paymentDate: input.payment_date,
+          note: input.note,
+        },
+      })
+
+      if (!updatedPayment) {
+        throw new InvoicePaymentNotFoundError()
+      }
+
+      await invoicesRepository.updateFinancialState(invoiceId, toInvoiceFinancialState(invoice.totalAmount, nextPaidAmountCents))
+
+      const updatedInvoice = await invoicesRepository.findByIdWithRelations(invoiceId)
+
+      if (!updatedInvoice) {
+        throw new InvoiceNotFoundError()
+      }
+
+      return toInvoiceDto(updatedInvoice, user)
+    })
+  }
+
+  async deletePayment(invoiceId: string, paymentId: string, user: SafeUser): Promise<InvoiceDto> {
+    assertPermission(user, "invoices.manage")
+
+    return this.invoicesRepository.transaction(async ({ invoicesRepository }) => {
+      const invoice = await invoicesRepository.findByIdWithRelations(invoiceId)
+
+      if (!invoice) {
+        throw new InvoiceNotFoundError()
+      }
+
+      if (invoice.status === "void") {
+        throw new InvoicePaymentVoidError()
+      }
+
+      const existingPayment = invoice.payments.find((payment) => payment.id === paymentId)
+
+      if (!existingPayment) {
+        throw new InvoicePaymentNotFoundError()
+      }
+
+      const nextPaidAmountCents = invoice.payments.reduce((sum, payment) => {
+        if (payment.id === paymentId) {
+          return sum
+        }
+
+        return sum + moneyToCents(payment.amount)
+      }, 0n)
+
+      const deletedPayment = await invoicesRepository.deletePayment({ invoiceId, paymentId })
+
+      if (!deletedPayment) {
+        throw new InvoicePaymentNotFoundError()
+      }
+
+      await invoicesRepository.updateFinancialState(invoiceId, toInvoiceFinancialState(invoice.totalAmount, nextPaidAmountCents))
+
+      const updatedInvoice = await invoicesRepository.findByIdWithRelations(invoiceId)
+
+      if (!updatedInvoice) {
+        throw new InvoiceNotFoundError()
+      }
+
+      return toInvoiceDto(updatedInvoice, user)
+    })
+  }
+
+  async archive(invoiceId: string, user: SafeUser): Promise<InvoiceDto> {
+    assertPermission(user, "invoices.manage")
+
+    return this.invoicesRepository.transaction(async ({ invoicesRepository }) => {
+      const invoice = await invoicesRepository.findByIdWithRelations(invoiceId)
+
+      if (!invoice) {
+        throw new InvoiceNotFoundError()
+      }
+
+      if (invoice.archivedAt) {
+        throw new InvoiceArchiveError()
+      }
+
+      if (invoice.status !== "void") {
+        throw new InvoiceArchiveStatusError()
+      }
+
+      await invoicesRepository.archive(invoiceId)
+
+      const updatedInvoice = await invoicesRepository.findByIdWithRelations(invoiceId)
+
+      if (!updatedInvoice) {
+        throw new InvoiceNotFoundError()
+      }
+
+      return toInvoiceDto(updatedInvoice, user)
+    })
+  }
+
   async void(invoiceId: string, user: SafeUser): Promise<InvoiceDto> {
     assertPermission(user, "invoices.manage")
 
@@ -391,6 +560,17 @@ function sumMoney(values: string[]) {
   const total = values.reduce((sum, value) => sum + moneyToCents(value), 0n)
 
   return centsToMoney(total)
+}
+
+function toInvoiceFinancialState(totalAmount: string, paidAmountCents: bigint) {
+  const totalAmountCents = moneyToCents(totalAmount)
+  const remainingBalanceCents = totalAmountCents - paidAmountCents
+
+  return {
+    status: remainingBalanceCents === 0n ? "paid" as const : "pending" as const,
+    paidAmount: centsToMoney(paidAmountCents),
+    remainingBalance: centsToMoney(remainingBalanceCents),
+  }
 }
 
 function moneyToCents(value: string) {

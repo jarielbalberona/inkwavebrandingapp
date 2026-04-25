@@ -20,6 +20,7 @@ export interface InvoiceListItemDto {
   total_amount: string
   paid_amount: string
   remaining_balance: string
+  archived_at: string | null
   created_at: string
   updated_at: string
 }
@@ -58,6 +59,7 @@ export interface InvoiceDto {
   notes: string | null
   items: InvoiceItemDto[]
   payments: InvoicePaymentDto[]
+  archived_at: string | null
   created_at: string
   updated_at: string
 }
@@ -94,6 +96,7 @@ export function toInvoiceListItemDto(invoice: Invoice, user: SafeUser): InvoiceL
     total_amount: toMoneyString(invoice.totalAmount),
     paid_amount: toMoneyString(invoice.paidAmount),
     remaining_balance: toMoneyString(invoice.remainingBalance),
+    archived_at: invoice.archivedAt?.toISOString() ?? null,
     created_at: invoice.createdAt.toISOString(),
     updated_at: invoice.updatedAt.toISOString(),
   }
@@ -159,6 +162,7 @@ export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): Inv
         created_at: payment.createdAt.toISOString(),
         updated_at: payment.updatedAt.toISOString(),
       })),
+    archived_at: invoice.archivedAt?.toISOString() ?? null,
     created_at: invoice.createdAt.toISOString(),
     updated_at: invoice.updatedAt.toISOString(),
   }

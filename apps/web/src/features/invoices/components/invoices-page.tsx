@@ -3,11 +3,13 @@ import { useDeferredValue, useState } from "react"
 import { Link, Navigate, useNavigate } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Skeleton } from "@workspace/ui/components/skeleton"
+import { Switch } from "@workspace/ui/components/switch"
 import {
   Table,
   TableBody,
@@ -29,9 +31,10 @@ export function InvoicesPage() {
   const navigate = useNavigate()
   const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
   const [search, setSearch] = useState("")
+  const [showVoid, setShowVoid] = useState(false)
   const deferredSearch = useDeferredValue(search)
-  const invoicesOverviewQuery = useInvoicesQuery()
-  const invoicesQuery = useInvoicesQuery({ search: deferredSearch })
+  const invoicesOverviewQuery = useInvoicesQuery({ includeVoid: true })
+  const invoicesQuery = useInvoicesQuery({ search: deferredSearch, includeVoid: showVoid })
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -55,7 +58,9 @@ export function InvoicesPage() {
     void navigate({ to: "/invoices/$invoiceId", params: { invoiceId } })
   }
 
-  const overview = summarizeInvoices(invoicesOverviewQuery.data ?? [])
+  const overviewInvoices = filterArchivedInvoices(invoicesOverviewQuery.data ?? [])
+  const tableInvoices = filterVisibleInvoices(invoicesQuery.data ?? [], showVoid)
+  const overview = summarizeInvoices(overviewInvoices)
 
   return (
     <Card>
@@ -97,14 +102,26 @@ export function InvoicesPage() {
           </div>
         )}
 
-        <div className="grid gap-2 md:max-w-sm">
-          <Label htmlFor="invoice-search">Search invoices</Label>
-          <Input
-            id="invoice-search"
-            value={search}
-            placeholder="Search invoice number, order number, or customer"
-            onChange={(event) => setSearch(event.target.value)}
-          />
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="grid gap-2 md:min-w-sm">
+            <Label htmlFor="invoice-search">Search invoices</Label>
+            <Input
+              id="invoice-search"
+              value={search}
+              placeholder="Search invoice number, order number, or customer"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2 pb-2">
+            <Switch
+              id="show-void-invoices"
+              checked={showVoid}
+              onCheckedChange={setShowVoid}
+            />
+            <Label htmlFor="show-void-invoices" className="text-sm font-normal">
+              Show void invoices
+            </Label>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -118,7 +135,7 @@ export function InvoicesPage() {
           </Alert>
         ) : null}
 
-        {!invoicesQuery.isLoading && !invoicesQuery.isError && (invoicesQuery.data?.length ?? 0) === 0 ? (
+        {!invoicesQuery.isLoading && !invoicesQuery.isError && tableInvoices.length === 0 ? (
           <p className="text-sm text-muted-foreground">No invoices match the current filters.</p>
         ) : null}
 
@@ -126,6 +143,7 @@ export function InvoicesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Invoice</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Order</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Subtotal</TableHead>
@@ -136,7 +154,7 @@ export function InvoicesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {invoicesQuery.data?.map((invoice) => (
+            {tableInvoices.map((invoice) => (
               <TableRow
                 key={invoice.id}
                 className="cursor-pointer"
@@ -150,6 +168,12 @@ export function InvoicesPage() {
                 }}
               >
                 <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={invoiceStatusVariant(invoice.status)}>{invoice.status}</Badge>
+                    {invoice.archived_at ? <Badge variant="outline">archived</Badge> : null}
+                  </div>
+                </TableCell>
                 <TableCell>{invoice.order_number_snapshot}</TableCell>
                 <TableCell>{invoice.customer.business_name}</TableCell>
                 <TableCell>{formatMoneyValue(invoice.subtotal)}</TableCell>
@@ -170,6 +194,14 @@ export function InvoicesPage() {
       </CardContent>
     </Card>
   )
+}
+
+function filterVisibleInvoices(invoices: InvoiceListItem[], showVoid: boolean) {
+  return invoices.filter((invoice) => !invoice.archived_at && (showVoid || invoice.status !== "void"))
+}
+
+function filterArchivedInvoices(invoices: InvoiceListItem[]) {
+  return invoices.filter((invoice) => !invoice.archived_at)
 }
 
 function summarizeInvoices(invoices: InvoiceListItem[]) {
@@ -204,6 +236,18 @@ function summarizeInvoices(invoices: InvoiceListItem[]) {
       totalOutstanding: 0,
     },
   )
+}
+
+function invoiceStatusVariant(status: "pending" | "paid" | "void"): "default" | "secondary" | "destructive" {
+  if (status === "paid") {
+    return "default"
+  }
+
+  if (status === "void") {
+    return "destructive"
+  }
+
+  return "secondary"
 }
 
 function MetricCard({

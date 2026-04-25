@@ -40,6 +40,8 @@ import {
   OrderCompletedCancellationError,
   OrderCreateValidationError,
   OrderCustomerReassignmentProgressError,
+  OrderArchiveStatusError,
+  OrderArchivedError,
   OrderCupInactiveError,
   OrderCupNotFoundError,
   OrderLidInactiveError,
@@ -125,6 +127,15 @@ export async function handleOrdersRoute(
   if (cancelOrderMatch && request.method === "PATCH") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
       sendJson(response, 200, { order: await service.cancel(cancelOrderMatch[1] ?? "", user) })
+    })
+    return true
+  }
+
+  const archiveOrderMatch = path.match(/^\/orders\/([^/]+)\/archive$/)
+
+  if (archiveOrderMatch && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { order: await service.archive(archiveOrderMatch[1] ?? "", user) })
     })
     return true
   }
@@ -218,6 +229,8 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
 
   if (
     error instanceof OrderCreateValidationError ||
+    error instanceof OrderArchiveStatusError ||
+    error instanceof OrderArchivedError ||
     error instanceof OrderCustomerNotFoundError ||
     error instanceof OrderCustomerInactiveError ||
     error instanceof OrderCupNotFoundError ||

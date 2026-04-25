@@ -135,6 +135,7 @@ const orderSchema = z.object({
   customer: customerSchema,
   items: z.array(orderItemSchema),
   notes: z.string().nullable(),
+  archived_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -422,11 +423,15 @@ export async function generateOrderInvoice(orderId: string): Promise<Invoice> {
   }
 }
 
-export async function listOrders(filters: { status?: OrderStatus } = {}): Promise<Order[]> {
+export async function listOrders(filters: { status?: OrderStatus; includeArchived?: boolean } = {}): Promise<Order[]> {
   const searchParams = new URLSearchParams()
 
   if (filters.status) {
     searchParams.set("status", filters.status)
+  }
+
+  if (filters.includeArchived) {
+    searchParams.set("include_archived", "true")
   }
 
   const data = await api.get<unknown>(`/orders${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`)
@@ -513,6 +518,27 @@ export async function cancelOrder(id: string): Promise<Order> {
       }
 
       throw new Error("Unable to cancel order.")
+    }
+
+    throw error
+  }
+}
+
+export async function archiveOrder(id: string): Promise<Order> {
+  try {
+    const data = await api.post<unknown, Record<string, never>>(`/orders/${id}/archive`, {})
+    return orderResponseSchema.parse(data).order
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.status === 404) {
+        throw new Error("Order no longer exists.")
+      }
+
+      if (error.status === 403) {
+        throw new Error("You do not have permission to manage orders.")
+      }
+
+      throw new Error("Unable to archive order.")
     }
 
     throw error

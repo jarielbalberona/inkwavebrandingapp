@@ -11,6 +11,8 @@ import { InventoryService } from "../inventory/inventory.service.js"
 import { InvoicesRepository } from "../invoices/invoices.repository.js"
 import {
   assertInvoiceAllowsStructuralChanges,
+  InvoicePaidLockError,
+  InvoicePaymentLockError,
   syncInvoiceSnapshotForOrder,
 } from "../invoices/invoices.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
@@ -145,6 +147,22 @@ export class OrderClosedUpdateError extends Error {
 
   constructor() {
     super("Canceled or completed orders cannot be edited")
+  }
+}
+
+export class OrderArchivedError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Archived orders cannot be changed")
+  }
+}
+
+export class OrderArchiveStatusError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Only canceled orders can be archived")
   }
 }
 
@@ -476,12 +494,18 @@ export class OrdersService {
     assertPermission(user, "orders.view")
 
     const parsedQuery = orderListQuerySchema.parse(query)
-    const orders = await this.listOrdersWithEmptyStateFallback(parsedQuery)
+    const orders = await this.listOrdersWithEmptyStateFallback({
+      status: parsedQuery.status,
+      includeArchived: parsedQuery.include_archived,
+    })
 
     return orders.map((order) => toOrderDto(order, user))
   }
 
-  private async listOrdersWithEmptyStateFallback(query: OrderListQuery) {
+  private async listOrdersWithEmptyStateFallback(query: {
+    status?: OrderStatus
+    includeArchived?: boolean
+  }) {
     try {
       return await this.ordersRepository.listWithRelations(query)
     } catch (error) {
@@ -788,6 +812,10 @@ export class OrdersService {
         throw new OrderNotFoundError()
       }
 
+      if (order.archivedAt) {
+        throw new OrderArchivedError()
+      }
+
       if (order.status === "completed") {
         throw new OrderCompletedCancellationError()
       }
@@ -797,6 +825,25 @@ export class OrdersService {
       }
 
       const inventoryRepository = new InventoryRepository(db)
+      const invoicesRepository = new InvoicesRepository(db)
+      const existingInvoice = await invoicesRepository.findByOrderId(order.id)
+
+      if (existingInvoice?.status === "paid") {
+        throw new InvoicePaidLockError()
+      }
+
+      if (existingInvoice?.status === "pending" && hasRecordedInvoicePayment(existingInvoice.paidAmount)) {
+        throw new InvoicePaymentLockError()
+      }
+
+      if (existingInvoice?.status === "pending") {
+        await invoicesRepository.updateFinancialState(existingInvoice.id, {
+          status: "void",
+          paidAmount: existingInvoice.paidAmount,
+          remainingBalance: existingInvoice.totalAmount,
+        })
+      }
+
       const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
 
       for (const item of orderItems) {
@@ -850,6 +897,10 @@ export class OrdersService {
 
       if (!order) {
         throw new OrderNotFoundError()
+      }
+
+      if (order.archivedAt) {
+        throw new OrderArchivedError()
       }
 
       const hasStructuralChanges =
@@ -1220,6 +1271,34 @@ export class OrdersService {
       const reorderedOrders = await ordersRepository.listWithRelations()
       return reorderedOrders.map((order) => toOrderDto(order, user))
     })
+  }
+
+  async archive(orderId: string, user: SafeUser): Promise<OrderDto> {
+    assertPermission(user, "orders.manage")
+
+    const order = await this.ordersRepository.findByIdWithRelations(orderId)
+
+    if (!order) {
+      throw new OrderNotFoundError()
+    }
+
+    if (order.archivedAt) {
+      return toOrderDto(order, user)
+    }
+
+    if (order.status !== "canceled") {
+      throw new OrderArchiveStatusError()
+    }
+
+    await this.ordersRepository.archiveOrder(order.id)
+
+    const archivedOrder = await this.ordersRepository.findByIdWithRelations(order.id)
+
+    if (!archivedOrder) {
+      throw new OrderNotFoundError()
+    }
+
+    return toOrderDto(archivedOrder, user)
   }
 }
 
@@ -1596,4 +1675,17 @@ function deriveOrderStatus(
 
 function hasFulfillmentProgress(items: OrderItemWithProgressEvents[]): boolean {
   return items.some((item) => item.progressEvents.length > 0)
+}
+
+function hasRecordedInvoicePayment(paidAmount: string): boolean {
+  const normalized = paidAmount.trim()
+
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    throw new Error(`Invalid invoice paid amount: ${paidAmount}`)
+  }
+
+  const [wholePart, decimalPart = ""] = normalized.split(".")
+  const cents = BigInt(wholePart) * 100n + BigInt(`${decimalPart}00`.slice(0, 2))
+
+  return cents > 0n
 }

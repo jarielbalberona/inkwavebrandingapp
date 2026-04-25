@@ -15,15 +15,22 @@ import {
   InvoiceDocumentsService,
   InvoiceShareLinkUnavailableError,
 } from "./invoice-documents.service.js"
-import { createInvoicePaymentSchema, invoicesListQuerySchema } from "./invoices.schemas.js"
+import {
+  createInvoicePaymentSchema,
+  invoicesListQuerySchema,
+  updateInvoicePaymentSchema,
+} from "./invoices.schemas.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 import {
   InvoiceAlreadyExistsError,
   InvoiceAlreadyPaidError,
   InvoiceAlreadyVoidError,
+  InvoiceArchiveError,
+  InvoiceArchiveStatusError,
   InvoiceNotFoundError,
   InvoiceOrderCanceledError,
   InvoiceOrderNotFoundError,
+  InvoicePaymentNotFoundError,
   InvoicePaymentOverpaymentError,
   InvoicePaymentVoidError,
   InvoiceVoidAfterPaymentError,
@@ -90,11 +97,51 @@ export async function handleInvoicesRoute(
     return true
   }
 
+  const invoicePaymentMatch = path.match(/^\/invoices\/([^/]+)\/payments\/([^/]+)$/)
+
+  if (invoicePaymentMatch && request.method === "PATCH") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const input = updateInvoicePaymentSchema.parse(await readJsonBody(request))
+
+      sendJson(response, 200, {
+        invoice: await service.updatePayment(
+          invoicePaymentMatch[1] ?? "",
+          invoicePaymentMatch[2] ?? "",
+          input,
+          user,
+        ),
+      })
+    })
+    return true
+  }
+
+  if (invoicePaymentMatch && request.method === "DELETE") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, {
+        invoice: await service.deletePayment(
+          invoicePaymentMatch[1] ?? "",
+          invoicePaymentMatch[2] ?? "",
+          user,
+        ),
+      })
+    })
+    return true
+  }
+
   const invoiceVoidMatch = path.match(/^\/invoices\/([^/]+)\/void$/)
 
   if (invoiceVoidMatch && request.method === "POST") {
     await withAuthenticatedUser(request, response, context, async (service, user) => {
       sendJson(response, 200, { invoice: await service.void(invoiceVoidMatch[1] ?? "", user) })
+    })
+    return true
+  }
+
+  const invoiceArchiveMatch = path.match(/^\/invoices\/([^/]+)\/archive$/)
+
+  if (invoiceArchiveMatch && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, { invoice: await service.archive(invoiceArchiveMatch[1] ?? "", user) })
     })
     return true
   }
@@ -185,6 +232,9 @@ function handleInvoicesError(response: ServerResponse, error: unknown) {
     error instanceof InvoiceOrderCanceledError ||
     error instanceof InvoiceAlreadyPaidError ||
     error instanceof InvoiceAlreadyVoidError ||
+    error instanceof InvoiceArchiveError ||
+    error instanceof InvoiceArchiveStatusError ||
+    error instanceof InvoicePaymentNotFoundError ||
     error instanceof InvoicePaymentOverpaymentError ||
     error instanceof InvoicePaymentVoidError ||
     error instanceof InvoiceVoidAfterPaymentError ||

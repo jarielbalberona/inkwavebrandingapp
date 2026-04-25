@@ -19,6 +19,7 @@ const invoiceListItemSchema = z.object({
   total_amount: z.string(),
   paid_amount: z.string(),
   remaining_balance: z.string(),
+  archived_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -73,6 +74,7 @@ const invoiceSchema = z.object({
   notes: z.string().nullable(),
   items: z.array(invoiceItemSchema),
   payments: z.array(invoicePaymentSchema),
+  archived_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -99,8 +101,11 @@ export interface RecordInvoicePaymentPayload {
   note?: string
 }
 
+export type UpdateInvoicePaymentPayload = RecordInvoicePaymentPayload
+
 export interface ListInvoicesFilters {
   search?: string
+  includeVoid?: boolean
 }
 
 export async function listInvoices(filters: ListInvoicesFilters = {}): Promise<InvoiceListItem[]> {
@@ -109,6 +114,10 @@ export async function listInvoices(filters: ListInvoicesFilters = {}): Promise<I
 
     if (filters.search?.trim()) {
       searchParams.set("search", filters.search.trim())
+    }
+
+    if (filters.includeVoid) {
+      searchParams.set("include_void", "true")
     }
 
     const data = await api.get<unknown>(
@@ -123,6 +132,73 @@ export async function listInvoices(filters: ListInvoicesFilters = {}): Promise<I
 
     if (error instanceof ApiClientError) {
       throw new Error("Unable to load invoices.")
+    }
+
+    throw error
+  }
+}
+
+export async function updateInvoicePayment(
+  invoiceId: string,
+  paymentId: string,
+  payload: UpdateInvoicePaymentPayload,
+): Promise<Invoice> {
+  try {
+    const data = await api.patch<unknown>(`/invoices/${invoiceId}/payments/${paymentId}`, payload)
+    return invoiceResponseSchema.parse(data).invoice
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Invoice payment not found.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("You do not have permission to update invoice payments.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error(error.message || "Unable to update payment.")
+    }
+
+    throw error
+  }
+}
+
+export async function deleteInvoicePayment(invoiceId: string, paymentId: string): Promise<Invoice> {
+  try {
+    const data = await api.delete<unknown>(`/invoices/${invoiceId}/payments/${paymentId}`)
+    return invoiceResponseSchema.parse(data).invoice
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Invoice payment not found.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("You do not have permission to delete invoice payments.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error(error.message || "Unable to delete payment.")
+    }
+
+    throw error
+  }
+}
+
+export async function archiveInvoice(invoiceId: string): Promise<Invoice> {
+  try {
+    const data = await api.post<unknown>(`/invoices/${invoiceId}/archive`, {})
+    return invoiceResponseSchema.parse(data).invoice
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new Error("Invoice not found.")
+    }
+
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new Error("You do not have permission to archive invoices.")
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new Error(error.message || "Unable to archive invoice.")
     }
 
     throw error

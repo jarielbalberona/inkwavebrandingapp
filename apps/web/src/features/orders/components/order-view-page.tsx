@@ -37,6 +37,7 @@ import type { Invoice, Order, OrderStatus } from "@/features/orders/api/orders-c
 import { openInvoicePdfInNewTab } from "@/features/invoices/api/invoices-client"
 import {
   useCancelOrderMutation,
+  useArchiveOrderMutation,
   useGenerateOrderInvoiceMutation,
   useOrderInvoiceQuery,
   useOrderQuery,
@@ -57,9 +58,11 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
   const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canViewInvoices)
   const generateOrderInvoiceMutation = useGenerateOrderInvoiceMutation()
   const cancelOrderMutation = useCancelOrderMutation()
+  const archiveOrderMutation = useArchiveOrderMutation()
   const [pageError, setPageError] = useState<string | null>(null)
   const [pageSuccess, setPageSuccess] = useState<string | null>(null)
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
 
   const order = orderQuery.data ?? null
   const invoiceLockBlocksEdit =
@@ -72,6 +75,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
     order.status !== "canceled" &&
     order.status !== "completed" &&
     order.status !== "partial_released" &&
+    order.archived_at === null &&
     !invoiceLockBlocksEdit
 
   if (currentUser.isLoading) {
@@ -104,7 +108,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       const canceledOrder = await cancelOrderMutation.mutateAsync(order.id)
       setIsCancelDialogOpen(false)
       setPageSuccess(
-        `Canceled ${canceledOrder.order_number}. Unconsumed reservations were released by the API.`,
+        `Canceled ${canceledOrder.order_number}. Unconsumed reservations were released and any unpaid pending invoice was voided by the API.`,
       )
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Unable to cancel order.")
@@ -124,6 +128,23 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       setPageSuccess(`Generated invoice ${invoice.invoice_number}.`)
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Unable to generate invoice.")
+    }
+  }
+
+  async function handleArchiveOrder() {
+    setPageError(null)
+    setPageSuccess(null)
+
+    if (!order) {
+      return
+    }
+
+    try {
+      const archivedOrder = await archiveOrderMutation.mutateAsync(order.id)
+      setIsArchiveDialogOpen(false)
+      setPageSuccess(`Archived ${archivedOrder.order_number}.`)
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : "Unable to archive order.")
     }
   }
 
@@ -204,6 +225,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                   <Badge variant={statusVariant(order.status)}>
                     {formatStatus(order.status)}
                   </Badge>
+                  {order.archived_at ? (
+                    <Badge variant="secondary">Archived</Badge>
+                  ) : null}
                 </div>
                 <div className="grid gap-1">
                   <p className="text-xs text-muted-foreground">Customer</p>
@@ -234,6 +258,12 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                   <p className="text-xs text-muted-foreground">Last updated</p>
                   <p>{new Date(order.updated_at).toLocaleString()}</p>
                 </div>
+                {order.archived_at ? (
+                  <div className="grid gap-1">
+                    <p className="text-xs text-muted-foreground">Archived</p>
+                    <p>{new Date(order.archived_at).toLocaleString()}</p>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Button asChild type="button" variant="outline" size="sm">
                     <Link to="/orders">Back</Link>
@@ -253,6 +283,23 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                       }}
                     >
                       {cancelOrderMutation.isPending ? "Canceling..." : "Cancel order"}
+                    </Button>
+                  ) : null}
+                  {canManageOrders ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={
+                        archiveOrderMutation.isPending ||
+                        order.archived_at !== null ||
+                        order.status !== "canceled"
+                      }
+                      onClick={() => {
+                        setIsArchiveDialogOpen(true)
+                      }}
+                    >
+                      {archiveOrderMutation.isPending ? "Archiving..." : "Archive order"}
                     </Button>
                   ) : null}
                 </div>
@@ -322,6 +369,30 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
               }}
             >
               {cancelOrderMutation.isPending ? "Canceling..." : "Cancel order"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {order
+                ? `Archive order ${order.order_number}? It will be hidden from the orders table unless archived orders are shown.`
+                : "Archive this order? It will be hidden from the orders table unless archived orders are shown."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveOrderMutation.isPending}>Keep order</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={archiveOrderMutation.isPending || !order}
+              onClick={() => {
+                void handleArchiveOrder()
+              }}
+            >
+              {archiveOrderMutation.isPending ? "Archiving..." : "Archive order"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

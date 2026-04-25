@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, lte, or } from "drizzle-orm"
+import { and, desc, eq, gte, ilike, isNull, lte, ne, or } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
@@ -43,6 +43,8 @@ export class InvoicesRepository {
       query.order_id ? eq(invoices.orderId, query.order_id) : undefined,
       query.start_date ? gte(invoices.createdAt, query.start_date) : undefined,
       query.end_date ? lte(invoices.createdAt, query.end_date) : undefined,
+      isNull(invoices.archivedAt),
+      query.include_void ? undefined : ne(invoices.status, "void"),
     ].filter(Boolean)
 
     return this.db
@@ -178,6 +180,34 @@ export class InvoicesRepository {
     return rows[0] ?? null
   }
 
+  async updatePayment(input: {
+    invoiceId: string
+    paymentId: string
+    payment: Pick<NewInvoicePayment, "amount" | "paymentDate" | "note">
+  }) {
+    const rows = await this.db
+      .update(invoicePayments)
+      .set({
+        amount: input.payment.amount,
+        paymentDate: input.payment.paymentDate,
+        note: input.payment.note,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(invoicePayments.id, input.paymentId), eq(invoicePayments.invoiceId, input.invoiceId)))
+      .returning()
+
+    return rows[0] ?? null
+  }
+
+  async deletePayment(input: { invoiceId: string; paymentId: string }) {
+    const rows = await this.db
+      .delete(invoicePayments)
+      .where(and(eq(invoicePayments.id, input.paymentId), eq(invoicePayments.invoiceId, input.invoiceId)))
+      .returning()
+
+    return rows[0] ?? null
+  }
+
   async updateFinancialState(
     invoiceId: string,
     input: Pick<NewInvoice, "status" | "paidAmount" | "remainingBalance">,
@@ -198,6 +228,16 @@ export class InvoicesRepository {
       .update(invoices)
       .set({
         documentAssetId,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, invoiceId))
+  }
+
+  async archive(invoiceId: string): Promise<void> {
+    await this.db
+      .update(invoices)
+      .set({
+        archivedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(invoices.id, invoiceId))

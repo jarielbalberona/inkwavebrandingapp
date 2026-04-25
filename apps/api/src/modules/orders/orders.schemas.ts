@@ -140,6 +140,10 @@ export const updateOrderPrioritiesSchema = z
 
 export const orderListQuerySchema = z.object({
   status: orderStatusSchema.optional(),
+  include_archived: z
+    .union([z.literal("true"), z.literal("false"), z.boolean()])
+    .optional()
+    .transform((value) => value === true || value === "true"),
 })
 
 export type OrderStatus = z.infer<typeof orderStatusSchema>
@@ -147,7 +151,7 @@ export type OrderLineItemProgressStage = z.infer<typeof orderLineItemProgressSta
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>
 export type UpdateOrderPrioritiesInput = z.infer<typeof updateOrderPrioritiesSchema>
-export type OrderListQuery = z.infer<typeof orderListQuerySchema>
+export type OrderListQuery = z.input<typeof orderListQuerySchema>
 export type CreateOrderLineItemProgressEventInput = z.infer<
   typeof createOrderLineItemProgressEventSchema
 >

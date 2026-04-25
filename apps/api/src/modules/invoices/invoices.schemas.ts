@@ -15,6 +15,10 @@ export const invoicesListQuerySchema = z
     order_id: z.string().uuid().optional(),
     start_date: z.coerce.date().optional(),
     end_date: z.coerce.date().optional(),
+    include_void: z
+      .enum(["true", "false"])
+      .optional()
+      .transform((value) => value === "true"),
   })
   .refine(
     (input) =>
@@ -41,3 +45,7 @@ export const createInvoicePaymentSchema = z.object({
 })
 
 export type CreateInvoicePaymentInput = z.infer<typeof createInvoicePaymentSchema>
+
+export const updateInvoicePaymentSchema = createInvoicePaymentSchema
+
+export type UpdateInvoicePaymentInput = z.infer<typeof updateInvoicePaymentSchema>

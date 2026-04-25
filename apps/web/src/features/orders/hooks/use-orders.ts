@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
   cancelOrder,
+  archiveOrder,
   createOrder,
   createProgressEvent,
   generateOrderInvoice,
@@ -39,10 +40,23 @@ export const progressStageOptions = [
   "released",
 ] as const
 
-export function useOrdersQuery(filters: { status?: OrderStatus } = {}) {
+export function useOrdersQuery(filters: { status?: OrderStatus; includeArchived?: boolean } = {}) {
   return useQuery({
     queryKey: [...ordersQueryKey, filters] as const,
     queryFn: () => listOrders(filters),
+  })
+}
+
+export function useArchiveOrderMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => archiveOrder(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+      await queryClient.invalidateQueries({ queryKey: orderInvoicesQueryKey })
+      await queryClient.invalidateQueries({ queryKey: orderProgressEventsQueryKey })
+    },
   })
 }
 
