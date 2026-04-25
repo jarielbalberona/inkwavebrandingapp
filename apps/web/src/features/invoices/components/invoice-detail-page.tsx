@@ -50,7 +50,7 @@ import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
-import type { InvoiceShareLink } from "@/features/invoices/api/invoices-client"
+import type { Invoice, InvoiceShareLink } from "@/features/invoices/api/invoices-client"
 import { useOrderQuery } from "@/features/orders/hooks/use-orders"
 import {
   useArchiveInvoiceMutation,
@@ -781,7 +781,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                   {invoice.items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.description_snapshot}</TableCell>
-                      <TableCell>{item.item_type}</TableCell>
+                      <TableCell>{formatInvoiceItemType(item.item_type)}</TableCell>
                       <TableCell>{item.quantity.toLocaleString()}</TableCell>
                       <TableCell>{formatMoneyValue(item.unit_price)}</TableCell>
                       <TableCell>{formatMoneyValue(item.line_total)}</TableCell>
@@ -890,6 +890,21 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
       </AlertDialog>
     </Card>
   )
+}
+
+function formatInvoiceItemType(itemType: Invoice["items"][number]["item_type"]): string {
+  switch (itemType) {
+    case "cup":
+      return "Cup"
+    case "lid":
+      return "Lid"
+    case "non_stock_item":
+      return "General item"
+    case "custom_charge":
+      return "Custom charge"
+    case "product_bundle":
+      return "Product bundle"
+  }
 }
 
 function FinancialRow({
