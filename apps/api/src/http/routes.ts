@@ -1,6 +1,6 @@
 import type { IncomingMessage } from "node:http"
 
-export type HttpMethod = "GET" | "POST" | "PATCH"
+export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE"
 
 export interface RouteDefinition {
   access: "public" | "protected"
@@ -30,6 +30,11 @@ export const routeDefinitions = [
   { access: "protected", method: "GET", path: "/invoices/:id" },
   { access: "protected", method: "GET", path: "/invoices/:id/pdf" },
   { access: "protected", method: "GET", path: "/invoices/:id/share-link" },
+  { access: "protected", method: "POST", path: "/invoices/:id/payments" },
+  { access: "protected", method: "PATCH", path: "/invoices/:id/payments/:paymentId" },
+  { access: "protected", method: "DELETE", path: "/invoices/:id/payments/:paymentId" },
+  { access: "protected", method: "POST", path: "/invoices/:id/void" },
+  { access: "protected", method: "POST", path: "/invoices/:id/archive" },
   { access: "protected", method: "GET", path: "/order-line-items/:id/progress-events" },
   { access: "protected", method: "POST", path: "/order-line-items/:id/progress-events" },
   { access: "protected", method: "GET", path: "/orders" },

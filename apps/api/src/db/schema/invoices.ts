@@ -124,12 +124,14 @@ export const invoicePayments = pgTable(
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("invoice_payments_invoice_id_idx").on(table.invoiceId),
     index("invoice_payments_payment_date_idx").on(table.paymentDate),
+    index("invoice_payments_archived_at_idx").on(table.archivedAt),
     index("invoice_payments_created_by_user_id_idx").on(table.createdByUserId),
     check("invoice_payments_amount_positive", sql`${table.amount} > 0`),
     check("invoice_payments_note_not_blank", sql`${table.note} is null or length(trim(${table.note})) > 0`),

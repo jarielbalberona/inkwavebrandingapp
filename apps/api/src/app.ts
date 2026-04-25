@@ -109,7 +109,7 @@ function applyCors(request: IncomingMessage, response: ServerResponse, env: ApiE
 
   response.setHeader("Access-Control-Allow-Origin", origin)
   response.setHeader("Access-Control-Allow-Credentials", "true")
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type")
-  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS")
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, X-Request-Id")
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
   response.setHeader("Vary", "Origin")
 }

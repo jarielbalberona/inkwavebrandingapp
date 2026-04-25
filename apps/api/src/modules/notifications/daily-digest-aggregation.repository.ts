@@ -1,4 +1,4 @@
-import { and, count, eq, gte, lt, sql } from "drizzle-orm"
+import { and, count, eq, gte, isNull, lt, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
@@ -122,6 +122,7 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
     const paymentRange = and(
       gte(invoicePayments.paymentDate, window.startedAt),
       lt(invoicePayments.paymentDate, window.endedAt),
+      isNull(invoicePayments.archivedAt),
     )
     const inventoryRange = and(
       gte(inventoryMovements.createdAt, window.startedAt),

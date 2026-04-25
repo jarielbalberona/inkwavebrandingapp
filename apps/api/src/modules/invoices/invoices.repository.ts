@@ -138,6 +138,7 @@ export class InvoicesRepository {
           },
         },
         payments: {
+          where: (p, { isNull }) => isNull(p.archivedAt),
           with: {
             createdByUser: true,
           },
@@ -157,6 +158,7 @@ export class InvoicesRepository {
           },
         },
         payments: {
+          where: (p, { isNull }) => isNull(p.archivedAt),
           with: {
             createdByUser: true,
           },
@@ -193,7 +195,13 @@ export class InvoicesRepository {
         note: input.payment.note,
         updatedAt: new Date(),
       })
-      .where(and(eq(invoicePayments.id, input.paymentId), eq(invoicePayments.invoiceId, input.invoiceId)))
+      .where(
+        and(
+          eq(invoicePayments.id, input.paymentId),
+          eq(invoicePayments.invoiceId, input.invoiceId),
+          isNull(invoicePayments.archivedAt),
+        ),
+      )
       .returning()
 
     return rows[0] ?? null
@@ -201,8 +209,15 @@ export class InvoicesRepository {
 
   async deletePayment(input: { invoiceId: string; paymentId: string }) {
     const rows = await this.db
-      .delete(invoicePayments)
-      .where(and(eq(invoicePayments.id, input.paymentId), eq(invoicePayments.invoiceId, input.invoiceId)))
+      .update(invoicePayments)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(invoicePayments.id, input.paymentId),
+          eq(invoicePayments.invoiceId, input.invoiceId),
+          isNull(invoicePayments.archivedAt),
+        ),
+      )
       .returning()
 
     return rows[0] ?? null

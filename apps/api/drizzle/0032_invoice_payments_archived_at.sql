@@ -1,0 +1,2 @@
+ALTER TABLE "invoice_payments" ADD COLUMN IF NOT EXISTS "archived_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "invoice_payments_archived_at_idx" ON "invoice_payments" USING btree ("archived_at");
