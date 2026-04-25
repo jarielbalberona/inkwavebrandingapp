@@ -4,10 +4,12 @@ import {
   getInvoice,
   archiveInvoice,
   deleteInvoicePayment,
+  getInvoiceShareLink,
   recordInvoicePayment,
   listInvoices,
   updateInvoicePayment,
   voidInvoice,
+  type InvoiceShareLink,
   type ListInvoicesFilters,
   type RecordInvoicePaymentPayload,
   type UpdateInvoicePaymentPayload,
@@ -27,6 +29,12 @@ export function useInvoiceQuery(invoiceId: string | null) {
     queryKey: [...invoicesQueryKey, "detail", invoiceId] as const,
     queryFn: () => getInvoice(invoiceId ?? ""),
     enabled: Boolean(invoiceId),
+  })
+}
+
+export function useInvoiceShareLinkMutation() {
+  return useMutation<InvoiceShareLink, Error, string>({
+    mutationFn: (invoiceId: string) => getInvoiceShareLink(invoiceId),
   })
 }
 

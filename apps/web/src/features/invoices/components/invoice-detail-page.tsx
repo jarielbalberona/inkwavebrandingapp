@@ -50,11 +50,12 @@ import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
-import { getInvoiceShareLink, openInvoicePdfInNewTab } from "@/features/invoices/api/invoices-client"
+import type { InvoiceShareLink } from "@/features/invoices/api/invoices-client"
 import {
   useArchiveInvoiceMutation,
   useDeleteInvoicePaymentMutation,
   useInvoiceQuery,
+  useInvoiceShareLinkMutation,
   useRecordInvoicePaymentMutation,
   useUpdateInvoicePaymentMutation,
   useVoidInvoiceMutation,
@@ -83,11 +84,16 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const deleteInvoicePaymentMutation = useDeleteInvoicePaymentMutation()
   const voidInvoiceMutation = useVoidInvoiceMutation()
   const archiveInvoiceMutation = useArchiveInvoiceMutation()
+  const shareLinkMutation = useInvoiceShareLinkMutation()
+  const [shareLinkState, setShareLinkState] = useState<{
+    invoiceId: string
+    shareLink: InvoiceShareLink
+  } | null>(null)
   const [shareMessage, setShareMessage] = useState<string | null>(null)
   const [shareError, setShareError] = useState<string | null>(null)
+  const [isManualShareDialogOpen, setIsManualShareDialogOpen] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [isCreatingShareLink, setIsCreatingShareLink] = useState(false)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false)
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
@@ -102,6 +108,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
       note: "",
     },
   })
+  const shareLink = shareLinkState?.invoiceId === invoiceId ? shareLinkState.shareLink : null
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -161,23 +168,78 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
     setIsPaymentDialogOpen(true)
   }
 
+  async function resolveShareLink(): Promise<InvoiceShareLink> {
+    if (!invoice) {
+      throw new Error("Invoice data is not available yet.")
+    }
+
+    if (shareLink) {
+      return shareLink
+    }
+
+    const nextShareLink = await shareLinkMutation.mutateAsync(invoice.id)
+    setShareLinkState({ invoiceId: invoice.id, shareLink: nextShareLink })
+    return nextShareLink
+  }
+
   async function handleCopyShareLink() {
-    if (!invoice || isCreatingShareLink) {
+    if (!invoice || shareLinkMutation.isPending) {
       return
     }
 
-    setIsCreatingShareLink(true)
     setShareMessage(null)
     setShareError(null)
 
+    let resolvedShareLink: InvoiceShareLink | null = null
+
     try {
-      const shareLink = await getInvoiceShareLink(invoice.id)
-      await navigator.clipboard.writeText(shareLink.url)
-      setShareMessage(`Copied share link for ${shareLink.filename}.`)
+      const nextShareLink = await resolveShareLink()
+      resolvedShareLink = nextShareLink
+
+      if (!navigator.clipboard?.writeText) {
+        setIsManualShareDialogOpen(true)
+        setShareError("Clipboard access is unavailable. Copy the invoice link manually.")
+        return
+      }
+
+      await navigator.clipboard.writeText(nextShareLink.url)
+      setIsManualShareDialogOpen(false)
+      setShareMessage(`Copied share link for ${nextShareLink.filename}.`)
     } catch (error) {
+      if (resolvedShareLink ?? shareLink) {
+        setIsManualShareDialogOpen(true)
+        setShareError("Clipboard copy failed. Copy the invoice link manually.")
+        return
+      }
+
       setShareError(error instanceof Error ? error.message : "Unable to copy share link.")
-    } finally {
-      setIsCreatingShareLink(false)
+    }
+  }
+
+  async function handleViewPdf() {
+    if (!invoice || shareLinkMutation.isPending) {
+      return
+    }
+
+    setShareMessage(null)
+    setShareError(null)
+
+    const child = window.open("", "_blank")
+
+    if (!child) {
+      setShareError("Your browser blocked the PDF tab. Allow pop-ups for this site, then try again.")
+      return
+    }
+
+    child.opener = null
+
+    try {
+      const nextShareLink = await resolveShareLink()
+      child.location.href = nextShareLink.url
+      setShareMessage(`Opened ${nextShareLink.filename}.`)
+    } catch (error) {
+      child.close()
+      setShareError(error instanceof Error ? error.message : "Unable to open the invoice PDF.")
     }
   }
 
@@ -295,31 +357,28 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={isCreatingShareLink}
+                disabled={shareLinkMutation.isPending}
                 size="sm"
                 onClick={() => {
                   void handleCopyShareLink()
                 }}
               >
                 <CopyIcon className="size-4" />
-                {isCreatingShareLink ? "Copying..." : "Copy"}
+                {shareLinkMutation.isPending ? "Preparing..." : "Copy link"}
               </Button>
             ) : null}
             {invoice ? (
               <Button
                 type="button"
                 variant="outline"
+                disabled={shareLinkMutation.isPending}
                 size="sm"
                 onClick={() => {
-                  setActionError(null)
-                  setActionMessage(null)
-                  void openInvoicePdfInNewTab(invoice.id).catch((error) => {
-                    setActionError(error instanceof Error ? error.message : "Unable to open the PDF.")
-                  })
+                  void handleViewPdf()
                 }}
               >
                 <EyeIcon className="size-4" />
-                PDF
+                View PDF
               </Button>
             ) : null}
           </div>
@@ -351,6 +410,15 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
           <Alert>
             <AlertDescription>{shareMessage}</AlertDescription>
           </Alert>
+        ) : null}
+
+        {shareLink ? (
+          <div className="grid gap-2 rounded-md border p-3">
+            <label htmlFor="invoice-share-link" className="text-xs font-medium text-muted-foreground">
+              Invoice share link
+            </label>
+            <Input id="invoice-share-link" readOnly value={shareLink.url} onFocus={(event) => event.target.select()} />
+          </div>
         ) : null}
 
         {actionError ? (
@@ -723,6 +791,21 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={isManualShareDialogOpen && Boolean(shareLink)} onOpenChange={setIsManualShareDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Copy invoice link manually</DialogTitle>
+            <DialogDescription>
+              Clipboard access failed. Select the link and copy it from the field below.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            readOnly
+            value={shareLink?.url ?? ""}
+            onFocus={(event) => event.target.select()}
+          />
+        </DialogContent>
+      </Dialog>
       <AlertDialog
         open={deletingPaymentId !== null}
         onOpenChange={(open) => {
