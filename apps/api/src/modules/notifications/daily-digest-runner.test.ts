@@ -198,6 +198,7 @@ test("DailyDigestRunner records retryable provider failures", async () => {
           listRunDeliveries: async () => [
             {
               id: "delivery-1",
+              recipientEmail: "admin@inkwave.test",
               status: "failed_retryable",
             },
           ],
@@ -277,6 +278,115 @@ test("DailyDigestRunner records retryable provider failures", async () => {
       errorCode: "rate_limit",
       errorMessage: "Rate limit",
       retryable: true,
+    },
+  ])
+})
+
+test("DailyDigestRunner includeFailureDetails backfills from DB when re-run has no pending deliveries", async () => {
+  const attempts: unknown[] = []
+  const runner = new DailyDigestRunner({
+    env: {
+      emailProvider: "resend",
+      resendApiKey: "test",
+      resendFromEmail: "ops@inkwave.test",
+      resendReplyToEmail: undefined,
+      webOrigin: "https://app.inkwave.test",
+    },
+    repository: {
+      transaction: async (handler: (repository: unknown) => Promise<unknown>) =>
+        handler({
+          ensureRun: async () => ({ id: "run-1", recipientCount: 0, sentCount: 0, failedCount: 0 }),
+          claimRun: async () => ({ id: "run-1" }),
+          seedDeliveries: async () => [],
+          listPendingDeliveries: async () => [],
+          listRunDeliveries: async () => [
+            {
+              id: "delivery-1",
+              recipientEmail: "admin@inkwave.test",
+              recipientName: "Admin",
+              status: "failed_terminal",
+              lastErrorCode: "invalid_from",
+              lastErrorMessage: "The from address is not valid for this domain",
+            },
+          ],
+          markDeliveryFailed: async () => {
+            throw new Error("markDeliveryFailed should not be called when there are no pending rows")
+          },
+          appendAttempt: async (_deliveryId: string, input: unknown) => {
+            attempts.push(input)
+          },
+          updateRunCounts: async () => ({ id: "run-1" }),
+        }),
+    } as never,
+    aggregationService: {
+      async build() {
+        return {
+          window: {
+            businessDate: "2026-04-27",
+            timezone: "Asia/Manila" as const,
+            startedAt: new Date("2026-04-26T16:00:00.000Z"),
+            endedAt: new Date("2026-04-27T16:00:00.000Z"),
+          },
+          props: {
+            businessName: "Ink Wave Branding",
+            reportDateLabel: "Monday, April 27, 2026",
+            dashboardUrl: "https://app.inkwave.test/dashboard",
+            orderSummary: {
+              totalOrders: 1,
+              pendingOrders: 1,
+              inProgressOrders: 0,
+              partialReleasedOrders: 0,
+              completedOrders: 0,
+              canceledOrders: 0,
+            },
+            invoiceSummary: {
+              pendingInvoiceCount: 0,
+              paidInvoiceCount: 0,
+              voidInvoiceCount: 0,
+              totalPaidAmount: 0,
+              outstandingBalance: 0,
+            },
+            inventorySummary: {
+              lowStockCount: 0,
+              outOfStockCount: 0,
+              highlightedItems: [],
+            },
+            inventoryActivitySummary: {
+              stockIntakeCount: 0,
+              adjustmentCount: 0,
+            },
+            highlights: ["Orders created today: 1"],
+          },
+          highlights: ["Orders created today: 1"],
+          isEmpty: false,
+        }
+      },
+    } as never,
+    recipientResolver: {
+      async resolve() {
+        return [{ email: "admin@inkwave.test", name: "Admin" }]
+      },
+    } as never,
+    emailProvider: {
+      async sendEmail() {
+        throw new Error("should not send when there are no pending deliveries")
+      },
+    },
+    now: () => new Date("2026-04-27T09:30:00.000Z"),
+  })
+
+  const result = await runner.runForBusinessDate("2026-04-27", {
+    includeFailureDetails: true,
+  })
+
+  assert.equal(result.status, "failed")
+  assert.equal(attempts.length, 0)
+  assert.deepEqual(result.deliveryFailures, [
+    {
+      recipientEmail: "admin@inkwave.test",
+      errorCode: "invalid_from",
+      errorMessage: "The from address is not valid for this domain",
+      retryable: false,
     },
   ])
 })

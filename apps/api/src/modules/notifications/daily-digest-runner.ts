@@ -23,8 +23,9 @@ export interface DailyDigestDeliveryFailureDetail {
 
 export interface DailyDigestRunOptions {
   /**
-   * When set, the result includes `deliveryFailures` for every catch in `deliverRecipient`
-   * (use from the daily digest CLI with `--debug` to see Resend / provider errors in stdout).
+   * When set, the result includes `deliveryFailures` (use with daily digest CLI `--debug`).
+   * Includes errors from send attempts in this run, and for re-runs with no pending deliveries
+   * (e.g. `failed_terminal`) backfills `last_error_*` from stored delivery rows.
    */
   includeFailureDetails?: boolean
 }
@@ -184,6 +185,11 @@ export class DailyDigestRunner {
             ? "partial_failure"
             : "failed"
 
+      const deliveryFailureDiagnostics =
+        includeFailureDetails
+          ? mergeFailureDetailsFromStoredDeliveries(failureDetails, deliveries)
+          : undefined
+
       const updatedRun = await repository.updateRunCounts(claimedRun.id, {
         recipientCount: deliveries.length,
         sentCount,
@@ -214,7 +220,9 @@ export class DailyDigestRunner {
         recipientCount: deliveries.length,
         sentCount,
         failedCount,
-        ...(failureDetails && failureDetails.length > 0 ? { deliveryFailures: failureDetails } : {}),
+        ...(deliveryFailureDiagnostics && deliveryFailureDiagnostics.length > 0
+          ? { deliveryFailures: deliveryFailureDiagnostics }
+          : {}),
       }
     })
   }
@@ -309,6 +317,61 @@ function resolveDashboardUrl(webOrigin: string | undefined): string {
   }
 
   return new URL("/dashboard", webOrigin).toString()
+}
+
+type RunDeliveryRow = Awaited<ReturnType<DailyDigestRepository["listRunDeliveries"]>>[number]
+
+/**
+ * Terminal / non-retryable failures are not listed as "pending", so a re-run may perform no
+ * sends. Merge in-memory errors from this run with persisted row data for non-sent deliveries.
+ */
+function mergeFailureDetailsFromStoredDeliveries(
+  fromLoop: DailyDigestDeliveryFailureDetail[] | undefined,
+  deliveries: RunDeliveryRow[],
+): DailyDigestDeliveryFailureDetail[] {
+  const fromLoopByEmail = new Map(
+    (fromLoop ?? []).map((f) => [f.recipientEmail.toLowerCase(), f]),
+  )
+  const out: DailyDigestDeliveryFailureDetail[] = []
+
+  for (const d of deliveries) {
+    if (d.status === "sent") {
+      continue
+    }
+
+    const email = d.recipientEmail
+    if (!email) {
+      out.push({
+        recipientEmail: "(unknown recipient)",
+        errorCode: d.lastErrorCode,
+        errorMessage:
+          d.lastErrorMessage ??
+          "Delivery row is missing recipient_email (data integrity issue).",
+        retryable: d.status === "failed_retryable",
+      })
+      continue
+    }
+
+    const key = email.toLowerCase()
+    const fromAttempt = fromLoopByEmail.get(key)
+    if (fromAttempt) {
+      out.push(fromAttempt)
+      continue
+    }
+
+    out.push({
+      recipientEmail: email,
+      errorCode: d.lastErrorCode,
+      errorMessage:
+        d.lastErrorMessage ??
+        (d.status === "pending"
+          ? "Delivery is still pending (no send attempt in this run)."
+          : "No error message stored on the delivery row."),
+      retryable: d.status === "failed_retryable",
+    })
+  }
+
+  return out
 }
 
 function normalizeDeliveryError(error: unknown): EmailProviderError {

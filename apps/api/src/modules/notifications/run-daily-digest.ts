@@ -16,6 +16,11 @@ const businessDate = parseBusinessDateArg(args) ?? getManilaBusinessDate()
 const debug = parseDebugFlag(args)
 
 if (debug) {
+  const fromEmail = env.resendFromEmail ?? null
+  const fromEmailHint =
+    fromEmail && /^".*"$/.test(fromEmail.trim())
+      ? "RESEND_FROM_EMAIL appears to include extra double quotes; use Ink Wave Name <addr@domain> without surrounding quotes in Render."
+      : null
   console.log(
     JSON.stringify({
       event: "daily_digest_cli_debug_preflight",
@@ -24,7 +29,8 @@ if (debug) {
       nodeEnv: process.env.NODE_ENV ?? null,
       emailProvider: env.emailProvider,
       resendApiKeyConfigured: Boolean(env.resendApiKey),
-      resendFromEmail: env.resendFromEmail ?? null,
+      resendFromEmail: fromEmail,
+      resendFromEmailHint: fromEmailHint,
       webOrigin: env.webOrigin ?? null,
     }),
   )
