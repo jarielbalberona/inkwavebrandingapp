@@ -9,10 +9,10 @@ export interface EmailBranding {
 }
 
 export const defaultEmailBranding: EmailBranding = {
-  appName: "Ink Wave Branding App",
+  appName: "Ink Wave Branding Internal",
   companyName: "Ink Wave Branding",
   tagline: "Operational updates for print orders, inventory, and invoice follow-through.",
-  supportEmail: "support@inkwave.local",
-  websiteUrl: "https://inkwave.local",
+  supportEmail: "hello@inkwavebrand.ing",
+  websiteUrl: "https://inkwavebrand.ing",
   headerLogoUrl: "https://assets.inkwavebrand.ing/iw-logo.jpg",
 }

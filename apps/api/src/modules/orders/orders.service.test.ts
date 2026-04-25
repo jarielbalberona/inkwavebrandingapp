@@ -57,7 +57,7 @@ test("OrdersService.list still fails when relation loading breaks and orders alr
   await assert.rejects(() => service.list({}, adminUser), /Failed query/)
 })
 
-test("OrdersService.cancel voids an unpaid pending linked invoice in the same transaction", async () => {
+test("OrdersService.cancel leaves an unpaid pending linked invoice pending for a separate void step", async () => {
   let canceledOrderId: string | null = null
   let invoiceFinancialState: unknown = null
   const now = new Date("2026-04-24T09:00:00.000Z")
@@ -115,13 +115,7 @@ test("OrdersService.cancel voids an unpaid pending linked invoice in the same tr
 
   assert.equal(canceledOrderId, "order-1")
   assert.equal(canceledOrder.status, "canceled")
-  assert.deepEqual(invoiceFinancialState, {
-    status: "void",
-    paidAmount: "0.00",
-    remainingBalance: "1000.00",
-    updatedAt: (invoiceFinancialState as { updatedAt: Date }).updatedAt,
-  })
-  assert.ok((invoiceFinancialState as { updatedAt: unknown }).updatedAt instanceof Date)
+  assert.equal(invoiceFinancialState, null)
 })
 
 test("OrdersService.cancel rejects a linked pending invoice once payments exist", async () => {

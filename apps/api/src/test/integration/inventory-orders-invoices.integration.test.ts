@@ -919,6 +919,85 @@ describe("inventory, order, and invoice integration", () => {
     expect(voidResponse.body.error).toBe("Invoices with recorded payments cannot be voided")
   })
 
+  it("rejects voiding invoices while the linked order is still active", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer({
+      businessName: "Void Order Gate Customer",
+    })
+    const nonStockItem = await seedNonStockItem({
+      name: "Void Order Gate Fee",
+      defaultSellPrice: "12.00",
+      costPrice: "4.00",
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const invoiceResponse = await api.get(`/orders/${orderId}/invoice`).set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const invoiceId = invoiceResponse.body.invoice.id as string
+    const voidResponse = await api.post(`/invoices/${invoiceId}/void`).set("Cookie", adminCookie)
+
+    expect(voidResponse.status).toBe(409)
+    expect(voidResponse.body.error).toBe("Cancel the linked order before voiding this invoice")
+  })
+
+  it("allows voiding an unpaid invoice after the linked order is canceled", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer({
+      businessName: "Void After Cancel Customer",
+    })
+    const nonStockItem = await seedNonStockItem({
+      name: "Void After Cancel Fee",
+      defaultSellPrice: "12.00",
+      costPrice: "4.00",
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const invoiceResponse = await api.get(`/orders/${orderId}/invoice`).set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const invoiceId = invoiceResponse.body.invoice.id as string
+
+    const cancelResponse = await api.patch(`/orders/${orderId}/cancel`).set("Cookie", adminCookie)
+
+    expect(cancelResponse.status).toBe(200)
+    expect(cancelResponse.body.order.status).toBe("canceled")
+
+    const invoiceBeforeVoid = await api.get(`/invoices/${invoiceId}`).set("Cookie", adminCookie)
+
+    expect(invoiceBeforeVoid.status).toBe(200)
+    expect(invoiceBeforeVoid.body.invoice.status).toBe("pending")
+
+    const voidResponse = await api.post(`/invoices/${invoiceId}/void`).set("Cookie", adminCookie)
+
+    expect(voidResponse.status).toBe(200)
+    expect(voidResponse.body.invoice.status).toBe("void")
+  })
+
   it("does not expose an invoice structural edit route", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()

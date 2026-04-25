@@ -34,6 +34,27 @@ test("DailyDigestAggregationService builds digest props for a Manila business da
         adjustmentCount: 2,
       }
     },
+    async getFulfillmentDaySummary() {
+      return {
+        totalEvents: 3,
+        totalUnits: 50,
+        unitsByStage: {
+          printed: 10,
+          qaPassed: 10,
+          packed: 10,
+          readyForRelease: 10,
+          released: 10,
+        },
+        recent: [
+          {
+            orderNumber: "ORD-9",
+            lineLabel: "CUP-001 · 12oz",
+            stage: "released" as const,
+            quantity: 10,
+          },
+        ],
+      }
+    },
     async listLowStockItems() {
       return [
         {
@@ -57,6 +78,9 @@ test("DailyDigestAggregationService builds digest props for a Manila business da
   assert.equal(digest.props.invoiceSummary.totalPaidAmount, 2750)
   assert.equal(digest.props.inventorySummary.outOfStockCount, 1)
   assert.equal(digest.isEmpty, false)
+  assert.equal(digest.props.fulfillmentDay?.totalEvents, 3)
+  assert.equal(digest.props.fulfillmentDay?.recent[0]?.orderNumber, "ORD-9")
+  assert.match(digest.highlights.join(" | "), /Fulfillment progress today/)
   assert.match(digest.highlights.join(" | "), /Orders created today: 2/)
   assert.match(digest.highlights.join(" | "), /Payments recorded today: 2 totaling 2750.00/)
 })
@@ -90,6 +114,20 @@ test("DailyDigestAggregationService can report an empty digest", async () => {
         totalPaidAmount: 0,
         stockIntakeCount: 0,
         adjustmentCount: 0,
+      }
+    },
+    async getFulfillmentDaySummary() {
+      return {
+        totalEvents: 0,
+        totalUnits: 0,
+        unitsByStage: {
+          printed: 0,
+          qaPassed: 0,
+          packed: 0,
+          readyForRelease: 0,
+          released: 0,
+        },
+        recent: [],
       }
     },
     async listLowStockItems() {

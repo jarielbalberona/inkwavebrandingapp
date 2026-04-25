@@ -14,6 +14,7 @@ import {
   type RecordInvoicePaymentPayload,
   type UpdateInvoicePaymentPayload,
 } from "@/features/invoices/api/invoices-client"
+import { ordersQueryKey } from "@/features/orders/hooks/use-orders"
 
 export const invoicesQueryKey = ["invoices"] as const
 
@@ -116,6 +117,9 @@ export function useVoidInvoiceMutation() {
       })
       await queryClient.invalidateQueries({
         queryKey: ["orders", "invoice", invoice.order_id],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: [...ordersQueryKey, "detail", invoice.order_id],
       })
     },
   })

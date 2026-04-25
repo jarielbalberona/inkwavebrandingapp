@@ -836,14 +836,6 @@ export class OrdersService {
         throw new InvoicePaymentLockError()
       }
 
-      if (existingInvoice?.status === "pending") {
-        await invoicesRepository.updateFinancialState(existingInvoice.id, {
-          status: "void",
-          paidAmount: existingInvoice.paidAmount,
-          remainingBalance: existingInvoice.totalAmount,
-        })
-      }
-
       const orderItems = await ordersRepository.listOrderItemsWithProgressEvents(order.id)
 
       for (const item of orderItems) {

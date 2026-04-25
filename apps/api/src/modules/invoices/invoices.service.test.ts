@@ -9,10 +9,12 @@ import {
   InvoiceAlreadyPaidError,
   InvoiceArchiveStatusError,
   InvoiceOrderCanceledError,
+  InvoiceOrderNotFoundError,
   InvoicePaymentLockError,
   InvoicePaymentOverpaymentError,
   InvoicePaymentVoidError,
   InvoicePaidLockError,
+  InvoiceVoidActiveOrderError,
   InvoiceVoidAfterPaymentError,
   InvoiceVoidLockError,
   InvoicesService,
@@ -1011,7 +1013,14 @@ test("void marks an unpaid invoice as void", async () => {
     },
   }
 
-  const service = new InvoicesService(invoicesRepository as never, {} as never)
+  const ordersRepository = {
+    findByIdWithRelations: async () => ({
+      id: "order-1",
+      status: "canceled" as const,
+    }),
+  }
+
+  const service = new InvoicesService(invoicesRepository as never, ordersRepository as never)
 
   const invoice = await service.void("invoice-1", adminUser)
 
@@ -1046,6 +1055,68 @@ test("void rejects invoices with recorded payments", async () => {
   )
 
   await assert.rejects(() => service.void("invoice-1", adminUser), InvoiceVoidAfterPaymentError)
+})
+
+test("void rejects invoices whose linked order is not canceled", async () => {
+  const invoicesRepository = {
+    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      handler({
+        invoicesRepository: {
+          findByIdWithRelations: async () => ({
+            id: "invoice-1",
+            orderId: "order-1",
+            status: "pending" as const,
+            totalAmount: "1000.00",
+            paidAmount: "0.00",
+            remainingBalance: "1000.00",
+            payments: [],
+          }),
+          updateFinancialState: async () => {
+            throw new Error("updateFinancialState should not run")
+          },
+        },
+        db: {},
+      }),
+  } as never
+
+  const ordersRepository = {
+    findByIdWithRelations: async () => ({
+      id: "order-1",
+      status: "pending" as const,
+    }),
+  } as never
+
+  const service = new InvoicesService(invoicesRepository, ordersRepository)
+
+  await assert.rejects(() => service.void("invoice-1", adminUser), InvoiceVoidActiveOrderError)
+})
+
+test("void rejects invoices whose linked order is missing", async () => {
+  const invoicesRepository = {
+    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      handler({
+        invoicesRepository: {
+          findByIdWithRelations: async () => ({
+            id: "invoice-1",
+            orderId: "order-1",
+            status: "pending" as const,
+            totalAmount: "1000.00",
+            paidAmount: "0.00",
+            remainingBalance: "1000.00",
+            payments: [],
+          }),
+        },
+        db: {},
+      }),
+  } as never
+
+  const ordersRepository = {
+    findByIdWithRelations: async () => null,
+  } as never
+
+  const service = new InvoicesService(invoicesRepository, ordersRepository)
+
+  await assert.rejects(() => service.void("invoice-1", adminUser), InvoiceOrderNotFoundError)
 })
 
 test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not exist", async () => {

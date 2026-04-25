@@ -33,9 +33,29 @@ test("DailyBusinessDigestEmail renders the operational summary", async () => {
       adjustmentCount: 2,
     },
     highlights: ["Push payment follow-up on the oldest unpaid invoice before release."],
+    fulfillmentDay: {
+      totalEvents: 2,
+      totalUnits: 24,
+      unitsByStage: {
+        printed: 6,
+        qaPassed: 6,
+        packed: 6,
+        readyForRelease: 0,
+        released: 6,
+      },
+      recent: [
+        {
+          orderNumber: "AB-1001",
+          lineLabel: "12oz PET cup",
+          stageLabel: "Released",
+          quantity: 6,
+        },
+      ],
+    },
   })
 
   assert.match(rendered.html, /https:\/\/assets\.inkwavebrand\.ing\/iw-logo\.jpg/)
+  assert.match(rendered.html, /Fulfillment \(today\)/)
   assert.match(rendered.html, /Daily business digest/)
   assert.match(rendered.html, /In progress/)
   assert.match(rendered.html, /Partial released/)

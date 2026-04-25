@@ -33,6 +33,7 @@ import {
   InvoicePaymentNotFoundError,
   InvoicePaymentOverpaymentError,
   InvoicePaymentVoidError,
+  InvoiceVoidActiveOrderError,
   InvoiceVoidAfterPaymentError,
   InvoicesService,
 } from "./invoices.service.js"
@@ -238,6 +239,7 @@ function handleInvoicesError(response: ServerResponse, error: unknown) {
     error instanceof InvoicePaymentOverpaymentError ||
     error instanceof InvoicePaymentVoidError ||
     error instanceof InvoiceVoidAfterPaymentError ||
+    error instanceof InvoiceVoidActiveOrderError ||
     error instanceof InvoiceShareLinkUnavailableError
   ) {
     sendJson(response, error.statusCode, { error: error.message })

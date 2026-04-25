@@ -1,10 +1,12 @@
-import { and, count, eq, gte, isNull, lt, sql } from "drizzle-orm"
+import { and, count, desc, eq, gte, isNull, lt, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
   invoicePayments,
   invoices,
   inventoryMovements,
+  orderItems,
+  orderLineItemProgressEvents,
   orders,
 } from "../../db/schema/index.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
@@ -40,6 +42,29 @@ export interface DailyDigestActivityCounts {
   adjustmentCount: number
 }
 
+export type DailyDigestFulfillmentStage = (typeof orderLineItemProgressEvents.$inferSelect)["stage"]
+
+export interface DailyDigestFulfillmentRecentRow {
+  orderNumber: string
+  lineLabel: string
+  stage: DailyDigestFulfillmentStage
+  quantity: number
+}
+
+export interface DailyDigestFulfillmentDaySummary {
+  totalEvents: number
+  totalUnits: number
+  unitsByStage: {
+    printed: number
+    qaPassed: number
+    packed: number
+    readyForRelease: number
+    released: number
+  }
+  /** Newest first, capped for email size */
+  recent: DailyDigestFulfillmentRecentRow[]
+}
+
 export interface DailyDigestLowStockItem {
   name: string
   onHand: number
@@ -51,6 +76,7 @@ export interface DailyDigestAggregationDataSource {
   getOrderStatusCounts(): Promise<DailyDigestOrderStatusCounts>
   getInvoiceSnapshot(): Promise<DailyDigestInvoiceSnapshot>
   getActivityCounts(window: DailyDigestAggregationWindow): Promise<DailyDigestActivityCounts>
+  getFulfillmentDaySummary(window: DailyDigestAggregationWindow): Promise<DailyDigestFulfillmentDaySummary>
   listLowStockItems(limit?: number): Promise<DailyDigestLowStockItem[]>
 }
 
@@ -99,6 +125,94 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
       paidCount: Number(row?.paidCount ?? 0),
       voidCount: Number(row?.voidCount ?? 0),
       outstandingBalance: Number(row?.outstandingBalance ?? "0"),
+    }
+  }
+
+  async getFulfillmentDaySummary(
+    window: DailyDigestAggregationWindow,
+  ): Promise<DailyDigestFulfillmentDaySummary> {
+    const eventWindow = and(
+      gte(orderLineItemProgressEvents.eventDate, window.startedAt),
+      lt(orderLineItemProgressEvents.eventDate, window.endedAt),
+    )
+    const baseJoin = and(eventWindow, isNull(orders.archivedAt))
+
+    const [eventTotalRow, stageRows, recentRaw] = await Promise.all([
+      this.db
+        .select({ value: count() })
+        .from(orderLineItemProgressEvents)
+        .innerJoin(orderItems, eq(orderItems.id, orderLineItemProgressEvents.orderLineItemId))
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .where(baseJoin),
+      this.db
+        .select({
+          stage: orderLineItemProgressEvents.stage,
+          eventCount: count(),
+          unitSum: sql<string>`coalesce(sum(${orderLineItemProgressEvents.quantity}), 0)::text`,
+        })
+        .from(orderLineItemProgressEvents)
+        .innerJoin(orderItems, eq(orderItems.id, orderLineItemProgressEvents.orderLineItemId))
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .where(baseJoin)
+        .groupBy(orderLineItemProgressEvents.stage),
+      this.db
+        .select({
+          orderNumber: orders.orderNumber,
+          lineLabel: orderItems.descriptionSnapshot,
+          stage: orderLineItemProgressEvents.stage,
+          quantity: orderLineItemProgressEvents.quantity,
+        })
+        .from(orderLineItemProgressEvents)
+        .innerJoin(orderItems, eq(orderItems.id, orderLineItemProgressEvents.orderLineItemId))
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .where(baseJoin)
+        .orderBy(
+          desc(orderLineItemProgressEvents.eventDate),
+          desc(orderLineItemProgressEvents.id),
+        )
+        .limit(12),
+    ])
+
+    const totalEvents = Number(eventTotalRow[0]?.value ?? 0)
+    const unitsByStage = {
+      printed: 0,
+      qaPassed: 0,
+      packed: 0,
+      readyForRelease: 0,
+      released: 0,
+    }
+
+    const addUnits: Record<string, keyof typeof unitsByStage> = {
+      printed: "printed",
+      qa_passed: "qaPassed",
+      packed: "packed",
+      ready_for_release: "readyForRelease",
+      released: "released",
+    }
+    for (const row of stageRows) {
+      const key = addUnits[row.stage]
+      if (key) {
+        unitsByStage[key] = Number(row.unitSum ?? "0")
+      }
+    }
+
+    const totalUnits =
+      unitsByStage.printed +
+      unitsByStage.qaPassed +
+      unitsByStage.packed +
+      unitsByStage.readyForRelease +
+      unitsByStage.released
+
+    return {
+      totalEvents,
+      totalUnits,
+      unitsByStage,
+      recent: recentRaw.map((row) => ({
+        orderNumber: row.orderNumber,
+        lineLabel: row.lineLabel,
+        stage: row.stage,
+        quantity: row.quantity,
+      })),
     }
   }
 

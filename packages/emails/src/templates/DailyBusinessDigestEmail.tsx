@@ -1,12 +1,4 @@
-import {
-  Button,
-  Column,
-  Link,
-  Row,
-  Section,
-  Text,
-} from "@react-email/components"
-import * as React from "react"
+import { Button, Column, Row, Section, Text } from "@react-email/components"
 
 import { EmailShell } from "../components/EmailShell.js"
 import { MetricCard } from "../components/MetricCard.js"
@@ -48,6 +40,24 @@ export interface DailyBusinessDigestEmailProps {
     stockIntakeCount: number
     adjustmentCount: number
   }
+  /** Line-item fulfillment (printed → released) recorded on the digest business day */
+  fulfillmentDay?: {
+    totalEvents: number
+    totalUnits: number
+    unitsByStage: {
+      printed: number
+      qaPassed: number
+      packed: number
+      readyForRelease: number
+      released: number
+    }
+    recent: Array<{
+      orderNumber: string
+      lineLabel: string
+      stageLabel: string
+      quantity: number
+    }>
+  }
   highlights?: string[]
 }
 
@@ -62,6 +72,7 @@ export function DailyBusinessDigestEmail({
   invoiceSummary,
   inventorySummary,
   inventoryActivitySummary,
+  fulfillmentDay,
   highlights = [],
 }: DailyBusinessDigestEmailProps) {
   const greeting = recipientName ? `Hi ${recipientName},` : "Hi,"
@@ -85,8 +96,7 @@ export function DailyBusinessDigestEmail({
       helpUrl={dashboardUrl}
     >
       <Text className="m-0 mb-6 text-[15px] leading-7 text-foreground">
-        {greeting} Here is the current operating picture for the business. This email is meant to
-        reduce dashboard hunting, not replace the dashboard.
+        {greeting} Here is the current operating picture for the business.
       </Text>
 
       <Row className="mb-4">
@@ -120,6 +130,60 @@ export function DailyBusinessDigestEmail({
           <strong>{formatCount(orderSummary.canceledOrders)}</strong>
         </Text>
       </Section>
+
+      {fulfillmentDay ? (
+        <Section className="mb-6 rounded-lg border border-border px-5 py-4">
+          <Text className="m-0 text-sm font-semibold text-foreground">Fulfillment (today)</Text>
+          <Text className="m-0 mt-3 text-sm leading-7 text-muted-foreground">
+            <strong>{formatCount(fulfillmentDay.totalEvents)}</strong> progress events ·{" "}
+            <strong>{formatCount(fulfillmentDay.totalUnits)}</strong> units across stages: Printed{" "}
+            {formatCount(fulfillmentDay.unitsByStage.printed)} · QA{" "}
+            {formatCount(fulfillmentDay.unitsByStage.qaPassed)} · Packed{" "}
+            {formatCount(fulfillmentDay.unitsByStage.packed)} · Ready to release{" "}
+            {formatCount(fulfillmentDay.unitsByStage.readyForRelease)} · Released{" "}
+            {formatCount(fulfillmentDay.unitsByStage.released)}
+          </Text>
+          {fulfillmentDay.recent.length > 0 ? (
+            <table className="mt-4 w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Order
+                  </th>
+                  <th className="py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Line
+                  </th>
+                  <th className="py-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Stage
+                  </th>
+                  <th className="py-2 text-right text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Qty
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {fulfillmentDay.recent.map((row, index) => (
+                  <tr
+                    key={`fulfillment-${row.orderNumber}-${index}`}
+                    className="border-b border-border"
+                  >
+                    <td className="whitespace-nowrap py-3 text-sm text-foreground">{row.orderNumber}</td>
+                    <td className="max-w-[220px] py-3 text-sm text-foreground [word-break:break-word]">
+                      {row.lineLabel}
+                    </td>
+                    <td className="whitespace-nowrap py-3 text-sm text-muted-foreground">
+                      {row.stageLabel}
+                    </td>
+                    <td className="whitespace-nowrap py-3 text-right text-sm text-foreground">
+                      {formatCount(row.quantity)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </Section>
+      ) : null}
 
       <Section className="mb-6 rounded-lg border border-border px-5 py-4">
         <Row>
@@ -220,15 +284,6 @@ export function DailyBusinessDigestEmail({
         <Button className="rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground no-underline" href={dashboardUrl}>
           Open dashboard
         </Button>
-        <Text className="m-0 mt-4 text-xs leading-6 text-muted-foreground">
-          If email is the wrong channel for this, stop and fix notification routing in the app. Do
-          not pile on more templates.
-        </Text>
-        <Text className="m-0 mt-2 text-xs text-muted-foreground">
-          <Link className="text-primary no-underline" href={dashboardUrl}>
-            {dashboardUrl}
-          </Link>
-        </Text>
       </Section>
     </EmailShell>
   )

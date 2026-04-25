@@ -113,6 +113,14 @@ export class InvoiceVoidAfterPaymentError extends Error {
   }
 }
 
+export class InvoiceVoidActiveOrderError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Cancel the linked order before voiding this invoice")
+  }
+}
+
 export class InvoiceArchiveError extends Error {
   readonly statusCode = 409
 
@@ -521,8 +529,20 @@ export class InvoicesService {
         throw new InvoiceAlreadyVoidError()
       }
 
-      if (moneyToCents(invoice.paidAmount) > 0n || invoice.status === "paid") {
+      const paymentRows = invoice.payments ?? []
+
+      if (paymentRows.length > 0 || moneyToCents(invoice.paidAmount) > 0n || invoice.status === "paid") {
         throw new InvoiceVoidAfterPaymentError()
+      }
+
+      const linkedOrder = await this.ordersRepository.findByIdWithRelations(invoice.orderId)
+
+      if (!linkedOrder) {
+        throw new InvoiceOrderNotFoundError()
+      }
+
+      if (linkedOrder.status !== "canceled") {
+        throw new InvoiceVoidActiveOrderError()
       }
 
       await invoicesRepository.updateFinancialState(invoiceId, {

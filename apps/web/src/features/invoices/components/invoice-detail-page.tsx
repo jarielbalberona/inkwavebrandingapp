@@ -51,6 +51,7 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { InvoiceShareLink } from "@/features/invoices/api/invoices-client"
+import { useOrderQuery } from "@/features/orders/hooks/use-orders"
 import {
   useArchiveInvoiceMutation,
   useDeleteInvoicePaymentMutation,
@@ -79,6 +80,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
   const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
   const invoiceQuery = useInvoiceQuery(invoiceId)
+  const linkedOrderQuery = useOrderQuery(invoiceQuery.data?.order_id ?? null)
   const recordInvoicePaymentMutation = useRecordInvoicePaymentMutation()
   const updateInvoicePaymentMutation = useUpdateInvoicePaymentMutation()
   const deleteInvoicePaymentMutation = useDeleteInvoicePaymentMutation()
@@ -132,11 +134,17 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const canRecordPayment =
     canManageInvoices && invoice !== null && invoice.status !== "paid" && invoice.status !== "void"
   const canMutatePayments = canManageInvoices && invoice !== null && invoice.status !== "void"
+  const hasNoInvoicePayments =
+    invoice !== null && Number(invoice.paid_amount) === 0 && invoice.payments.length === 0
+  const linkedOrderCanceled = linkedOrderQuery.data?.status === "canceled"
+  const linkedOrderGateReady = !linkedOrderQuery.isLoading && !linkedOrderQuery.isError
   const canVoidInvoice =
     canManageInvoices &&
     invoice !== null &&
     invoice.status === "pending" &&
-    Number(invoice.paid_amount) === 0 &&
+    hasNoInvoicePayments &&
+    linkedOrderGateReady &&
+    linkedOrderCanceled &&
     !voidInvoiceMutation.isPending
   const canArchiveInvoice =
     canManageInvoices &&
@@ -659,9 +667,27 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                           <p className="text-muted-foreground">
                             {invoice.status === "void"
                               ? "Already void."
-                              : Number(invoice.paid_amount) > 0
+                              : !hasNoInvoicePayments
                                 ? "Void is disabled once any payment has been recorded."
-                                : "Void is only available for unpaid pending invoices."}
+                                : linkedOrderQuery.isLoading
+                                  ? "Checking linked order…"
+                                  : linkedOrderQuery.isError
+                                    ? "Could not load the linked order. Refresh and try again."
+                                    : linkedOrderQuery.data && linkedOrderQuery.data.status !== "canceled"
+                                      ? (
+                                          <>
+                                            Cancel the linked order before voiding this invoice.{" "}
+                                            <Link
+                                              to="/orders/$orderId"
+                                              params={{ orderId: invoice.order_id }}
+                                              className="font-medium text-foreground underline"
+                                            >
+                                              Open order
+                                            </Link>
+                                            .
+                                          </>
+                                        )
+                                      : "Void is only available for unpaid pending invoices whose linked order is canceled."}
                           </p>
                         ) : null}
                         <Button

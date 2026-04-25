@@ -108,7 +108,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       const canceledOrder = await cancelOrderMutation.mutateAsync(order.id)
       setIsCancelDialogOpen(false)
       setPageSuccess(
-        `Canceled ${canceledOrder.order_number}. Unconsumed reservations were released and any unpaid pending invoice was voided by the API.`,
+        `Canceled ${canceledOrder.order_number}. Unconsumed reservations were released. Void any unpaid invoice from the invoice detail page when you are ready.`,
       )
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Unable to cancel order.")
