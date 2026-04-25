@@ -28,6 +28,12 @@ export interface DailyDigestRunOptions {
    * (e.g. `failed_terminal`) backfills `last_error_*` from stored delivery rows.
    */
   includeFailureDetails?: boolean
+  /**
+   * When `true`, reopens a run that already finished (`succeeded` / `partial_failure` / stuck
+   * `sending`) so the digest is sent again. The scheduled/cron path must not set this, or every
+   * run would re-email the same day.
+   */
+  forceResend?: boolean
 }
 
 export interface DailyDigestRunnerResult {
@@ -69,7 +75,7 @@ export class DailyDigestRunner {
     businessDate: string = getManilaBusinessDate(this.now()),
     runOptions: DailyDigestRunOptions = {},
   ): Promise<DailyDigestRunnerResult> {
-    const { includeFailureDetails = false } = runOptions
+    const { includeFailureDetails = false, forceResend = false } = runOptions
     const digest = await this.deps.aggregationService.build({
       businessDate,
       dashboardUrl: resolveDashboardUrl(this.deps.env.webOrigin),
@@ -82,6 +88,16 @@ export class DailyDigestRunner {
         startedAt: digest.window.startedAt,
         endedAt: digest.window.endedAt,
       })
+      if (forceResend) {
+        const reopened = await repository.reopenCompletedRunForResend(run.id, this.now())
+        if (reopened) {
+          logInfo({
+            event: "daily_digest_run_reopened_for_resend",
+            businessDate,
+            runId: run.id,
+          })
+        }
+      }
       const claimedRun = await repository.claimRun(run.id, this.now())
 
       if (!claimedRun) {

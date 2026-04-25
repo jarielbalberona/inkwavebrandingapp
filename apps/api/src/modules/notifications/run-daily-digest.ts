@@ -14,6 +14,7 @@ const env = loadApiEnv()
 const db = getDatabaseClient()
 const businessDate = parseBusinessDateArg(args) ?? getManilaBusinessDate()
 const debug = parseDebugFlag(args)
+const forceResend = parseForceResendFlag(args)
 
 if (debug) {
   const fromEmail = env.resendFromEmail ?? null
@@ -32,6 +33,7 @@ if (debug) {
       resendFromEmail: fromEmail,
       resendFromEmailHint: fromEmailHint,
       webOrigin: env.webOrigin ?? null,
+      forceResend,
     }),
   )
 }
@@ -46,7 +48,7 @@ const runner = new DailyDigestRunner({
 })
 
 runner
-  .runForBusinessDate(businessDate, { includeFailureDetails: debug })
+  .runForBusinessDate(businessDate, { includeFailureDetails: debug, forceResend })
   .then((result) => {
     console.log(
       JSON.stringify({
@@ -80,6 +82,14 @@ function parseBusinessDateArg(args: string[]): string | undefined {
 
 function parseDebugFlag(args: string[]): boolean {
   if (args.includes("--debug") || process.env.DAILY_DIGEST_DEBUG === "1") {
+    return true
+  }
+
+  return false
+}
+
+function parseForceResendFlag(args: string[]): boolean {
+  if (args.includes("--force-resend") || process.env.DAILY_DIGEST_FORCE_RESEND === "1") {
     return true
   }
 

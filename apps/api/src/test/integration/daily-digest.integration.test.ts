@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm"
+import { asc, eq } from "drizzle-orm"
 import { describe, expect, test } from "vitest"
 
 import * as schema from "../../db/schema/index.js"
@@ -135,5 +135,22 @@ describe("daily digest runner integration", () => {
     expect(attempts).toHaveLength(1)
     expect(attempts[0]?.status).toBe("sent")
     expect(attempts[0]?.attemptNumber).toBe(1)
+
+    const thirdRun = await runner.runForBusinessDate(businessDate, { forceResend: true })
+
+    expect(thirdRun.status).toBe("succeeded")
+    expect(sentTo).toEqual([
+      integrationAdmin.email,
+      integrationAdmin.email,
+    ])
+
+    const attemptsAfterResend = await db
+      .select()
+      .from(schema.notificationDigestDeliveryAttempts)
+      .orderBy(asc(schema.notificationDigestDeliveryAttempts.attemptNumber))
+
+    expect(attemptsAfterResend).toHaveLength(2)
+    expect(attemptsAfterResend[0]?.attemptNumber).toBe(1)
+    expect(attemptsAfterResend[1]?.attemptNumber).toBe(2)
   })
 })

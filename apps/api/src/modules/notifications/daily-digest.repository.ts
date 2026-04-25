@@ -35,6 +35,13 @@ const claimableRunStatuses: NotificationDigestRunStatus[] = [
   "skipped_empty",
 ]
 
+/** Run states that are not claimable until reopened (used for explicit manual resend). */
+const reopenableForResendStatuses: NotificationDigestRunStatus[] = [
+  "succeeded",
+  "partial_failure",
+  "sending",
+]
+
 const retryableDeliveryStatuses: NotificationDigestDeliveryStatus[] = [
   "pending",
   "failed_retryable",
@@ -87,6 +94,54 @@ export class DailyDigestRepository {
       .limit(1)
 
     return rows[0]
+  }
+
+  /**
+   * Reset a run that has already completed sending (or is stuck in `sending`) so `claimRun` can
+   * process it again. Does not run for `failed` / skipped runs — those are already claimable.
+   * Requeues all deliveries to `pending` but keeps `attemptCount` so new attempts append in order.
+   */
+  async reopenCompletedRunForResend(runId: string, now: Date): Promise<boolean> {
+    const rows = await this.db
+      .update(notificationDigestRuns)
+      .set({
+        status: "pending",
+        recipientCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+        completedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        startedAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(notificationDigestRuns.id, runId),
+          inArray(notificationDigestRuns.status, reopenableForResendStatuses),
+        ),
+      )
+      .returning({ id: notificationDigestRuns.id })
+
+    if (rows.length === 0) {
+      return false
+    }
+
+    await this.db
+      .update(notificationDigestDeliveries)
+      .set({
+        status: "pending",
+        provider: null,
+        providerMessageId: null,
+        deliveredAt: null,
+        lastAttemptAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        updatedAt: now,
+      })
+      .where(eq(notificationDigestDeliveries.runId, runId))
+
+    return true
   }
 
   async claimRun(runId: string, now: Date): Promise<NotificationDigestRun | undefined> {
