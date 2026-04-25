@@ -13,6 +13,7 @@ import {
 import { CupsPage } from "@/features/cups/components/cups-page"
 import { LidsPage } from "@/features/lids/components/lids-page"
 import { GeneralItemsPage } from "@/features/non-stock-items/components/general-items-page"
+import { ProductBundlesPage } from "@/features/product-bundles/components/product-bundles-page"
 
 type ProductTabValue = "cups" | "lids" | "general-items" | "bundles" | "pricing-rules"
 
@@ -40,6 +41,10 @@ export function ProductsPage() {
 
       if (hasPermission(currentUser.data, appPermissions.nonStockItemsView)) {
         tabs.push({ value: "general-items", label: "General", content: <GeneralItemsPage /> })
+      }
+
+      if (hasPermission(currentUser.data, appPermissions.productBundlesView)) {
+        tabs.push({ value: "bundles", label: "Bundles", content: <ProductBundlesPage /> })
       }
 
       return tabs
