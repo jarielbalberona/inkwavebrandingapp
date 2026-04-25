@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from "react"
 
-import { Link, Navigate } from "@tanstack/react-router"
+import { Link, Navigate, useNavigate } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
@@ -26,6 +26,7 @@ import { formatMoneyValue } from "@/lib/money"
 
 export function InvoicesPage() {
   const currentUser = useCurrentUser()
+  const navigate = useNavigate()
   const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search)
@@ -48,6 +49,10 @@ export function InvoicesPage() {
         <AlertDescription>Invoice visibility requires invoice-view permission.</AlertDescription>
       </Alert>
     )
+  }
+
+  function navigateToInvoice(invoiceId: string) {
+    void navigate({ to: "/invoices/$invoiceId", params: { invoiceId } })
   }
 
   const overview = summarizeInvoices(invoicesOverviewQuery.data ?? [])
@@ -132,7 +137,18 @@ export function InvoicesPage() {
           </TableHeader>
           <TableBody>
             {invoicesQuery.data?.map((invoice) => (
-              <TableRow key={invoice.id}>
+              <TableRow
+                key={invoice.id}
+                className="cursor-pointer"
+                tabIndex={0}
+                onClick={() => navigateToInvoice(invoice.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    navigateToInvoice(invoice.id)
+                  }
+                }}
+              >
                 <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                 <TableCell>{invoice.order_number_snapshot}</TableCell>
                 <TableCell>{invoice.customer.business_name}</TableCell>
@@ -140,7 +156,7 @@ export function InvoicesPage() {
                 <TableCell>{formatMoneyValue(invoice.paid_amount)}</TableCell>
                 <TableCell>{formatMoneyValue(invoice.remaining_balance)}</TableCell>
                 <TableCell>{new Date(invoice.created_at).toLocaleString()}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                   <Button asChild type="button" variant="outline" size="sm">
                     <Link to="/invoices/$invoiceId" params={{ invoiceId: invoice.id }}>
                       View

@@ -18,7 +18,7 @@ import {
 } from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { DatePicker } from "@workspace/ui/components/date-picker"
 import {
   Form,
@@ -58,6 +58,7 @@ import {
   useVoidInvoiceMutation,
 } from "@/features/invoices/hooks/use-invoices"
 import { formatMoneyValue } from "@/lib/money"
+import { ArrowLeftIcon, CopyIcon, EyeIcon } from "lucide-react"
 
 const paymentFormSchema = z.object({
   amount: z
@@ -199,30 +200,30 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
         <div className="flex items-start justify-between gap-3">
           <div className="grid gap-1">
             <CardTitle>Invoice Detail</CardTitle>
-            <CardDescription>
-              Structural invoice content stays read-only here. Payment actions only change financial state, and any recorded payment locks structural order edits.
-            </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
-              <Link to="/invoices">Back to invoices</Link>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/invoices"><ArrowLeftIcon className="size-4" />Invoices</Link>
             </Button>
             {invoice ? (
               <Button
                 type="button"
                 variant="outline"
                 disabled={isCreatingShareLink}
+                size="sm"
                 onClick={() => {
                   void handleCopyShareLink()
                 }}
               >
-                {isCreatingShareLink ? "Preparing link..." : "Copy share link"}
+                <CopyIcon className="size-4" />
+                {isCreatingShareLink ? "Copying..." : "Copy"}
               </Button>
             ) : null}
             {invoice ? (
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => {
                   setActionError(null)
                   setActionMessage(null)
@@ -231,7 +232,8 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                   })
                 }}
               >
-                Open PDF
+                <EyeIcon className="size-4" />
+                PDF
               </Button>
             ) : null}
           </div>
