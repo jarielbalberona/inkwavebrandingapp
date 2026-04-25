@@ -17,6 +17,7 @@ import { handleNonStockItemsRoute } from "./modules/non-stock-items/non-stock-it
 import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
 import { handleProductBundlesRoute } from "./modules/product-bundles/product-bundles.routes.js"
 import { handleReportsRoute } from "./modules/reports/reports.routes.js"
+import { handleSellableProductPriceRulesRoute } from "./modules/sellable-product-price-rules/sellable-product-price-rules.routes.js"
 import { handleUsersRoute } from "./modules/users/users.routes.js"
 
 export interface RuntimeApiEnv extends ApiEnv {
@@ -76,6 +77,7 @@ export async function handleApiRequest(
     if (await handleLidsRoute(request, response, { env })) return
     if (await handleNonStockItemsRoute(request, response, { env })) return
     if (await handleProductBundlesRoute(request, response, { env })) return
+    if (await handleSellableProductPriceRulesRoute(request, response, { env })) return
     if (await handleDashboardRoute(request, response, { env })) return
     if (await handleInvoicesRoute(request, response, { env })) return
     if (await handleOrdersRoute(request, response, { env })) return

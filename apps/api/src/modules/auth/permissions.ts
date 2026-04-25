@@ -86,6 +86,18 @@ export const permissionDefinitions = [
     group: "catalog",
   },
   {
+    key: "sellable_product_price_rules.view",
+    label: "View sellable price rules",
+    description: "Open default tier pricing rules for commercial product bundles.",
+    group: "catalog",
+  },
+  {
+    key: "sellable_product_price_rules.manage",
+    label: "Manage sellable price rules",
+    description: "Create and update default tier pricing rules for commercial product bundles.",
+    group: "catalog",
+  },
+  {
     key: "inventory.view",
     label: "View inventory",
     description: "Open inventory balances and movement history.",
@@ -232,11 +244,16 @@ export function resolveEffectivePermissions(
     effective.add("product_bundles.view")
   }
 
+  if (effective.has("sellable_product_price_rules.manage")) {
+    effective.add("sellable_product_price_rules.view")
+  }
+
   if (
     effective.has("cups.manage") ||
     effective.has("lids.manage") ||
     effective.has("non_stock_items.manage") ||
-    effective.has("product_bundles.manage")
+    effective.has("product_bundles.manage") ||
+    effective.has("sellable_product_price_rules.manage")
   ) {
     effective.add("catalog.pricing.view")
   }
