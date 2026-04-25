@@ -4,6 +4,8 @@ export interface EmailBranding {
   tagline: string
   supportEmail: string
   websiteUrl: string
+  /** Absolute URL for the header mark (`<Img src>`; email clients need a public https URL). */
+  headerLogoUrl: string
 }
 
 export const defaultEmailBranding: EmailBranding = {
@@ -12,4 +14,5 @@ export const defaultEmailBranding: EmailBranding = {
   tagline: "Operational updates for print orders, inventory, and invoice follow-through.",
   supportEmail: "support@inkwave.local",
   websiteUrl: "https://inkwave.local",
+  headerLogoUrl: "https://assets.inkwavebrand.ing/iw-logo.jpg",
 }

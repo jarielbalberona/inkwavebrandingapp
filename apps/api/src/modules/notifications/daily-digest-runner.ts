@@ -97,6 +97,17 @@ export class DailyDigestRunner {
             runId: run.id,
           })
         }
+        const failedRequeued = await repository.requeueFailedRunDeliveriesForResend(
+          run.id,
+          this.now(),
+        )
+        if (failedRequeued) {
+          logInfo({
+            event: "daily_digest_failed_run_deliveries_requeued_for_resend",
+            businessDate,
+            runId: run.id,
+          })
+        }
       }
       const claimedRun = await repository.claimRun(run.id, this.now())
 

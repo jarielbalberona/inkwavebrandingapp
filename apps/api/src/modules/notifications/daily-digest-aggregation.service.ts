@@ -56,8 +56,8 @@ export class DailyDigestAggregationService {
         pendingInvoiceCount: invoiceSnapshot.pendingCount,
         paidInvoiceCount: invoiceSnapshot.paidCount,
         voidInvoiceCount: invoiceSnapshot.voidCount,
-        totalPaidAmount: activity.totalPaidAmount,
-        outstandingBalance: invoiceSnapshot.outstandingBalance,
+        totalPaidAmount: safeFiniteNumber(activity.totalPaidAmount),
+        outstandingBalance: safeFiniteNumber(invoiceSnapshot.outstandingBalance),
       },
       inventorySummary: {
         lowStockCount,
@@ -92,6 +92,10 @@ export class DailyDigestAggregationService {
   }
 }
 
+function safeFiniteNumber(value: number): number {
+  return Number.isFinite(value) ? value : 0
+}
+
 function totalOrders(counts: DailyDigestOrderStatusCounts): number {
   return (
     counts.pending +
@@ -121,8 +125,10 @@ function buildHighlights(
   }
 
   if (activity.paymentsRecorded > 0) {
+    const totalPaid = activity.totalPaidAmount
+    const totalLabel = Number.isFinite(totalPaid) ? totalPaid.toFixed(2) : "0.00"
     highlights.push(
-      `Payments recorded today: ${activity.paymentsRecorded} totaling ${activity.totalPaidAmount.toFixed(2)}`,
+      `Payments recorded today: ${activity.paymentsRecorded} totaling ${totalLabel}`,
     )
   }
 

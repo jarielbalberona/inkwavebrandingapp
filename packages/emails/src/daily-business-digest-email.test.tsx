@@ -35,6 +35,7 @@ test("DailyBusinessDigestEmail renders the operational summary", async () => {
     highlights: ["Push payment follow-up on the oldest unpaid invoice before release."],
   })
 
+  assert.match(rendered.html, /https:\/\/assets\.inkwavebrand\.ing\/iw-logo\.jpg/)
   assert.match(rendered.html, /Daily business digest/)
   assert.match(rendered.html, /In progress/)
   assert.match(rendered.html, /Partial released/)

@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp src/iw-logo.jpg dist/iw-logo.jpg",
+    "build": "tsc -p tsconfig.build.json",
     "lint": "eslint src",
     "render": "node --import tsx scripts/render.ts",
     "test": "pnpm exec tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",

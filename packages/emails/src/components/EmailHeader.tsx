@@ -4,18 +4,17 @@ import {
   defaultEmailBranding,
   type EmailBranding,
 } from "../brand.js"
-import { IW_LOGO_DATA_URI } from "../iw-logo-data-uri.js"
 
 export interface EmailHeaderProps {
   branding?: Partial<EmailBranding>
   eyebrow?: string
-  /** When set, used instead of the bundled `iw-logo.jpg` (e.g. absolute CDN URL). */
+  /** When set, overrides `branding.headerLogoUrl` (e.g. for tests or a one-off send). */
   logoSrc?: string
 }
 
 export function EmailHeader({ branding, eyebrow = "Operational Email", logoSrc }: EmailHeaderProps) {
   const resolvedBranding = { ...defaultEmailBranding, ...branding }
-  const resolvedLogo = logoSrc ?? IW_LOGO_DATA_URI
+  const resolvedLogo = logoSrc ?? resolvedBranding.headerLogoUrl
 
   return (
     <Section className="mb-8">

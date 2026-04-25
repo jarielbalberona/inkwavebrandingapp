@@ -127,7 +127,35 @@ export class DailyDigestRepository {
       return false
     }
 
-    await this.db
+    await this.resetRunDeliveriesToPendingForResend(runId, now)
+
+    return true
+  }
+
+  /**
+   * A run in `failed` is claimable, but `failed_terminal` deliveries are not "pending" and are
+   * never retried. When manually forcing resend, requeue them so the send loop runs again.
+   */
+  async requeueFailedRunDeliveriesForResend(runId: string, now: Date): Promise<boolean> {
+    const [run] = await this.db
+      .select({ status: notificationDigestRuns.status })
+      .from(notificationDigestRuns)
+      .where(eq(notificationDigestRuns.id, runId))
+      .limit(1)
+
+    if (run?.status !== "failed") {
+      return false
+    }
+
+    const rows = await this.resetRunDeliveriesToPendingForResend(runId, now)
+    return rows.length > 0
+  }
+
+  private async resetRunDeliveriesToPendingForResend(
+    runId: string,
+    now: Date,
+  ): Promise<{ id: string }[]> {
+    return this.db
       .update(notificationDigestDeliveries)
       .set({
         status: "pending",
@@ -140,8 +168,7 @@ export class DailyDigestRepository {
         updatedAt: now,
       })
       .where(eq(notificationDigestDeliveries.runId, runId))
-
-    return true
+      .returning({ id: notificationDigestDeliveries.id })
   }
 
   async claimRun(runId: string, now: Date): Promise<NotificationDigestRun | undefined> {

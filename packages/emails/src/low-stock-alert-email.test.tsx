@@ -25,6 +25,7 @@ test("LowStockAlertEmail renders inventory actions", async () => {
     ],
   })
 
+  assert.match(rendered.html, /https:\/\/assets\.inkwavebrand\.ing\/iw-logo\.jpg/)
   assert.match(rendered.html, /Low-stock alert/)
   assert.match(rendered.html, /Out of stock/)
   assert.match(rendered.html, /12oz PET Cup/)

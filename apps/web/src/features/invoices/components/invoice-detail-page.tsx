@@ -364,7 +364,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                 }}
               >
                 <CopyIcon className="size-4" />
-                {shareLinkMutation.isPending ? "Preparing..." : "Copy link"}
+                {shareLinkMutation.isPending ? "Copying..." : "Link"}
               </Button>
             ) : null}
             {invoice ? (
@@ -378,7 +378,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                 }}
               >
                 <EyeIcon className="size-4" />
-                View PDF
+                PDF
               </Button>
             ) : null}
           </div>

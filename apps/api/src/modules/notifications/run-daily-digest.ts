@@ -48,7 +48,11 @@ const runner = new DailyDigestRunner({
 })
 
 runner
-  .runForBusinessDate(businessDate, { includeFailureDetails: debug, forceResend })
+  .runForBusinessDate(businessDate, {
+    // CLI always needs provider errors in JSON when a send fails (not only with --debug).
+    includeFailureDetails: true,
+    forceResend,
+  })
   .then((result) => {
     console.log(
       JSON.stringify({
