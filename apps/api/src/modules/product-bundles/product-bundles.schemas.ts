@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { getProductBundleCompositionIssues } from "./product-bundles.composition.js"
+
 const optionalText = (max: number) =>
   z
     .string()
@@ -93,43 +95,23 @@ function addProductBundleCompositionIssues(
   },
   context: z.RefinementCtx,
 ) {
-  if (!input.cupId && !input.lidId) {
+  for (const message of getProductBundleCompositionIssues(input)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ["cup_id"],
-      message: "At least one cup or lid component is required.",
+      path: getProductBundleCompositionIssuePath(message),
+      message,
     })
+  }
+}
+
+function getProductBundleCompositionIssuePath(message: string): string[] {
+  if (message.startsWith("Cup quantity")) {
+    return ["cup_qty_per_set"]
   }
 
-  if (!input.cupId && input.cupQtyPerSet !== 0) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["cup_qty_per_set"],
-      message: "Cup quantity must be 0 when no cup is selected.",
-    })
+  if (message.startsWith("Lid quantity")) {
+    return ["lid_qty_per_set"]
   }
 
-  if (input.cupId && input.cupQtyPerSet <= 0) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["cup_qty_per_set"],
-      message: "Cup quantity must be greater than 0 when a cup is selected.",
-    })
-  }
-
-  if (!input.lidId && input.lidQtyPerSet !== 0) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["lid_qty_per_set"],
-      message: "Lid quantity must be 0 when no lid is selected.",
-    })
-  }
-
-  if (input.lidId && input.lidQtyPerSet <= 0) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["lid_qty_per_set"],
-      message: "Lid quantity must be greater than 0 when a lid is selected.",
-    })
-  }
+  return ["cup_id"]
 }

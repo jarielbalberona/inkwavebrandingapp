@@ -8,6 +8,8 @@ import { getRequestPath } from "../../http/routes.js"
 import { requireAuthenticatedRequest } from "../auth/auth.middleware.js"
 import { AuthorizationError, sendForbidden } from "../auth/authorization.js"
 import { AuthService } from "../auth/auth.service.js"
+import { CupsRepository } from "../cups/cups.repository.js"
+import { LidsRepository } from "../lids/lids.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import { ProductBundlesRepository } from "./product-bundles.repository.js"
 import {
@@ -98,8 +100,14 @@ async function withAuthenticatedUser(
       return
     }
 
+    const db = getDatabaseClient()
+
     await handler(
-      new ProductBundlesService(new ProductBundlesRepository(getDatabaseClient())),
+      new ProductBundlesService(
+        new ProductBundlesRepository(db),
+        new CupsRepository(db),
+        new LidsRepository(db),
+      ),
       authContext.user,
     )
   } catch (error) {

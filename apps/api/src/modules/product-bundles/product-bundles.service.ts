@@ -1,12 +1,24 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission, AuthorizationError } from "../auth/authorization.js"
-import { ProductBundlesRepository } from "./product-bundles.repository.js"
+import type { ProductBundle } from "../../db/schema/index.js"
+import { getProductBundleCompositionIssues } from "./product-bundles.composition.js"
 import type {
   CreateProductBundleInput,
   ProductBundleListQuery,
   UpdateProductBundleInput,
 } from "./product-bundles.schemas.js"
 import { toProductBundleDto, type ProductBundleDto } from "./product-bundles.types.js"
+
+interface ProductBundlesDataStore {
+  list(options?: { includeInactive?: boolean; name?: string }): Promise<ProductBundle[]>
+  findById(id: string): Promise<ProductBundle | undefined>
+  create(input: CreateProductBundleInput): Promise<ProductBundle>
+  update(id: string, input: UpdateProductBundleInput): Promise<ProductBundle | undefined>
+}
+
+interface ProductBundleComponentDataStore {
+  findById(id: string): Promise<{ isActive: boolean } | undefined>
+}
 
 export class ProductBundleNotFoundError extends Error {
   readonly statusCode = 404
@@ -33,7 +45,11 @@ export class ProductBundlePersistenceValidationError extends Error {
 }
 
 export class ProductBundlesService {
-  constructor(private readonly productBundlesRepository: ProductBundlesRepository) {}
+  constructor(
+    private readonly productBundlesRepository: ProductBundlesDataStore,
+    private readonly cupsRepository: ProductBundleComponentDataStore,
+    private readonly lidsRepository: ProductBundleComponentDataStore,
+  ) {}
 
   async list(query: ProductBundleListQuery, user: SafeUser): Promise<ProductBundleDto[]> {
     assertPermission(user, "product_bundles.view")
@@ -62,8 +78,14 @@ export class ProductBundlesService {
     assertPermission(user, "product_bundles.manage")
 
     try {
+      await this.assertReferencedComponentsAreActive(input, input.isActive)
+
       return toProductBundleDto(await this.productBundlesRepository.create(input))
     } catch (error) {
+      if (error instanceof ProductBundlePersistenceValidationError) {
+        throw error
+      }
+
       if (isUniqueViolation(error)) {
         throw new DuplicateProductBundleNameError()
       }
@@ -105,6 +127,10 @@ export class ProductBundlesService {
       }
 
       assertValidProductBundleComposition(mergedComposition)
+      await this.assertReferencedComponentsAreActive(
+        mergedComposition,
+        input.isActive === undefined ? existingProductBundle.isActive : input.isActive,
+      )
 
       const productBundle = await this.productBundlesRepository.update(id, {
         ...input,
@@ -137,6 +163,50 @@ export class ProductBundlesService {
       throw error
     }
   }
+
+  private async assertReferencedComponentsAreActive(
+    input: {
+      cupId?: string | null
+      lidId?: string | null
+    },
+    bundleIsActive: boolean,
+  ) {
+    if (!bundleIsActive) {
+      return
+    }
+
+    if (input.cupId) {
+      const cup = await this.cupsRepository.findById(input.cupId)
+
+      if (!cup) {
+        throw new ProductBundlePersistenceValidationError(
+          "Product bundle references a cup that does not exist.",
+        )
+      }
+
+      if (!cup.isActive) {
+        throw new ProductBundlePersistenceValidationError(
+          "Active product bundles cannot reference inactive cups.",
+        )
+      }
+    }
+
+    if (input.lidId) {
+      const lid = await this.lidsRepository.findById(input.lidId)
+
+      if (!lid) {
+        throw new ProductBundlePersistenceValidationError(
+          "Product bundle references a lid that does not exist.",
+        )
+      }
+
+      if (!lid.isActive) {
+        throw new ProductBundlePersistenceValidationError(
+          "Active product bundles cannot reference inactive lids.",
+        )
+      }
+    }
+  }
 }
 
 function assertValidProductBundleComposition(input: {
@@ -145,34 +215,10 @@ function assertValidProductBundleComposition(input: {
   cupQtyPerSet: number
   lidQtyPerSet: number
 }) {
-  if (!input.cupId && !input.lidId) {
-    throw new ProductBundlePersistenceValidationError(
-      "At least one cup or lid component is required.",
-    )
-  }
+  const issues = getProductBundleCompositionIssues(input)
 
-  if (!input.cupId && input.cupQtyPerSet !== 0) {
-    throw new ProductBundlePersistenceValidationError(
-      "Cup quantity must be 0 when no cup is selected.",
-    )
-  }
-
-  if (input.cupId && input.cupQtyPerSet <= 0) {
-    throw new ProductBundlePersistenceValidationError(
-      "Cup quantity must be greater than 0 when a cup is selected.",
-    )
-  }
-
-  if (!input.lidId && input.lidQtyPerSet !== 0) {
-    throw new ProductBundlePersistenceValidationError(
-      "Lid quantity must be 0 when no lid is selected.",
-    )
-  }
-
-  if (input.lidId && input.lidQtyPerSet <= 0) {
-    throw new ProductBundlePersistenceValidationError(
-      "Lid quantity must be greater than 0 when a lid is selected.",
-    )
+  if (issues.length > 0) {
+    throw new ProductBundlePersistenceValidationError(issues.join(" "))
   }
 }
 
