@@ -344,7 +344,7 @@ export function OrdersPage() {
                                     asChild
                                     type="button"
                                     variant="outline"
-                                    size="sm"
+                                    size="xs"
                                     disabled={
                                       !order.items.some(
                                         (item) =>
@@ -357,7 +357,7 @@ export function OrdersPage() {
                                       to="/orders/$orderId/fulfillment"
                                       params={{ orderId: order.id }}
                                     >
-                                      Fulfillment Progress
+                                      Progress
                                     </Link>
                                   </Button>
                                 ) : null}
@@ -365,7 +365,7 @@ export function OrdersPage() {
                                   asChild
                                   type="button"
                                   variant="outline"
-                                  size="sm"
+                                  size="xs"
                                 >
                                   <Link
                                     to="/orders/$orderId"
@@ -379,7 +379,7 @@ export function OrdersPage() {
                                     asChild
                                     type="button"
                                     variant="outline"
-                                    size="sm"
+                                    size="xs"
                                   >
                                     <Link
                                       to="/orders/$orderId/edit"
