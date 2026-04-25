@@ -48,7 +48,7 @@ export interface DailyDigestRunnerResult {
 }
 
 interface DailyDigestRunnerDependencies {
-  env: Pick<ApiEnv, "emailProvider" | "resendApiKey" | "resendFromEmail" | "resendReplyToEmail" | "webOrigin">
+  env: Pick<ApiEnv, "emailProvider" | "resendApiKey" | "resendFromEmail" | "webOrigin">
   repository: DailyDigestRepository
   aggregationService: DailyDigestAggregationService
   recipientResolver: DailyDigestRecipientResolver
@@ -300,7 +300,7 @@ export class DailyDigestRunner {
 }
 
 function createEmailProvider(
-  env: Pick<ApiEnv, "emailProvider" | "resendApiKey" | "resendFromEmail" | "resendReplyToEmail">,
+  env: Pick<ApiEnv, "emailProvider" | "resendApiKey" | "resendFromEmail">,
 ): EmailProvider {
   if (env.emailProvider !== "resend") {
     throw new Error(

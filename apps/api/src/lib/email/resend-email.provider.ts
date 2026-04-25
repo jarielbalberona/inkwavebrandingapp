@@ -38,7 +38,7 @@ export class ResendEmailProvider implements EmailProvider {
   private readonly replyTo?: string
 
   constructor(
-    env: Pick<ApiEnv, "resendApiKey" | "resendFromEmail" | "resendReplyToEmail">,
+    env: Pick<ApiEnv, "resendApiKey" | "resendFromEmail">,
     resendClient?: ResendClient,
   ) {
     if (!env.resendApiKey) {
@@ -51,7 +51,6 @@ export class ResendEmailProvider implements EmailProvider {
 
     this.resend = resendClient ?? (new Resend(env.resendApiKey) as unknown as ResendClient)
     this.from = env.resendFromEmail
-    this.replyTo = env.resendReplyToEmail
   }
 
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
