@@ -14,6 +14,7 @@ import { CupsPage } from "@/features/cups/components/cups-page"
 import { LidsPage } from "@/features/lids/components/lids-page"
 import { GeneralItemsPage } from "@/features/non-stock-items/components/general-items-page"
 import { ProductBundlesPage } from "@/features/product-bundles/components/product-bundles-page"
+import { SellableProductPriceRulesPage } from "@/features/sellable-product-price-rules/components/sellable-product-price-rules-page"
 
 type ProductTabValue = "cups" | "lids" | "general-items" | "bundles" | "pricing-rules"
 
@@ -45,6 +46,14 @@ export function ProductsPage() {
 
       if (hasPermission(currentUser.data, appPermissions.productBundlesView)) {
         tabs.push({ value: "bundles", label: "Bundles", content: <ProductBundlesPage /> })
+      }
+
+      if (hasPermission(currentUser.data, appPermissions.sellableProductPriceRulesView)) {
+        tabs.push({
+          value: "pricing-rules",
+          label: "Pricing",
+          content: <SellableProductPriceRulesPage />,
+        })
       }
 
       return tabs
