@@ -74,6 +74,18 @@ export const permissionDefinitions = [
     group: "catalog",
   },
   {
+    key: "product_bundles.view",
+    label: "View product bundles",
+    description: "Open commercial product bundle records.",
+    group: "catalog",
+  },
+  {
+    key: "product_bundles.manage",
+    label: "Manage product bundles",
+    description: "Create and update commercial product bundle records.",
+    group: "catalog",
+  },
+  {
     key: "inventory.view",
     label: "View inventory",
     description: "Open inventory balances and movement history.",
@@ -216,10 +228,15 @@ export function resolveEffectivePermissions(
     effective.add("non_stock_items.view")
   }
 
+  if (effective.has("product_bundles.manage")) {
+    effective.add("product_bundles.view")
+  }
+
   if (
     effective.has("cups.manage") ||
     effective.has("lids.manage") ||
-    effective.has("non_stock_items.manage")
+    effective.has("non_stock_items.manage") ||
+    effective.has("product_bundles.manage")
   ) {
     effective.add("catalog.pricing.view")
   }

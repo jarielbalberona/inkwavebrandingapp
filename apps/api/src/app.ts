@@ -15,6 +15,7 @@ import { handleInvoicesRoute } from "./modules/invoices/invoices.routes.js"
 import { handleLidsRoute } from "./modules/lids/lids.routes.js"
 import { handleNonStockItemsRoute } from "./modules/non-stock-items/non-stock-items.routes.js"
 import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
+import { handleProductBundlesRoute } from "./modules/product-bundles/product-bundles.routes.js"
 import { handleReportsRoute } from "./modules/reports/reports.routes.js"
 import { handleUsersRoute } from "./modules/users/users.routes.js"
 
@@ -74,6 +75,7 @@ export async function handleApiRequest(
     if (await handleInventoryRoute(request, response, { env })) return
     if (await handleLidsRoute(request, response, { env })) return
     if (await handleNonStockItemsRoute(request, response, { env })) return
+    if (await handleProductBundlesRoute(request, response, { env })) return
     if (await handleDashboardRoute(request, response, { env })) return
     if (await handleInvoicesRoute(request, response, { env })) return
     if (await handleOrdersRoute(request, response, { env })) return
