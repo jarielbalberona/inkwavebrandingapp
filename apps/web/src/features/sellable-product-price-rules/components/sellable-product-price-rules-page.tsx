@@ -212,7 +212,7 @@ export function SellableProductPriceRulesPage() {
           <div className="grid gap-2 sm:max-w-sm">
             <Label htmlFor="pricing-bundle-filter">Bundle</Label>
             <Select value={bundleFilter} onValueChange={setBundleFilter}>
-              <SelectTrigger id="pricing-bundle-filter">
+              <SelectTrigger id="pricing-bundle-filter" className="w-full">
                 <SelectValue placeholder="All bundles" />
               </SelectTrigger>
               <SelectContent>
@@ -304,7 +304,7 @@ export function SellableProductPriceRulesPage() {
                     <FormLabel>Bundle</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select bundle" />
                         </SelectTrigger>
                       </FormControl>
@@ -329,12 +329,10 @@ export function SellableProductPriceRulesPage() {
                     <FormItem>
                       <FormLabel>Min qty</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <Input.Number
                           min={1}
-                          step={1}
                           value={field.value}
-                          onChange={(event) => field.onChange(Number(event.target.value))}
+                          onChange={(value) => field.onChange(value ?? 0)}
                         />
                       </FormControl>
                       <FormMessage />
@@ -349,13 +347,11 @@ export function SellableProductPriceRulesPage() {
                     <FormItem>
                       <FormLabel>Max qty</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <Input.Number
                           min={1}
-                          step={1}
                           disabled={!hasMaxQty}
                           value={field.value}
-                          onChange={(event) => field.onChange(Number(event.target.value))}
+                          onChange={(value) => field.onChange(value ?? 0)}
                         />
                       </FormControl>
                       <FormMessage />
@@ -387,12 +383,11 @@ export function SellableProductPriceRulesPage() {
                   <FormItem>
                     <FormLabel>Unit price</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
+                      <Input.Currency
                         value={field.value}
-                        onChange={(event) => field.onChange(Number(event.target.value))}
+                        onChange={field.onChange}
+                        placeholder="0.00"
+                        allowNegativeValue={false}
                       />
                     </FormControl>
                     <FormMessage />

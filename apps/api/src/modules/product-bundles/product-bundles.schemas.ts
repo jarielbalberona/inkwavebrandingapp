@@ -2,19 +2,17 @@ import { z } from "zod"
 
 import { getProductBundleCompositionIssues } from "./product-bundles.composition.js"
 
-const optionalText = (max: number) =>
+const optionalNullableText = (max: number) =>
   z
-    .string()
-    .trim()
-    .max(max)
+    .union([z.string().trim().max(max), z.null()])
     .optional()
-    .transform((value) => (value === "" ? undefined : value))
+    .transform((value) => (value === "" ? null : value))
 
 const nullableUuid = z.string().uuid().nullable().optional()
 
 const baseProductBundleObjectSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(180),
-  description: optionalText(800),
+  description: optionalNullableText(800),
   cupId: nullableUuid,
   lidId: nullableUuid,
   cupQtyPerSet: z.number().int().min(0).default(0),
@@ -44,7 +42,7 @@ export const productBundleListQuerySchema = z.object({
 
 const createProductBundleRequestObjectSchema = z.object({
   name: baseProductBundleObjectSchema.shape.name,
-  description: z.string().trim().max(800).optional(),
+  description: optionalNullableText(800),
   cup_id: nullableUuid,
   lid_id: nullableUuid,
   cup_qty_per_set: z.number().int().min(0).default(0),

@@ -17,7 +17,7 @@ ALTER TABLE "order_items" ADD CONSTRAINT "order_items_exactly_one_item" CHECK ((
       ));--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_item_type_matches_reference" CHECK ((
         (
-          "order_items"."item_type" = 'cup'
+          "order_items"."item_type"::text = 'cup'
           AND "order_items"."cup_id" IS NOT NULL
           AND "order_items"."lid_id" IS NULL
           AND "order_items"."non_stock_item_id" IS NULL
@@ -25,7 +25,7 @@ ALTER TABLE "order_items" ADD CONSTRAINT "order_items_item_type_matches_referenc
         )
         OR
         (
-          "order_items"."item_type" = 'lid'
+          "order_items"."item_type"::text = 'lid'
           AND "order_items"."lid_id" IS NOT NULL
           AND "order_items"."cup_id" IS NULL
           AND "order_items"."non_stock_item_id" IS NULL
@@ -33,7 +33,7 @@ ALTER TABLE "order_items" ADD CONSTRAINT "order_items_item_type_matches_referenc
         )
         OR
         (
-          "order_items"."item_type" = 'non_stock_item'
+          "order_items"."item_type"::text = 'non_stock_item'
           AND "order_items"."non_stock_item_id" IS NOT NULL
           AND "order_items"."cup_id" IS NULL
           AND "order_items"."lid_id" IS NULL
@@ -41,7 +41,7 @@ ALTER TABLE "order_items" ADD CONSTRAINT "order_items_item_type_matches_referenc
         )
         OR
         (
-          "order_items"."item_type" = 'product_bundle'
+          "order_items"."item_type"::text = 'product_bundle'
           AND "order_items"."product_bundle_id" IS NOT NULL
           AND "order_items"."cup_id" IS NULL
           AND "order_items"."lid_id" IS NULL
@@ -49,7 +49,7 @@ ALTER TABLE "order_items" ADD CONSTRAINT "order_items_item_type_matches_referenc
         )
         OR
         (
-          "order_items"."item_type" = 'custom_charge'
+          "order_items"."item_type"::text = 'custom_charge'
           AND "order_items"."non_stock_item_id" IS NULL
           AND "order_items"."cup_id" IS NULL
           AND "order_items"."lid_id" IS NULL

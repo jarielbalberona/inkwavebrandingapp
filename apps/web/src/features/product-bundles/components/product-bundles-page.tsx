@@ -348,7 +348,7 @@ export function ProductBundlesPage() {
           }
         }}
       >
-        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-6xl!">
           <DialogHeader>
             <DialogTitle>{selectedBundle ? "Edit Bundle" : "Create Bundle"}</DialogTitle>
             <DialogDescription>
@@ -401,7 +401,7 @@ export function ProductBundlesPage() {
                       <FormLabel>Cup component</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="No cup" />
                           </SelectTrigger>
                         </FormControl>
@@ -426,12 +426,10 @@ export function ProductBundlesPage() {
                     <FormItem>
                       <FormLabel>Cup qty per set</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <Input.Number
                           min={0}
-                          step={1}
                           value={field.value}
-                          onChange={(event) => field.onChange(Number(event.target.value))}
+                          onChange={(value) => field.onChange(value ?? 0)}
                         />
                       </FormControl>
                       <FormMessage />
@@ -449,7 +447,7 @@ export function ProductBundlesPage() {
                       <FormLabel>Lid component</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="No lid" />
                           </SelectTrigger>
                         </FormControl>
@@ -474,12 +472,10 @@ export function ProductBundlesPage() {
                     <FormItem>
                       <FormLabel>Lid qty per set</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <Input.Number
                           min={0}
-                          step={1}
                           value={field.value}
-                          onChange={(event) => field.onChange(Number(event.target.value))}
+                          onChange={(value) => field.onChange(value ?? 0)}
                         />
                       </FormControl>
                       <FormMessage />

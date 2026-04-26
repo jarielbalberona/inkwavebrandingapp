@@ -54,18 +54,6 @@ export class InventoryAdjustmentOutInsufficientStockError extends Error {
   }
 }
 
-export class InventoryReservationInsufficientStockError extends Error {
-  readonly statusCode = 409
-
-  constructor(
-    readonly itemType: "cup" | "lid",
-    readonly requestedQuantity: number,
-    readonly availableQuantity: number,
-  ) {
-    super(`Cannot reserve ${requestedQuantity} ${itemType} units; only ${availableQuantity} available`)
-  }
-}
-
 export class InventoryService {
   constructor(
     private readonly inventoryRepository: InventoryRepository,
@@ -176,16 +164,14 @@ export class InventoryService {
     repository: InventoryRepository,
   ) {
     const referencesByItemKey = new Map<string, InventoryItemReference>()
-    const requestedQuantityByItemKey = new Map<string, number>()
 
     for (const item of input.items) {
       const reference = repository.toBalanceReference(item)
       const key = toInventoryItemKey(reference)
       referencesByItemKey.set(key, reference)
-      requestedQuantityByItemKey.set(key, (requestedQuantityByItemKey.get(key) ?? 0) + item.quantity)
     }
 
-    for (const [key, reference] of referencesByItemKey.entries()) {
+    for (const reference of referencesByItemKey.values()) {
       const balance = await repository.getBalanceByItem(reference)
 
       if (!balance) {
@@ -193,17 +179,6 @@ export class InventoryService {
       }
 
       await this.assertTrackedItemIsActive(reference)
-
-      const requestedQuantity = requestedQuantityByItemKey.get(key) ?? 0
-      const availableQuantity = balance.onHand - balance.reserved
-
-      if (availableQuantity < requestedQuantity) {
-        throw new InventoryReservationInsufficientStockError(
-          reference.itemType,
-          requestedQuantity,
-          availableQuantity,
-        )
-      }
     }
 
     const movements = []

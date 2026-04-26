@@ -1,10 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import {
-  InventoryReservationInsufficientStockError,
-  InventoryService,
-} from "./inventory.service.js"
+import { InventoryService } from "./inventory.service.js"
 
 function createInventoryService(input: {
   onHand: number
@@ -47,53 +44,58 @@ function createInventoryService(input: {
   }
 }
 
-test("InventoryService.reserveOrderItems rejects reservations above available stock before writing movements", async () => {
+test("InventoryService.reserveOrderItems allows reservations above available stock", async () => {
   const { service, movements } = createInventoryService({ onHand: 10, reserved: 5 })
 
-  await assert.rejects(
-    () =>
-      service.reserveOrderItems({
-        orderId: "11111111-1111-4111-8111-111111111111",
-        createdByUserId: "22222222-2222-4222-8222-222222222222",
-        items: [
-          {
-            orderItemId: "33333333-3333-4333-8333-333333333333",
-            itemType: "cup",
-            cupId: "44444444-4444-4444-8444-444444444444",
-            quantity: 6,
-          },
-        ],
-      }),
-    InventoryReservationInsufficientStockError,
-  )
+  await service.reserveOrderItems({
+    orderId: "11111111-1111-4111-8111-111111111111",
+    createdByUserId: "22222222-2222-4222-8222-222222222222",
+    items: [
+      {
+        orderItemId: "33333333-3333-4333-8333-333333333333",
+        itemType: "cup",
+        cupId: "44444444-4444-4444-8444-444444444444",
+        quantity: 6,
+      },
+    ],
+  })
 
-  assert.deepEqual(movements, [])
+  assert.deepEqual(movements, [
+    {
+      itemType: "cup",
+      cupId: "44444444-4444-4444-8444-444444444444",
+      lidId: undefined,
+      movementType: "reserve",
+      quantity: 6,
+      orderId: "11111111-1111-4111-8111-111111111111",
+      orderItemId: "33333333-3333-4333-8333-333333333333",
+      note: "Reserved for pending order",
+      reference: "11111111-1111-4111-8111-111111111111",
+      createdByUserId: "22222222-2222-4222-8222-222222222222",
+    },
+  ])
 })
 
-test("InventoryService.reserveOrderItems aggregates same-component reservation requests before stock check", async () => {
+test("InventoryService.reserveOrderItems writes each same-component reservation request", async () => {
   const { service, movements } = createInventoryService({ onHand: 10, reserved: 0 })
 
-  await assert.rejects(
-    () =>
-      service.reserveOrderItems({
-        orderId: "11111111-1111-4111-8111-111111111111",
-        items: [
-          {
-            orderItemId: "33333333-3333-4333-8333-333333333333",
-            itemType: "lid",
-            lidId: "44444444-4444-4444-8444-444444444444",
-            quantity: 6,
-          },
-          {
-            orderItemId: "55555555-5555-4555-8555-555555555555",
-            itemType: "lid",
-            lidId: "44444444-4444-4444-8444-444444444444",
-            quantity: 5,
-          },
-        ],
-      }),
-    InventoryReservationInsufficientStockError,
-  )
+  await service.reserveOrderItems({
+    orderId: "11111111-1111-4111-8111-111111111111",
+    items: [
+      {
+        orderItemId: "33333333-3333-4333-8333-333333333333",
+        itemType: "lid",
+        lidId: "44444444-4444-4444-8444-444444444444",
+        quantity: 6,
+      },
+      {
+        orderItemId: "55555555-5555-4555-8555-555555555555",
+        itemType: "lid",
+        lidId: "44444444-4444-4444-8444-444444444444",
+        quantity: 5,
+      },
+    ],
+  })
 
-  assert.deepEqual(movements, [])
+  assert.equal(movements.length, 2)
 })

@@ -66,14 +66,8 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
               {
                 key: "item",
                 title: "Item",
-                width: "26%",
+                width: "54%",
                 render: (item) => item.item,
-              },
-              {
-                key: "specs",
-                title: "Specs",
-                width: "28%",
-                render: (item) => item.specs,
               },
               {
                 key: "quantity",

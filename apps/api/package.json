@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "db:check": "node --import tsx src/db/check.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "node --import tsx src/db/migrate-deploy.ts",
     "db:migrate:deploy": "node --import tsx src/db/migrate-deploy.ts",
     "db:studio": "drizzle-kit studio",
     "db:drizzle-check": "drizzle-kit check",

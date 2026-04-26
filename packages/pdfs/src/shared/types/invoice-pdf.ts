@@ -13,7 +13,6 @@ export interface InvoicePdfMetaItem {
 
 export interface InvoicePdfLineItem {
   item: string
-  specs: string
   quantity: number
   unit_price: string
   total: string

@@ -40,7 +40,6 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
     ],
     line_items: invoice.items.map((item) => ({
       item: item.description_snapshot,
-      specs: toInvoicePdfSpecs(item.item_type),
       quantity: item.quantity,
       unit_price: item.unit_price,
       total: item.line_total,
@@ -76,21 +75,6 @@ function toInvoicePdfStatus(status: ReturnType<typeof toInvoiceDto>["status"]) {
       return { label: "Void", tone: "danger" as const }
     default:
       return { label: "Pending", tone: "warning" as const }
-  }
-}
-
-function toInvoicePdfSpecs(itemType: ReturnType<typeof toInvoiceDto>["items"][number]["item_type"]) {
-  switch (itemType) {
-    case "cup":
-      return "Cup item"
-    case "lid":
-      return "Lid item"
-    case "non_stock_item":
-      return "General item"
-    case "custom_charge":
-      return "Custom charge"
-    case "product_bundle":
-      return "Bundle"
   }
 }
 

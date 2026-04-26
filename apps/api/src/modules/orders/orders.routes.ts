@@ -16,7 +16,6 @@ import {
   InventoryBalanceItemNotFoundError,
   InventoryItemInactiveError,
   InventoryItemNotFoundError,
-  InventoryReservationInsufficientStockError,
   InventoryService,
 } from "../inventory/inventory.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
@@ -260,8 +259,7 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof InvoiceVoidLockError ||
     error instanceof InventoryBalanceItemNotFoundError ||
     error instanceof InventoryItemNotFoundError ||
-    error instanceof InventoryItemInactiveError ||
-    error instanceof InventoryReservationInsufficientStockError
+    error instanceof InventoryItemInactiveError
   ) {
     if (error instanceof OrderCreateValidationError) {
       sendJson(response, error.statusCode, {

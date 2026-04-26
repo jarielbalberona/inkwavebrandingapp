@@ -47,6 +47,29 @@ test("createProductBundleRequestSchema accepts a cup-only bundle", () => {
   assert.equal(result.isActive, true)
 })
 
+test("createProductBundleRequestSchema accepts a null description", () => {
+  const result = createProductBundleRequestSchema.parse({
+    name: "16oz PET Cup only",
+    description: null,
+    cup_id: cupId,
+    lid_id: null,
+    cup_qty_per_set: 1,
+    lid_qty_per_set: 0,
+  })
+
+  assert.equal(result.description, null)
+})
+
+test("updateProductBundleRequestSchema normalizes a blank description to null", () => {
+  const result = updateProductBundleRequestSchema.parse({
+    description: "   ",
+  })
+
+  assert.deepEqual(result, {
+    description: null,
+  })
+})
+
 test("createProductBundleRequestSchema rejects a bundle without inventory components", () => {
   assert.throws(
     () =>
