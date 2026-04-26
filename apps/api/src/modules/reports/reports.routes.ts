@@ -13,6 +13,7 @@ import { InventoryRepository } from "../inventory/inventory.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import { ReportsRepository } from "./reports.repository.js"
 import {
+  commercialSalesReportQuerySchema,
   cupUsageReportQuerySchema,
   salesCostVisibilityReportQuerySchema,
 } from "./reports.schemas.js"
@@ -68,6 +69,17 @@ export async function handleReportsRoute(
       )
 
       sendJson(response, 200, { report: await service.getSalesCostVisibilityReport(query, user) })
+    })
+    return true
+  }
+
+  if (path === "/reports/commercial-sales" && request.method === "GET") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      const query = commercialSalesReportQuerySchema.parse(
+        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
+      )
+
+      sendJson(response, 200, { report: await service.getCommercialSalesReport(query, user) })
     })
     return true
   }

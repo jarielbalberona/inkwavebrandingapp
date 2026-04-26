@@ -1,5 +1,5 @@
 import { ReportsRepository } from "./reports.repository.js"
-import type { CupUsageReportQuery } from "./reports.schemas.js"
+import type { CommercialSalesReportQuery, CupUsageReportQuery } from "./reports.schemas.js"
 import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertCanViewConfidentialFields, assertPermission } from "../auth/authorization.js"
@@ -11,6 +11,8 @@ import {
   type CupUsageReportDto,
   type OrderStatusReportDto,
   type SalesCostVisibilityReportDto,
+  type CommercialSalesReportDto,
+  toCommercialSalesReportDto,
   toSalesCostVisibilityReportDto,
 } from "./reports.types.js"
 
@@ -87,6 +89,34 @@ export class ReportsService {
         cost_total: row.costTotal,
         gross_profit: row.grossProfit,
       })),
+    )
+  }
+
+  async getCommercialSalesReport(
+    query: CommercialSalesReportQuery,
+    user: SafeUser,
+  ): Promise<CommercialSalesReportDto> {
+    assertPermission(user, "reports.view")
+    assertCanViewConfidentialFields(user)
+
+    const [rows, represented] = await Promise.all([
+      this.reportsRepository.listCommercialSales(query),
+      this.reportsRepository.countCommercialSalesRepresented(query),
+    ])
+
+    return toCommercialSalesReportDto(
+      query,
+      rows.map((row) => ({
+        item_type: row.itemType,
+        item_id: row.itemId,
+        description_snapshot: row.descriptionSnapshot,
+        quantity_sold: row.quantitySold,
+        revenue: row.revenue,
+        average_unit_price: row.averageUnitPrice,
+        invoice_count: row.invoiceCount,
+        order_count: row.orderCount,
+      })),
+      represented,
     )
   }
 }

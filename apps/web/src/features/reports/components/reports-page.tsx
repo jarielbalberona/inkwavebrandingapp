@@ -17,6 +17,8 @@ import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type {
+  CommercialSalesReport,
+  CommercialSalesReportItem,
   CupUsageReport,
   CupUsageReportItem,
   InventoryReportItem,
@@ -26,6 +28,7 @@ import type {
   SalesCostReportItem,
 } from "@/features/reports/api/reports-client"
 import {
+  useCommercialSalesReportQuery,
   useCupUsageReportQuery,
   useInventorySummaryReportQuery,
   useLowStockReportQuery,
@@ -39,6 +42,7 @@ type ReportTab =
   | "order-status"
   | "cup-usage"
   | "sales-cost"
+  | "commercial-sales"
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState<ReportTab>("inventory-summary")
@@ -50,6 +54,7 @@ export function ReportsPage() {
   const orderStatusQuery = useOrderStatusReportQuery()
   const cupUsageQuery = useCupUsageReportQuery()
   const salesCostQuery = useSalesCostReportQuery(canViewFinancialReports)
+  const commercialSalesQuery = useCommercialSalesReportQuery(canViewFinancialReports)
 
   const inventoryReport =
     activeTab === "inventory-summary"
@@ -67,7 +72,9 @@ export function ReportsPage() {
           ? orderStatusQuery
           : activeTab === "cup-usage"
             ? cupUsageQuery
-            : salesCostQuery
+            : activeTab === "sales-cost"
+              ? salesCostQuery
+              : commercialSalesQuery
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -103,7 +110,8 @@ export function ReportsPage() {
                 value === "low-stock" ||
                 value === "order-status" ||
                 value === "cup-usage" ||
-                value === "sales-cost"
+                value === "sales-cost" ||
+                value === "commercial-sales"
               ) {
                 setActiveTab(value)
               }
@@ -124,9 +132,14 @@ export function ReportsPage() {
                   Cups
                 </TabsTrigger>
                 {canViewFinancialReports ? (
-                  <TabsTrigger className="shrink-0 flex-none" value="sales-cost">
-                    Financial
-                  </TabsTrigger>
+                  <>
+                    <TabsTrigger className="shrink-0 flex-none" value="commercial-sales">
+                      Commercial Sales
+                    </TabsTrigger>
+                    <TabsTrigger className="shrink-0 flex-none" value="sales-cost">
+                      Cup Financials
+                    </TabsTrigger>
+                  </>
                 ) : null}
               </TabsList>
             </div>
@@ -140,6 +153,11 @@ export function ReportsPage() {
             <SalesCostReportSection
               canViewFinancialReports={canViewFinancialReports}
               report={salesCostQuery.data}
+            />
+          ) : activeTab === "commercial-sales" ? (
+            <CommercialSalesReportSection
+              canViewFinancialReports={canViewFinancialReports}
+              report={commercialSalesQuery.data}
             />
           ) : (
             <InventoryReportSummaryCards
@@ -166,6 +184,7 @@ export function ReportsPage() {
           activeTab !== "order-status" &&
           activeTab !== "cup-usage" &&
           activeTab !== "sales-cost" &&
+          activeTab !== "commercial-sales" &&
           inventoryReport?.items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {activeTab === "inventory-summary"
@@ -195,9 +214,19 @@ export function ReportsPage() {
             </p>
           ) : null}
 
+          {!activeQuery.isLoading &&
+          activeTab === "commercial-sales" &&
+          canViewFinancialReports &&
+          commercialSalesQuery.data?.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No invoice line snapshots are available for commercial sales reporting yet.
+            </p>
+          ) : null}
+
           {activeTab !== "order-status" &&
           activeTab !== "cup-usage" &&
           activeTab !== "sales-cost" &&
+          activeTab !== "commercial-sales" &&
           inventoryReport?.items.length ? (
             <InventoryReportTable items={inventoryReport.items} />
           ) : null}
@@ -208,6 +237,12 @@ export function ReportsPage() {
 
           {activeTab === "sales-cost" && canViewFinancialReports && salesCostQuery.data?.items.length ? (
             <SalesCostReportTable items={salesCostQuery.data.items} />
+          ) : null}
+
+          {activeTab === "commercial-sales" &&
+          canViewFinancialReports &&
+          commercialSalesQuery.data?.items.length ? (
+            <CommercialSalesReportTable items={commercialSalesQuery.data.items} />
           ) : null}
         </CardContent>
       </Card>
@@ -506,6 +541,75 @@ function SalesCostReportSection({
   )
 }
 
+function CommercialSalesReportSection({
+  canViewFinancialReports,
+  report,
+}: {
+  canViewFinancialReports: boolean
+  report: CommercialSalesReport | undefined
+}) {
+  if (!canViewFinancialReports) {
+    return (
+      <Alert>
+        <AlertDescription>
+          Commercial sales reporting requires the financial-report permission. This is revenue data,
+          not an inventory usage surface.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-5">
+        <MoneyMetricCard
+          label="Revenue"
+          value={report?.totals.total_revenue ?? "0.00"}
+          description="From invoice line snapshots"
+        />
+        <MetricCard
+          label="Quantity sold"
+          value={report?.totals.total_quantity ?? 0}
+          description="Commercial line quantities, not component usage"
+        />
+        <MoneyMetricCard
+          label="Avg unit price"
+          value={report?.totals.average_unit_price ?? "0.00"}
+          description="Revenue divided by commercial quantity"
+        />
+        <MetricCard
+          label="Invoices"
+          value={report?.totals.total_invoices ?? 0}
+          description="Distinct invoices represented"
+        />
+        <MetricCard
+          label="Orders"
+          value={report?.totals.total_orders ?? 0}
+          description="Distinct orders represented"
+        />
+      </div>
+
+      {report ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Commercial Basis</CardTitle>
+            <CardDescription>
+              Revenue basis: {formatReportBasis(report.revenue_basis)}. Date basis:{" "}
+              {formatReportBasis(report.date_basis)}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              This report reads customer-facing invoice line snapshots. It does not read inventory
+              movement rows and does not split product bundles into cup/lid components.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  )
+}
+
 function sum(items: InventoryReportItem[] | undefined, mapItem: (item: InventoryReportItem) => number) {
   return (items ?? []).reduce((total, item) => total + mapItem(item), 0)
 }
@@ -627,4 +731,62 @@ function SalesCostReportTable({ items }: { items: SalesCostReportItem[] }) {
       </TableBody>
     </Table>
   )
+}
+
+function CommercialSalesReportTable({ items }: { items: CommercialSalesReportItem[] }) {
+  const sortedItems = [...items].sort(
+    (left, right) => Number(right.revenue) - Number(left.revenue),
+  )
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Commercial item</TableHead>
+          <TableHead>Type</TableHead>
+          <TableHead>Quantity Sold</TableHead>
+          <TableHead>Revenue</TableHead>
+          <TableHead>Avg Unit Price</TableHead>
+          <TableHead>Invoices</TableHead>
+          <TableHead>Orders</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sortedItems.map((item) => (
+          <TableRow key={`${item.item_type}:${item.item_id ?? item.description_snapshot}`}>
+            <TableCell className="font-medium">{item.description_snapshot}</TableCell>
+            <TableCell>
+              <Badge variant={item.item_type === "product_bundle" ? "default" : "secondary"}>
+                {formatCommercialItemType(item.item_type)}
+              </Badge>
+            </TableCell>
+            <TableCell>{item.quantity_sold.toLocaleString()}</TableCell>
+            <TableCell>{item.revenue}</TableCell>
+            <TableCell>{item.average_unit_price}</TableCell>
+            <TableCell>{item.invoice_count.toLocaleString()}</TableCell>
+            <TableCell>{item.order_count.toLocaleString()}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+}
+
+function formatCommercialItemType(itemType: CommercialSalesReportItem["item_type"]): string {
+  switch (itemType) {
+    case "product_bundle":
+      return "Product bundle"
+    case "non_stock_item":
+      return "General item"
+    case "custom_charge":
+      return "Custom charge"
+    case "cup":
+      return "Cup"
+    case "lid":
+      return "Lid"
+  }
+}
+
+function formatReportBasis(value: string): string {
+  return value.replaceAll("_", " ")
 }

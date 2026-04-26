@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import {
+  getCommercialSalesReport,
   getCupUsageReport,
   getInventorySummaryReport,
   getLowStockReport,
@@ -42,6 +43,14 @@ export function useSalesCostReportQuery(enabled: boolean) {
   return useQuery({
     queryKey: [...reportsQueryKey, "sales-cost"] as const,
     queryFn: getSalesCostReport,
+    enabled,
+  })
+}
+
+export function useCommercialSalesReportQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: [...reportsQueryKey, "commercial-sales"] as const,
+    queryFn: getCommercialSalesReport,
     enabled,
   })
 }

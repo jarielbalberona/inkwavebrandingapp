@@ -1,10 +1,10 @@
 import { and, asc, gte, isNotNull, lte, eq, or, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
-import { cups, inventoryMovements, orders } from "../../db/schema/index.js"
+import { cups, inventoryMovements, invoices, invoiceItems, orders } from "../../db/schema/index.js"
 import { orderItems, orderLineItemProgressEvents } from "../../db/schema/index.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
-import type { CupUsageReportQuery } from "./reports.schemas.js"
+import type { CommercialSalesReportQuery, CupUsageReportQuery } from "./reports.schemas.js"
 import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
 import type {
   CupUsageReportItemDto,
@@ -27,6 +27,17 @@ export interface SalesCostVisibilityRow {
   sellTotal: string
   costTotal: string
   grossProfit: string
+}
+
+export interface CommercialSalesRow {
+  itemType: "product_bundle" | "cup" | "lid" | "non_stock_item" | "custom_charge"
+  itemId: string | null
+  descriptionSnapshot: string
+  quantitySold: number
+  revenue: string
+  averageUnitPrice: string
+  invoiceCount: number
+  orderCount: number
 }
 
 export class ReportsRepository {
@@ -154,6 +165,83 @@ export class ReportsRepository {
       costTotal: toMoneyString(row.costTotal),
       grossProfit: toMoneyString(row.grossProfit),
     }))
+  }
+
+  async listCommercialSales(query: CommercialSalesReportQuery): Promise<CommercialSalesRow[]> {
+    const itemIdExpression = sql<string | null>`CASE
+      WHEN ${invoiceItems.itemType} = 'product_bundle' THEN ${orderItems.productBundleId}
+      WHEN ${invoiceItems.itemType} = 'cup' THEN ${orderItems.cupId}
+      WHEN ${invoiceItems.itemType} = 'lid' THEN ${orderItems.lidId}
+      WHEN ${invoiceItems.itemType} = 'non_stock_item' THEN ${orderItems.nonStockItemId}
+      ELSE NULL
+    END`
+    const conditions = [
+      query.start_date ? gte(invoices.createdAt, query.start_date) : undefined,
+      query.end_date ? lte(invoices.createdAt, query.end_date) : undefined,
+      query.item_type ? eq(invoiceItems.itemType, query.item_type) : undefined,
+      query.product_bundle_id
+        ? eq(orderItems.productBundleId, query.product_bundle_id)
+        : undefined,
+    ].filter(Boolean)
+
+    const rows = await this.db
+      .select({
+        itemType: invoiceItems.itemType,
+        itemId: itemIdExpression,
+        descriptionSnapshot: invoiceItems.descriptionSnapshot,
+        quantitySold: sql<number>`COALESCE(SUM(${invoiceItems.quantity}), 0)`,
+        revenue: sql<string>`COALESCE(SUM(${invoiceItems.lineTotal}), 0)::text`,
+        averageUnitPrice:
+          sql<string>`CASE WHEN COALESCE(SUM(${invoiceItems.quantity}), 0) = 0 THEN '0' ELSE (COALESCE(SUM(${invoiceItems.lineTotal}), 0) / SUM(${invoiceItems.quantity}))::text END`,
+        invoiceCount: sql<number>`COUNT(DISTINCT ${invoiceItems.invoiceId})`,
+        orderCount: sql<number>`COUNT(DISTINCT ${invoices.orderId})`,
+      })
+      .from(invoiceItems)
+      .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
+      .innerJoin(orderItems, eq(invoiceItems.orderItemId, orderItems.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(invoiceItems.itemType, itemIdExpression, invoiceItems.descriptionSnapshot)
+      .orderBy(asc(invoiceItems.itemType), asc(invoiceItems.descriptionSnapshot))
+
+    return rows.map((row) => ({
+      itemType: row.itemType,
+      itemId: row.itemId,
+      descriptionSnapshot: row.descriptionSnapshot,
+      quantitySold: Number(row.quantitySold),
+      revenue: toMoneyString(row.revenue),
+      averageUnitPrice: toMoneyString(row.averageUnitPrice),
+      invoiceCount: Number(row.invoiceCount),
+      orderCount: Number(row.orderCount),
+    }))
+  }
+
+  async countCommercialSalesRepresented(query: CommercialSalesReportQuery): Promise<{
+    invoiceCount: number
+    orderCount: number
+  }> {
+    const conditions = [
+      query.start_date ? gte(invoices.createdAt, query.start_date) : undefined,
+      query.end_date ? lte(invoices.createdAt, query.end_date) : undefined,
+      query.item_type ? eq(invoiceItems.itemType, query.item_type) : undefined,
+      query.product_bundle_id
+        ? eq(orderItems.productBundleId, query.product_bundle_id)
+        : undefined,
+    ].filter(Boolean)
+
+    const rows = await this.db
+      .select({
+        invoiceCount: sql<number>`COUNT(DISTINCT ${invoiceItems.invoiceId})`,
+        orderCount: sql<number>`COUNT(DISTINCT ${invoices.orderId})`,
+      })
+      .from(invoiceItems)
+      .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
+      .innerJoin(orderItems, eq(invoiceItems.orderItemId, orderItems.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+
+    return {
+      invoiceCount: Number(rows[0]?.invoiceCount ?? 0),
+      orderCount: Number(rows[0]?.orderCount ?? 0),
+    }
   }
 }
 

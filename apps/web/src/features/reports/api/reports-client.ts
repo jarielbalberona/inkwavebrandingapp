@@ -121,6 +121,48 @@ const salesCostReportResponseSchema = z.object({
   report: salesCostReportSchema,
 })
 
+const commercialSalesItemTypeSchema = z.enum([
+  "product_bundle",
+  "cup",
+  "lid",
+  "non_stock_item",
+  "custom_charge",
+])
+
+const commercialSalesReportItemSchema = z.object({
+  item_type: commercialSalesItemTypeSchema,
+  item_id: z.string().uuid().nullable(),
+  description_snapshot: z.string(),
+  quantity_sold: z.number(),
+  revenue: z.string(),
+  average_unit_price: z.string(),
+  invoice_count: z.number(),
+  order_count: z.number(),
+})
+
+const commercialSalesReportSchema = z.object({
+  revenue_basis: z.literal("invoice_line_snapshots"),
+  date_basis: z.literal("invoice_created_at"),
+  filters: z.object({
+    start_date: z.string().nullable(),
+    end_date: z.string().nullable(),
+    item_type: commercialSalesItemTypeSchema.nullable(),
+    product_bundle_id: z.string().uuid().nullable(),
+  }),
+  items: z.array(commercialSalesReportItemSchema),
+  totals: z.object({
+    total_revenue: z.string(),
+    total_quantity: z.number(),
+    total_invoices: z.number(),
+    total_orders: z.number(),
+    average_unit_price: z.string(),
+  }),
+})
+
+const commercialSalesReportResponseSchema = z.object({
+  report: commercialSalesReportSchema,
+})
+
 export type InventoryReportItem = z.infer<typeof inventoryReportItemSchema>
 export type InventoryReport = z.infer<typeof inventoryReportSchema>
 export type OrderStatusReport = z.infer<typeof orderStatusReportSchema>
@@ -129,6 +171,8 @@ export type CupUsageReport = z.infer<typeof cupUsageReportSchema>
 export type CupUsageReportItem = z.infer<typeof cupUsageReportItemSchema>
 export type SalesCostReport = z.infer<typeof salesCostReportSchema>
 export type SalesCostReportItem = z.infer<typeof salesCostReportItemSchema>
+export type CommercialSalesReport = z.infer<typeof commercialSalesReportSchema>
+export type CommercialSalesReportItem = z.infer<typeof commercialSalesReportItemSchema>
 
 export class ReportsApiError extends Error {
   readonly status: number
@@ -201,4 +245,20 @@ export async function getSalesCostReport(): Promise<SalesCostReport> {
   }
 
   return salesCostReportResponseSchema.parse(await response.json()).report
+}
+
+export async function getCommercialSalesReport(): Promise<CommercialSalesReport> {
+  const response = await fetch(`${apiBaseUrl}/reports/commercial-sales`, {
+    credentials: "include",
+  })
+
+  if (response.status === 403) {
+    throw new ReportsApiError("You do not have permission to view commercial sales reporting.", response.status)
+  }
+
+  if (!response.ok) {
+    throw new ReportsApiError("Unable to load commercial sales report.", response.status)
+  }
+
+  return commercialSalesReportResponseSchema.parse(await response.json()).report
 }

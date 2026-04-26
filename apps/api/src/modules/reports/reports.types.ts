@@ -1,6 +1,6 @@
 import type { InventoryBalanceSummary } from "../inventory/inventory.repository.js"
 import { calculateAvailable } from "../inventory/inventory.rules.js"
-import type { CupUsageReportQuery } from "./reports.schemas.js"
+import type { CommercialSalesReportItemType, CommercialSalesReportQuery, CupUsageReportQuery } from "./reports.schemas.js"
 import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
 
 export interface InventoryReportItemDto {
@@ -104,6 +104,36 @@ export interface SalesCostVisibilityReportDto {
   }
 }
 
+export interface CommercialSalesReportItemDto {
+  item_type: CommercialSalesReportItemType
+  item_id: string | null
+  description_snapshot: string
+  quantity_sold: number
+  revenue: string
+  average_unit_price: string
+  invoice_count: number
+  order_count: number
+}
+
+export interface CommercialSalesReportDto {
+  revenue_basis: "invoice_line_snapshots"
+  date_basis: "invoice_created_at"
+  filters: {
+    start_date: string | null
+    end_date: string | null
+    item_type: CommercialSalesReportItemType | null
+    product_bundle_id: string | null
+  }
+  items: CommercialSalesReportItemDto[]
+  totals: {
+    total_revenue: string
+    total_quantity: number
+    total_invoices: number
+    total_orders: number
+    average_unit_price: string
+  }
+}
+
 export function toInventoryReportItemDto(
   balance: InventoryBalanceSummary,
 ): InventoryReportItemDto {
@@ -192,6 +222,45 @@ export function toSalesCostVisibilityReportDto(
     },
     items,
     totals,
+  }
+}
+
+export function toCommercialSalesReportDto(
+  query: CommercialSalesReportQuery,
+  items: CommercialSalesReportItemDto[],
+  represented: { invoiceCount: number; orderCount: number },
+): CommercialSalesReportDto {
+  const totals = items.reduce(
+    (accumulator, item) => {
+      accumulator.total_revenue = addMoneyStrings(accumulator.total_revenue, item.revenue)
+      accumulator.total_quantity += item.quantity_sold
+      return accumulator
+    },
+    {
+      total_revenue: "0.00",
+      total_quantity: 0,
+    },
+  )
+
+  return {
+    revenue_basis: "invoice_line_snapshots",
+    date_basis: "invoice_created_at",
+    filters: {
+      start_date: query.start_date?.toISOString() ?? null,
+      end_date: query.end_date?.toISOString() ?? null,
+      item_type: query.item_type ?? null,
+      product_bundle_id: query.product_bundle_id ?? null,
+    },
+    items,
+    totals: {
+      ...totals,
+      total_invoices: represented.invoiceCount,
+      total_orders: represented.orderCount,
+      average_unit_price:
+        totals.total_quantity === 0
+          ? "0.00"
+          : (Number(totals.total_revenue) / totals.total_quantity).toFixed(2),
+    },
   }
 }
 
