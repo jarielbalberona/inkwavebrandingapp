@@ -11,8 +11,12 @@ import {
   type Order,
 } from "../../db/schema/index.js"
 
-export type OrderWithRelations = NonNullable<Awaited<ReturnType<OrdersRepository["findByIdWithRelations"]>>>
-export type OrderItemWithOrder = NonNullable<Awaited<ReturnType<OrdersRepository["findOrderItemWithOrder"]>>>
+export type OrderWithRelations = NonNullable<
+  Awaited<ReturnType<OrdersRepository["findByIdWithRelations"]>>
+>
+export type OrderItemWithOrder = NonNullable<
+  Awaited<ReturnType<OrdersRepository["findOrderItemWithOrder"]>>
+>
 export type ProgressEventWithRelations = Awaited<
   ReturnType<OrdersRepository["listProgressEventsForOrderItem"]>
 >[number]
@@ -24,13 +28,16 @@ export class OrdersRepository {
   constructor(private readonly db: DatabaseClient) {}
 
   async transaction<T>(
-    handler: (context: { db: DatabaseClient; ordersRepository: OrdersRepository }) => Promise<T>,
+    handler: (context: {
+      db: DatabaseClient
+      ordersRepository: OrdersRepository
+    }) => Promise<T>
   ): Promise<T> {
     return this.db.transaction((tx) =>
       handler({
         db: tx as DatabaseClient,
         ordersRepository: new OrdersRepository(tx as DatabaseClient),
-      }),
+      })
     )
   }
 
@@ -38,7 +45,10 @@ export class OrdersRepository {
     order: NewOrder
     items: Omit<NewOrderItem, "orderId">[]
   }): Promise<OrderWithRelations> {
-    const orderRows = await this.db.insert(orders).values(input.order).returning()
+    const orderRows = await this.db
+      .insert(orders)
+      .values(input.order)
+      .returning()
     const order = orderRows[0]
 
     if (!order) {
@@ -62,13 +72,15 @@ export class OrdersRepository {
 
   async createOrderItems(
     orderId: string,
-    items: Omit<NewOrderItem, "orderId">[],
+    items: Omit<NewOrderItem, "orderId">[]
   ): Promise<void> {
     if (items.length === 0) {
       return
     }
 
-    await this.db.insert(orderItems).values(items.map((item) => ({ ...item, orderId })))
+    await this.db
+      .insert(orderItems)
+      .values(items.map((item) => ({ ...item, orderId })))
   }
 
   async findByIdWithRelations(id: string) {
@@ -93,11 +105,13 @@ export class OrdersRepository {
     })
   }
 
-  async listWithRelations(options: { status?: Order["status"]; includeArchived?: boolean } = {}) {
+  async listWithRelations(
+    options: { status?: Order["status"]; includeArchived?: boolean } = {}
+  ) {
     return this.db.query.orders.findMany({
       where: and(
         options.status ? eq(orders.status, options.status) : undefined,
-        options.includeArchived ? undefined : isNull(orders.archivedAt),
+        options.includeArchived ? undefined : isNull(orders.archivedAt)
       ),
       with: {
         customer: true,
@@ -167,7 +181,10 @@ export class OrdersRepository {
     })
   }
 
-  async updateOrderStatus(orderId: string, status: Order["status"]): Promise<void> {
+  async updateOrderStatus(
+    orderId: string,
+    status: Order["status"]
+  ): Promise<void> {
     await this.db
       .update(orders)
       .set({
@@ -189,7 +206,7 @@ export class OrdersRepository {
 
   async updateOrderMetadata(
     orderId: string,
-    input: { customerId?: string; notes?: string | null },
+    input: { customerId?: string; notes?: string | null }
   ): Promise<void> {
     await this.db
       .update(orders)
@@ -203,7 +220,7 @@ export class OrdersRepository {
 
   async updateOrderItem(
     orderItemId: string,
-    input: Omit<NewOrderItem, "orderId">,
+    input: Omit<NewOrderItem, "orderId">
   ): Promise<void> {
     await this.db
       .update(orderItems)
@@ -277,9 +294,20 @@ export class OrdersRepository {
       .where(eq(orders.id, orderId))
   }
 
-  async listProgressEventsForOrderItem(orderLineItemId: string) {
+  async listProgressEventsForOrderItem(
+    orderLineItemId: string,
+    filters: { componentItemType?: "cup" | "lid" } = {}
+  ) {
     return this.db.query.orderLineItemProgressEvents.findMany({
-      where: eq(orderLineItemProgressEvents.orderLineItemId, orderLineItemId),
+      where: and(
+        eq(orderLineItemProgressEvents.orderLineItemId, orderLineItemId),
+        filters.componentItemType
+          ? eq(
+              orderLineItemProgressEvents.componentItemType,
+              filters.componentItemType
+            )
+          : undefined
+      ),
       with: {
         createdByUser: true,
       },
@@ -291,9 +319,12 @@ export class OrdersRepository {
   }
 
   async createProgressEvent(
-    input: NewOrderLineItemProgressEvent,
+    input: NewOrderLineItemProgressEvent
   ): Promise<ProgressEventWithRelations> {
-    const rows = await this.db.insert(orderLineItemProgressEvents).values(input).returning()
+    const rows = await this.db
+      .insert(orderLineItemProgressEvents)
+      .values(input)
+      .returning()
     const event = rows[0]
 
     if (!event) {

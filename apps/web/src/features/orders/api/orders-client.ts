@@ -173,7 +173,13 @@ const orderSchema = z.object({
 const invoiceItemSchema = z.object({
   id: z.string().uuid(),
   order_line_item_id: z.string().uuid(),
-  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge", "product_bundle"]),
+  item_type: z.enum([
+    "cup",
+    "lid",
+    "non_stock_item",
+    "custom_charge",
+    "product_bundle",
+  ]),
   description_snapshot: z.string(),
   quantity: z.number().int().positive(),
   unit_price: z.string(),
@@ -218,7 +224,7 @@ const invoiceSchema = z.object({
         .nullable(),
       created_at: z.string(),
       updated_at: z.string(),
-    }),
+    })
   ),
   created_at: z.string(),
   updated_at: z.string(),
@@ -249,6 +255,7 @@ const progressTotalsSchema = z.object({
 const progressEventSchema = z.object({
   id: z.string().uuid(),
   order_line_item_id: z.string().uuid(),
+  component_item_type: z.enum(["cup", "lid"]).nullable(),
   stage: progressStageSchema,
   quantity: z.number().int().positive(),
   note: z.string().nullable(),
@@ -282,9 +289,21 @@ export type ProgressEvent = z.infer<typeof progressEventSchema>
 
 const createOrderLineItemErrorSchema = z.object({
   line_item_index: z.number().int().nonnegative(),
-  item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge", "product_bundle"]),
+  item_type: z.enum([
+    "cup",
+    "lid",
+    "non_stock_item",
+    "custom_charge",
+    "product_bundle",
+  ]),
   item_id: z.string().uuid().optional(),
-  field: z.enum(["item_id", "quantity", "description_snapshot", "unit_sell_price", "unit_cost_price"]),
+  field: z.enum([
+    "item_id",
+    "quantity",
+    "description_snapshot",
+    "unit_sell_price",
+    "unit_cost_price",
+  ]),
   item_label: z.string().optional(),
   requested_quantity: z.number().int().positive().optional(),
   available_quantity: z.number().int().min(0).optional(),
@@ -296,7 +315,9 @@ const createOrderErrorResponseSchema = z.object({
   line_items: z.array(createOrderLineItemErrorSchema).optional(),
 })
 
-export type CreateOrderLineItemError = z.infer<typeof createOrderLineItemErrorSchema>
+export type CreateOrderLineItemError = z.infer<
+  typeof createOrderLineItemErrorSchema
+>
 
 export class CreateOrderError extends Error {
   readonly lineItems: CreateOrderLineItemError[]
@@ -349,6 +370,7 @@ export interface CreateOrderPayload {
 
 export interface CreateProgressEventPayload {
   stage: ProgressStage
+  component_item_type?: "cup" | "lid"
   quantity: number
   note?: string
   event_date: string
@@ -445,7 +467,9 @@ export async function getOrderInvoice(orderId: string): Promise<Invoice> {
 
 export async function generateOrderInvoice(orderId: string): Promise<Invoice> {
   try {
-    const data = await api.post<unknown, undefined>(`/orders/${orderId}/invoice`)
+    const data = await api.post<unknown, undefined>(
+      `/orders/${orderId}/invoice`
+    )
     return invoiceResponseSchema.parse(data).invoice
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 403) {
@@ -457,7 +481,9 @@ export async function generateOrderInvoice(orderId: string): Promise<Invoice> {
     }
 
     if (error instanceof ApiClientError && error.status === 409) {
-      throw new Error(error.message || "Invoice generation is not allowed for this order.")
+      throw new Error(
+        error.message || "Invoice generation is not allowed for this order."
+      )
     }
 
     if (error instanceof ApiClientError) {
@@ -468,7 +494,9 @@ export async function generateOrderInvoice(orderId: string): Promise<Invoice> {
   }
 }
 
-export async function listOrders(filters: { status?: OrderStatus; includeArchived?: boolean } = {}): Promise<Order[]> {
+export async function listOrders(
+  filters: { status?: OrderStatus; includeArchived?: boolean } = {}
+): Promise<Order[]> {
   const searchParams = new URLSearchParams()
 
   if (filters.status) {
@@ -479,7 +507,9 @@ export async function listOrders(filters: { status?: OrderStatus; includeArchive
     searchParams.set("include_archived", "true")
   }
 
-  const data = await api.get<unknown>(`/orders${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`)
+  const data = await api.get<unknown>(
+    `/orders${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`
+  )
   return ordersResponseSchema.parse(data).orders
 }
 
@@ -507,19 +537,27 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
   } catch (error) {
     if (error instanceof ApiClientError) {
       const parsedError = parseCreateOrderApiError(error.data)
-      const lineItems = parsedError.success ? (parsedError.data.line_items ?? []) : []
+      const lineItems = parsedError.success
+        ? (parsedError.data.line_items ?? [])
+        : []
 
       if (error.status === 400) {
         throw new CreateOrderError(
-          orderApiErrorMessage(error.data, "Check the selected customer, items, and quantities."),
-          lineItems,
+          orderApiErrorMessage(
+            error.data,
+            "Check the selected customer, items, and quantities."
+          ),
+          lineItems
         )
       }
 
       if (error.status === 404) {
         throw new CreateOrderError(
-          orderApiErrorMessage(error.data, "A selected customer, cup, or lid no longer exists."),
-          lineItems,
+          orderApiErrorMessage(
+            error.data,
+            "A selected customer, cup, or lid no longer exists."
+          ),
+          lineItems
         )
       }
 
@@ -527,9 +565,9 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
         throw new CreateOrderError(
           orderApiErrorMessage(
             error.data,
-            "Unable to create order. Check customer/item status, duplicate items, or available stock.",
+            "Unable to create order. Check customer/item status, duplicate items, or available stock."
           ),
-          lineItems,
+          lineItems
         )
       }
 
@@ -537,7 +575,10 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
         throw new Error("You do not have permission to record fulfillment.")
       }
 
-      throw new CreateOrderError(orderApiErrorMessage(error.data, "Unable to create order."), lineItems)
+      throw new CreateOrderError(
+        orderApiErrorMessage(error.data, "Unable to create order."),
+        lineItems
+      )
     }
 
     throw error
@@ -571,7 +612,10 @@ export async function cancelOrder(id: string): Promise<Order> {
 
 export async function archiveOrder(id: string): Promise<Order> {
   try {
-    const data = await api.post<unknown, Record<string, never>>(`/orders/${id}/archive`, {})
+    const data = await api.post<unknown, Record<string, never>>(
+      `/orders/${id}/archive`,
+      {}
+    )
     return orderResponseSchema.parse(data).order
   } catch (error) {
     if (error instanceof ApiClientError) {
@@ -590,9 +634,15 @@ export async function archiveOrder(id: string): Promise<Order> {
   }
 }
 
-export async function updateOrder(id: string, payload: UpdateOrderPayload): Promise<Order> {
+export async function updateOrder(
+  id: string,
+  payload: UpdateOrderPayload
+): Promise<Order> {
   try {
-    const data = await api.patch<unknown, UpdateOrderPayload>(`/orders/${id}`, payload)
+    const data = await api.patch<unknown, UpdateOrderPayload>(
+      `/orders/${id}`,
+      payload
+    )
     return orderResponseSchema.parse(data).order
   } catch (error) {
     if (error instanceof ApiClientError) {
@@ -603,7 +653,7 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
           parsedError.success
             ? parsedError.data.error
             : "Order update contained invalid structural data.",
-          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+          parsedError.success ? (parsedError.data.line_items ?? []) : []
         )
       }
 
@@ -616,7 +666,7 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
           parsedError.success
             ? parsedError.data.error
             : "Order cannot be edited in its current state.",
-          parsedError.success ? (parsedError.data.line_items ?? []) : [],
+          parsedError.success ? (parsedError.data.line_items ?? []) : []
         )
       }
 
@@ -624,7 +674,10 @@ export async function updateOrder(id: string, payload: UpdateOrderPayload): Prom
         throw new Error("You do not have permission to manage orders.")
       }
 
-      throw new CreateOrderError(orderApiErrorMessage(error.data, "Unable to update order."), [])
+      throw new CreateOrderError(
+        orderApiErrorMessage(error.data, "Unable to update order."),
+        []
+      )
     }
 
     throw error
@@ -661,12 +714,23 @@ export async function updateOrderPriorities(
   }
 }
 
-export async function listProgressEvents(orderLineItemId: string): Promise<{
+export async function listProgressEvents(
+  orderLineItemId: string,
+  componentItemType?: "cup" | "lid"
+): Promise<{
   events: ProgressEvent[]
   totals: ProgressTotals
 }> {
   try {
-    const data = await api.get<unknown>(`/order-line-items/${orderLineItemId}/progress-events`)
+    const searchParams = new URLSearchParams()
+    if (componentItemType) {
+      searchParams.set("component_item_type", componentItemType)
+    }
+    const data = await api.get<unknown>(
+      `/order-line-items/${orderLineItemId}/progress-events${
+        searchParams.size > 0 ? `?${searchParams.toString()}` : ""
+      }`
+    )
     return progressEventsResponseSchema.parse(data)
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 404) {
@@ -683,7 +747,7 @@ export async function listProgressEvents(orderLineItemId: string): Promise<{
 
 export async function createProgressEvent(
   orderLineItemId: string,
-  payload: CreateProgressEventPayload,
+  payload: CreateProgressEventPayload
 ): Promise<{
   event: ProgressEvent
   totals: ProgressTotals
@@ -692,14 +756,16 @@ export async function createProgressEvent(
   try {
     const data = await api.post<unknown, CreateProgressEventPayload>(
       `/order-line-items/${orderLineItemId}/progress-events`,
-      payload,
+      payload
     )
 
     return createProgressEventResponseSchema.parse(data)
   } catch (error) {
     if (error instanceof ApiClientError) {
       if (error.status === 400) {
-        throw new Error("Enter a valid progress stage, quantity, and event date.")
+        throw new Error(
+          "Enter a valid progress stage, quantity, and event date."
+        )
       }
 
       if (error.status === 404) {
@@ -707,7 +773,10 @@ export async function createProgressEvent(
       }
 
       if (error.status === 409) {
-        throw new Error(error.message || "Progress quantity exceeds the allowed stage balance.")
+        throw new Error(
+          error.message ||
+            "Progress quantity exceeds the allowed stage balance."
+        )
       }
 
       if (error.status === 403) {

@@ -64,7 +64,7 @@ type FulfillmentRow = {
   bundlePart: BundleFulfillmentPart | null
 }
 
-type ProgressStageRuleSet = "lid" | "bundle" | "default"
+type ProgressStageRuleSet = "lid" | "default"
 
 function getProgressStageRuleSet(
   itemType: Order["items"][number]["item_type"],
@@ -75,9 +75,6 @@ function getProgressStageRuleSet(
   }
   if (itemType === "product_bundle" && row?.bundlePart === "lid") {
     return "lid"
-  }
-  if (itemType === "product_bundle") {
-    return "bundle"
   }
   return "default"
 }
@@ -170,7 +167,10 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
   }, [fulfillmentRows, selectedFulfillmentKey])
 
   const progressEventsQuery = useProgressEventsQuery(
-    selectedLineItem?.id ?? null
+    selectedLineItem?.id ?? null,
+    selectedLineItem?.item_type === "product_bundle"
+      ? (selectedRow?.bundlePart ?? undefined)
+      : undefined
   )
   const availableProgressStages = getAllowedProgressStagesForRow(selectedRow)
   const defaultProgressStage: ProgressStage =
@@ -183,7 +183,8 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
     if (!activeFulfillmentKey) {
       return
     }
-    const row = fulfillmentRows.find((r) => r.key === activeFulfillmentKey) ?? null
+    const row =
+      fulfillmentRows.find((r) => r.key === activeFulfillmentKey) ?? null
     const allowed = getAllowedProgressStagesForRow(row)
     setProgressStage((current) =>
       allowed.includes(current) ? current : (allowed[0] ?? "packed")
@@ -271,6 +272,10 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
         orderLineItemId: selectedLineItem.id,
         payload: {
           stage: effectiveProgressStage,
+          component_item_type:
+            selectedLineItem.item_type === "product_bundle"
+              ? (selectedRow.bundlePart ?? undefined)
+              : undefined,
           quantity,
           note: progressNote.trim() || undefined,
           event_date: progressEventDate,
@@ -354,7 +359,7 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
               </Alert>
             ) : (
               <div className="">
-                <div className="grid gap-2 bg-orange-300 p-3 mb-4">
+                <div className="mb-4 grid gap-2 bg-orange-300 p-3">
                   <Label>Select Order Item</Label>
                   <Select
                     value={activeFulfillmentKey ?? undefined}
@@ -404,17 +409,28 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                             <p className="text-xs text-muted-foreground">
                               {selectedRow.bundlePart === "lid" ? (
                                 <>
-                                  Lids follow the same <span className="font-medium">packed → ready → released</span>{" "}
-                                  rules as a stand-alone lid (no printed/QA on the lid). Quantities are in{" "}
-                                  <span className="font-medium">bundle sets</span>, shared with the cup row.
-                                  Use the <span className="font-medium">cup</span> row for printed/QA when working
-                                  on cups.
+                                  Lids follow the same{" "}
+                                  <span className="font-medium">
+                                    packed → ready → released
+                                  </span>{" "}
+                                  rules as a stand-alone lid (no printed/QA on
+                                  the lid). Quantities are in{" "}
+                                  <span className="font-medium">
+                                    bundle sets
+                                  </span>
+                                  . Use the{" "}
+                                  <span className="font-medium">cup</span> row
+                                  for printed/QA when working on cups.
                                 </>
                               ) : (
                                 <>
-                                  Quantities and stages follow{" "}
-                                  <span className="font-medium">bundle sets</span> (same line as the
-                                  other component). Progress applies to the whole line.
+                                  Cups follow the same printed → QA → packed →
+                                  ready → released flow as a stand-alone cup.
+                                  Quantities are in{" "}
+                                  <span className="font-medium">
+                                    bundle sets
+                                  </span>
+                                  .
                                 </>
                               )}
                             </p>
@@ -861,24 +877,6 @@ function maxQuantityForStage(
     }
   }
 
-  if (stageRules === "bundle") {
-    switch (stage) {
-      case "printed":
-        return Number.MAX_SAFE_INTEGER
-      case "qa_passed":
-        return Math.max(totals.total_printed - totals.total_qa_passed, 0)
-      case "packed":
-        return Math.max(orderedQuantity - totals.total_packed, 0)
-      case "ready_for_release":
-        return Math.max(totals.total_packed - totals.total_ready_for_release, 0)
-      case "released":
-        return Math.max(
-          totals.total_ready_for_release - totals.total_released,
-          0
-        )
-    }
-  }
-
   switch (stage) {
     case "printed":
       return Number.MAX_SAFE_INTEGER
@@ -921,28 +919,6 @@ function describeStageBalance(
     }
   }
 
-  if (stageRules === "bundle") {
-    const maxQuantity = maxQuantityForStage(
-      itemType,
-      stage,
-      orderedQuantity,
-      totals,
-      "bundle"
-    )
-    switch (stage) {
-      case "printed":
-        return "Printed supports overrun. Record the actual printed quantity."
-      case "qa_passed":
-        return `Available from printed: ${maxQuantity.toLocaleString()}.`
-      case "packed":
-        return `Up to ${maxQuantity.toLocaleString()} more can be packed within the ordered quantity (independent of the QA total).`
-      case "ready_for_release":
-        return `Available from packed: ${maxQuantity.toLocaleString()}.`
-      case "released":
-        return `Available from ready for release: ${maxQuantity.toLocaleString()}.`
-    }
-  }
-
   const maxQuantity = maxQuantityForStage(
     itemType,
     stage,
@@ -982,21 +958,6 @@ function buildProgressQuantityError(
         return `Released quantity cannot exceed the current ready-for-release balance of ${maxQuantity}.`
       default:
         return `This stage is not used for lid line items.`
-    }
-  }
-
-  if (rules === "bundle") {
-    switch (stage) {
-      case "packed":
-        return `Packed quantity cannot exceed ${maxQuantity} (remaining to pack for this line; not limited by QA).`
-      case "ready_for_release":
-        return `Ready for release quantity cannot exceed the current moveable packed balance of ${maxQuantity}.`
-      case "released":
-        return `Released quantity cannot exceed the current ready-for-release balance of ${maxQuantity}.`
-      case "qa_passed":
-        return `QA passed quantity cannot exceed the current printed balance of ${maxQuantity}.`
-      case "printed":
-        return "Printed supports overrun and should not be capped here."
     }
   }
 

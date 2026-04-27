@@ -32,6 +32,7 @@ import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
   orderListQuerySchema,
+  progressEventsQuerySchema,
   updateOrderPrioritiesSchema,
   updateOrderSchema,
 } from "./orders.schemas.js"
@@ -69,94 +70,177 @@ interface OrdersRouteContext {
 export async function handleOrdersRoute(
   request: IncomingMessage,
   response: ServerResponse,
-  context: OrdersRouteContext,
+  context: OrdersRouteContext
 ): Promise<boolean> {
   const path = getRequestPath(request)
 
   if (path === "/orders" && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const query = orderListQuerySchema.parse(
-        Object.fromEntries(new URL(request.url ?? "/", "http://localhost").searchParams),
-      )
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        const query = orderListQuerySchema.parse(
+          Object.fromEntries(
+            new URL(request.url ?? "/", "http://localhost").searchParams
+          )
+        )
 
-      sendJson(response, 200, { orders: await service.list(query, user) })
-    })
+        sendJson(response, 200, { orders: await service.list(query, user) })
+      }
+    )
     return true
   }
 
   if (path === "/orders" && request.method === "POST") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const input = createOrderSchema.parse(await readJsonBody(request))
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        const input = createOrderSchema.parse(await readJsonBody(request))
 
-      sendJson(response, 201, { order: await service.create(input, user) })
-    })
+        sendJson(response, 201, { order: await service.create(input, user) })
+      }
+    )
     return true
   }
 
   if (path === "/orders/priorities" && request.method === "PATCH") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const input = updateOrderPrioritiesSchema.parse(await readJsonBody(request))
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        const input = updateOrderPrioritiesSchema.parse(
+          await readJsonBody(request)
+        )
 
-      sendJson(response, 200, {
-        orders: await service.updatePriorities(input, user),
-      })
-    })
+        sendJson(response, 200, {
+          orders: await service.updatePriorities(input, user),
+        })
+      }
+    )
     return true
   }
 
   const getOrderMatch = path.match(/^\/orders\/([^/]+)$/)
 
   if (getOrderMatch && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      sendJson(response, 200, { order: await service.getById(getOrderMatch[1] ?? "", user) })
-    })
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        sendJson(response, 200, {
+          order: await service.getById(getOrderMatch[1] ?? "", user),
+        })
+      }
+    )
     return true
   }
 
   const updateOrderMatch = path.match(/^\/orders\/([^/]+)$/)
 
   if (updateOrderMatch && request.method === "PATCH") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const input = updateOrderSchema.parse(await readJsonBody(request))
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        const input = updateOrderSchema.parse(await readJsonBody(request))
 
-      sendJson(response, 200, { order: await service.update(updateOrderMatch[1] ?? "", input, user) })
-    })
+        sendJson(response, 200, {
+          order: await service.update(updateOrderMatch[1] ?? "", input, user),
+        })
+      }
+    )
     return true
   }
 
   const cancelOrderMatch = path.match(/^\/orders\/([^/]+)\/cancel$/)
 
   if (cancelOrderMatch && request.method === "PATCH") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      sendJson(response, 200, { order: await service.cancel(cancelOrderMatch[1] ?? "", user) })
-    })
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        sendJson(response, 200, {
+          order: await service.cancel(cancelOrderMatch[1] ?? "", user),
+        })
+      }
+    )
     return true
   }
 
   const archiveOrderMatch = path.match(/^\/orders\/([^/]+)\/archive$/)
 
   if (archiveOrderMatch && request.method === "POST") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      sendJson(response, 200, { order: await service.archive(archiveOrderMatch[1] ?? "", user) })
-    })
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        sendJson(response, 200, {
+          order: await service.archive(archiveOrderMatch[1] ?? "", user),
+        })
+      }
+    )
     return true
   }
 
-  const progressEventsMatch = path.match(/^\/order-line-items\/([^/]+)\/progress-events$/)
+  const progressEventsMatch = path.match(
+    /^\/order-line-items\/([^/]+)\/progress-events$/
+  )
 
   if (progressEventsMatch && request.method === "GET") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      sendJson(response, 200, await service.listProgressEvents(progressEventsMatch[1] ?? "", user))
-    })
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        const query = progressEventsQuerySchema.parse(
+          Object.fromEntries(
+            new URL(request.url ?? "/", "http://localhost").searchParams
+          )
+        )
+
+        sendJson(
+          response,
+          200,
+          await service.listProgressEvents(
+            progressEventsMatch[1] ?? "",
+            user,
+            query
+          )
+        )
+      }
+    )
     return true
   }
 
   if (progressEventsMatch && request.method === "POST") {
-    await withAuthenticatedUser(request, response, context, async (service, user) => {
-      const input = createOrderLineItemProgressEventSchema.parse(await readJsonBody(request))
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        const input = createOrderLineItemProgressEventSchema.parse(
+          await readJsonBody(request)
+        )
 
-      sendJson(response, 201, await service.createProgressEvent(progressEventsMatch[1] ?? "", input, user))
-    })
+        sendJson(
+          response,
+          201,
+          await service.createProgressEvent(
+            progressEventsMatch[1] ?? "",
+            input,
+            user
+          )
+        )
+      }
+    )
     return true
   }
 
@@ -169,12 +253,13 @@ async function withAuthenticatedUser(
   context: OrdersRouteContext,
   handler: (
     service: OrdersService,
-    user: NonNullable<Awaited<ReturnType<AuthService["getCurrentUser"]>>>,
-  ) => Promise<void>,
+    user: NonNullable<Awaited<ReturnType<AuthService["getCurrentUser"]>>>
+  ) => Promise<void>
 ) {
   try {
     const authContext = await requireAuthenticatedRequest(request, response, {
-      createAuthService: () => new AuthService(new UsersRepository(getDatabaseClient())),
+      createAuthService: () =>
+        new AuthService(new UsersRepository(getDatabaseClient())),
       env: context.env,
     })
 
@@ -196,10 +281,10 @@ async function withAuthenticatedUser(
           new InventoryService(
             new InventoryRepository(transactionDb),
             new CupsRepository(transactionDb),
-            new LidsRepository(transactionDb),
-          ),
+            new LidsRepository(transactionDb)
+          )
       ),
-      authContext.user,
+      authContext.user
     )
   } catch (error) {
     handleOrdersError(response, error)
@@ -291,7 +376,9 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
       detail: persistenceError.detail,
       column: persistenceError.column,
       table: persistenceError.table,
-      ...(persistenceError.pg_message ? { pg_message: persistenceError.pg_message } : {}),
+      ...(persistenceError.pg_message
+        ? { pg_message: persistenceError.pg_message }
+        : {}),
     })
     return
   }
@@ -327,7 +414,7 @@ function userMessageForOrderDbError(
   constraint: string | undefined,
   detail: string | undefined,
   column?: string | undefined,
-  table?: string | undefined,
+  table?: string | undefined
 ): string {
   const c = (constraint ?? "").toLowerCase()
   const d = (detail ?? "").toLowerCase()
@@ -336,10 +423,18 @@ function userMessageForOrderDbError(
     if (c.includes("customer_id") || d.includes("customers")) {
       return "The customer on this order is no longer in the system. Refresh the page and select an active customer."
     }
-    if (c.includes("cup_id") || d.includes('table "cups"') || d.includes("table 'cups'")) {
+    if (
+      c.includes("cup_id") ||
+      d.includes('table "cups"') ||
+      d.includes("table 'cups'")
+    ) {
       return "A selected cup is no longer in the catalog. Refresh the page, remove that line, or pick another cup."
     }
-    if (c.includes("lid_id") || d.includes('table "lids"') || d.includes("table 'lids'")) {
+    if (
+      c.includes("lid_id") ||
+      d.includes('table "lids"') ||
+      d.includes("table 'lids'")
+    ) {
       return "A selected lid is no longer in the catalog. Refresh the page, remove that line, or pick another lid."
     }
     if (c.includes("non_stock_item") || d.includes("non_stock_items")) {
@@ -362,7 +457,10 @@ function userMessageForOrderDbError(
     if (c.includes("order_items_quantity_positive")) {
       return "Each line must have a quantity of at least 1."
     }
-    if (c.includes("order_items_unit_sell_price") || c.includes("order_items_unit_cost_price")) {
+    if (
+      c.includes("order_items_unit_sell_price") ||
+      c.includes("order_items_unit_cost_price")
+    ) {
       return "A line has an invalid price. Check sell and cost prices on custom charges and try again."
     }
     if (c.includes("order_items_description_snapshot")) {
@@ -425,7 +523,9 @@ function truncateForApiMessage(message: string, max: number): string {
   return `${message.slice(0, max)}…`
 }
 
-function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse | null {
+function toOrderPersistenceError(
+  error: unknown
+): OrderPersistenceErrorResponse | null {
   const meta = collectPostgresErrorMetadata(error)
   const code = meta?.code ?? getDbErrorCode(error)
 
@@ -437,8 +537,16 @@ function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse 
   const detail = meta?.detail ?? getDbErrorString(error, "detail")
   const column = meta?.column ?? getDbErrorString(error, "column")
   const table = meta?.table ?? getDbErrorString(error, "table")
-  const pg_message = meta ? truncateForApiMessage(meta.driverMessage, PG_MESSAGE_MAX) : undefined
-  const message = userMessageForOrderDbError(code, constraint, detail, column, table)
+  const pg_message = meta
+    ? truncateForApiMessage(meta.driverMessage, PG_MESSAGE_MAX)
+    : undefined
+  const message = userMessageForOrderDbError(
+    code,
+    constraint,
+    detail,
+    column,
+    table
+  )
 
   const base = {
     error: message,
@@ -462,7 +570,13 @@ function toOrderPersistenceError(error: unknown): OrderPersistenceErrorResponse 
     return { statusCode: 400, ...base }
   }
 
-  if (code === "42703" || code === "42P01" || code === "40001" || code === "40P01" || code === "57014") {
+  if (
+    code === "42703" ||
+    code === "42P01" ||
+    code === "40001" ||
+    code === "40P01" ||
+    code === "57014"
+  ) {
     return { statusCode: 500, ...base }
   }
 
@@ -475,13 +589,16 @@ function getDbErrorCode(error: unknown): string | undefined {
 
 function getDbErrorString(
   error: unknown,
-  key: "code" | "constraint" | "detail" | "column" | "table",
+  key: "code" | "constraint" | "detail" | "column" | "table"
 ): string | undefined {
   if (!error || typeof error !== "object") {
     return undefined
   }
 
-  if (key in error && typeof (error as Record<string, unknown>)[key] === "string") {
+  if (
+    key in error &&
+    typeof (error as Record<string, unknown>)[key] === "string"
+  ) {
     return (error as Record<string, string>)[key]
   }
 

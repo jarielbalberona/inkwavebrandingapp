@@ -1,0 +1,3 @@
+ALTER TABLE "order_line_item_progress_events" ADD COLUMN "component_item_type" varchar(10);--> statement-breakpoint
+CREATE INDEX "order_line_item_progress_events_component_item_type_idx" ON "order_line_item_progress_events" USING btree ("component_item_type");--> statement-breakpoint
+ALTER TABLE "order_line_item_progress_events" ADD CONSTRAINT "order_line_item_progress_events_component_item_type_valid" CHECK ("order_line_item_progress_events"."component_item_type" IS NULL OR "order_line_item_progress_events"."component_item_type" IN ('cup', 'lid'));

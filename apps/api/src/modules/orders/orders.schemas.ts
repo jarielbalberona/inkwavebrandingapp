@@ -20,7 +20,9 @@ const nullableOptionalText = (max: number) =>
       return value
     })
 
-const moneyStringSchema = z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid non-negative money amount")
+const moneyStringSchema = z
+  .string()
+  .regex(/^\d+(\.\d{1,2})?$/, "Must be a valid non-negative money amount")
 
 const createOrderLineItemSchema = z.discriminatedUnion("item_type", [
   z.object({
@@ -123,9 +125,14 @@ export const createOrderSchema = z.object({
 
 export const createOrderLineItemProgressEventSchema = z.object({
   stage: orderLineItemProgressStageSchema,
+  component_item_type: z.enum(["cup", "lid"]).optional(),
   quantity: z.number().int().positive(),
   note: optionalText(500),
   event_date: z.coerce.date(),
+})
+
+export const progressEventsQuerySchema = z.object({
+  component_item_type: z.enum(["cup", "lid"]).optional(),
 })
 
 export const updateOrderSchema = z
@@ -141,8 +148,9 @@ export const updateOrderSchema = z
       input.notes !== undefined ||
       input.line_items !== undefined,
     {
-    message: "At least one supported order field is required",
-  })
+      message: "At least one supported order field is required",
+    }
+  )
 
 export const updateOrderPrioritiesSchema = z
   .object({
@@ -162,11 +170,16 @@ export const orderListQuerySchema = z.object({
 })
 
 export type OrderStatus = z.infer<typeof orderStatusSchema>
-export type OrderLineItemProgressStage = z.infer<typeof orderLineItemProgressStageSchema>
+export type OrderLineItemProgressStage = z.infer<
+  typeof orderLineItemProgressStageSchema
+>
 export type CreateOrderInput = z.infer<typeof createOrderSchema>
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>
-export type UpdateOrderPrioritiesInput = z.infer<typeof updateOrderPrioritiesSchema>
+export type UpdateOrderPrioritiesInput = z.infer<
+  typeof updateOrderPrioritiesSchema
+>
 export type OrderListQuery = z.input<typeof orderListQuerySchema>
 export type CreateOrderLineItemProgressEventInput = z.infer<
   typeof createOrderLineItemProgressEventSchema
 >
+export type ProgressEventsQuery = z.infer<typeof progressEventsQuerySchema>

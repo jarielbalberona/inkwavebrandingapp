@@ -28,13 +28,10 @@ export const orderStatusEnum = pgEnum("order_status", [
   "canceled",
 ])
 
-export const orderLineItemProgressStageEnum = pgEnum("order_line_item_progress_stage", [
-  "printed",
-  "qa_passed",
-  "packed",
-  "ready_for_release",
-  "released",
-])
+export const orderLineItemProgressStageEnum = pgEnum(
+  "order_line_item_progress_stage",
+  ["printed", "qa_passed", "packed", "ready_for_release", "released"]
+)
 
 export const orderLineItemTypeEnum = pgEnum("order_line_item_type", [
   "cup",
@@ -60,18 +57,27 @@ export const orders = pgTable(
     }),
     canceledAt: timestamp("canceled_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
-    uniqueIndex("orders_order_number_unique_idx").on(sql`lower(${table.orderNumber})`),
+    uniqueIndex("orders_order_number_unique_idx").on(
+      sql`lower(${table.orderNumber})`
+    ),
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_priority_idx").on(table.priority),
     index("orders_status_idx").on(table.status),
     index("orders_archived_at_idx").on(table.archivedAt),
     index("orders_created_at_idx").on(table.createdAt),
-    check("orders_order_number_not_blank", sql`length(trim(${table.orderNumber})) > 0`),
-  ],
+    check(
+      "orders_order_number_not_blank",
+      sql`length(trim(${table.orderNumber})) > 0`
+    ),
+  ]
 )
 
 export const orderItems = pgTable(
@@ -84,19 +90,33 @@ export const orderItems = pgTable(
     itemType: orderLineItemTypeEnum("item_type").notNull(),
     cupId: uuid("cup_id").references(() => cups.id, { onDelete: "restrict" }),
     lidId: uuid("lid_id").references(() => lids.id, { onDelete: "restrict" }),
-    nonStockItemId: uuid("non_stock_item_id").references(() => nonStockItems.id, {
-      onDelete: "restrict",
-    }),
-    productBundleId: uuid("product_bundle_id").references(() => productBundles.id, {
-      onDelete: "restrict",
-    }),
+    nonStockItemId: uuid("non_stock_item_id").references(
+      () => nonStockItems.id,
+      {
+        onDelete: "restrict",
+      }
+    ),
+    productBundleId: uuid("product_bundle_id").references(
+      () => productBundles.id,
+      {
+        onDelete: "restrict",
+      }
+    ),
     descriptionSnapshot: text("description_snapshot").notNull(),
     quantity: integer("quantity").notNull(),
-    unitCostPrice: numeric("unit_cost_price", { precision: 12, scale: 2 }).notNull().default("0"),
-    unitSellPrice: numeric("unit_sell_price", { precision: 12, scale: 2 }).notNull().default("0"),
+    unitCostPrice: numeric("unit_cost_price", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
+    unitSellPrice: numeric("unit_sell_price", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
     notes: text("notes"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
     index("order_items_order_id_idx").on(table.orderId),
@@ -105,9 +125,18 @@ export const orderItems = pgTable(
     index("order_items_non_stock_item_id_idx").on(table.nonStockItemId),
     index("order_items_product_bundle_id_idx").on(table.productBundleId),
     check("order_items_quantity_positive", sql`${table.quantity} > 0`),
-    check("order_items_unit_cost_price_non_negative", sql`${table.unitCostPrice} >= 0`),
-    check("order_items_unit_sell_price_non_negative", sql`${table.unitSellPrice} >= 0`),
-    check("order_items_description_snapshot_not_blank", sql`length(trim(${table.descriptionSnapshot})) > 0`),
+    check(
+      "order_items_unit_cost_price_non_negative",
+      sql`${table.unitCostPrice} >= 0`
+    ),
+    check(
+      "order_items_unit_sell_price_non_negative",
+      sql`${table.unitSellPrice} >= 0`
+    ),
+    check(
+      "order_items_description_snapshot_not_blank",
+      sql`length(trim(${table.descriptionSnapshot})) > 0`
+    ),
     check(
       "order_items_exactly_one_item",
       sql`(
@@ -120,7 +149,7 @@ export const orderItems = pgTable(
         (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL AND ${table.productBundleId} IS NOT NULL)
         OR
         (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.nonStockItemId} IS NULL AND ${table.productBundleId} IS NULL)
-      )`,
+      )`
     ),
     check(
       "order_items_item_type_matches_reference",
@@ -164,9 +193,9 @@ export const orderItems = pgTable(
           AND ${table.lidId} IS NULL
           AND ${table.productBundleId} IS NULL
         )
-      )`,
+      )`
     ),
-  ],
+  ]
 )
 
 export const ordersRelations = relations(orders, ({ many, one }) => ({
@@ -189,20 +218,37 @@ export const orderLineItemProgressEvents = pgTable(
       .notNull()
       .references(() => orderItems.id, { onDelete: "cascade" }),
     stage: orderLineItemProgressStageEnum("stage").notNull(),
+    componentItemType: varchar("component_item_type", { length: 10 }),
     quantity: integer("quantity").notNull(),
     note: text("note"),
-    eventDate: timestamp("event_date", { withTimezone: true }).notNull().defaultNow(),
+    eventDate: timestamp("event_date", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
-    index("order_line_item_progress_events_line_item_id_idx").on(table.orderLineItemId),
+    index("order_line_item_progress_events_line_item_id_idx").on(
+      table.orderLineItemId
+    ),
+    index("order_line_item_progress_events_component_item_type_idx").on(
+      table.componentItemType
+    ),
     index("order_line_item_progress_events_stage_idx").on(table.stage),
     index("order_line_item_progress_events_event_date_idx").on(table.eventDate),
-    check("order_line_item_progress_events_quantity_positive", sql`${table.quantity} > 0`),
-  ],
+    check(
+      "order_line_item_progress_events_component_item_type_valid",
+      sql`${table.componentItemType} IS NULL OR ${table.componentItemType} IN ('cup', 'lid')`
+    ),
+    check(
+      "order_line_item_progress_events_quantity_positive",
+      sql`${table.quantity} > 0`
+    ),
+  ]
 )
 
 export const orderItemsRelations = relations(orderItems, ({ many, one }) => ({
@@ -229,20 +275,25 @@ export const orderItemsRelations = relations(orderItems, ({ many, one }) => ({
   progressEvents: many(orderLineItemProgressEvents),
 }))
 
-export const orderLineItemProgressEventsRelations = relations(orderLineItemProgressEvents, ({ one }) => ({
-  orderItem: one(orderItems, {
-    fields: [orderLineItemProgressEvents.orderLineItemId],
-    references: [orderItems.id],
-  }),
-  createdByUser: one(users, {
-    fields: [orderLineItemProgressEvents.createdByUserId],
-    references: [users.id],
-  }),
-}))
+export const orderLineItemProgressEventsRelations = relations(
+  orderLineItemProgressEvents,
+  ({ one }) => ({
+    orderItem: one(orderItems, {
+      fields: [orderLineItemProgressEvents.orderLineItemId],
+      references: [orderItems.id],
+    }),
+    createdByUser: one(users, {
+      fields: [orderLineItemProgressEvents.createdByUserId],
+      references: [users.id],
+    }),
+  })
+)
 
 export type Order = typeof orders.$inferSelect
 export type NewOrder = typeof orders.$inferInsert
 export type OrderItem = typeof orderItems.$inferSelect
 export type NewOrderItem = typeof orderItems.$inferInsert
-export type OrderLineItemProgressEvent = typeof orderLineItemProgressEvents.$inferSelect
-export type NewOrderLineItemProgressEvent = typeof orderLineItemProgressEvents.$inferInsert
+export type OrderLineItemProgressEvent =
+  typeof orderLineItemProgressEvents.$inferSelect
+export type NewOrderLineItemProgressEvent =
+  typeof orderLineItemProgressEvents.$inferInsert

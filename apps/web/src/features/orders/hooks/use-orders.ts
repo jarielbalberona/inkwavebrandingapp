@@ -21,7 +21,10 @@ import {
 } from "@/features/orders/api/orders-client"
 
 export const ordersQueryKey = ["orders"] as const
-export const orderProgressEventsQueryKey = ["orders", "progress-events"] as const
+export const orderProgressEventsQueryKey = [
+  "orders",
+  "progress-events",
+] as const
 export const orderInvoicesQueryKey = ["orders", "invoice"] as const
 
 export const orderStatusOptions = [
@@ -40,7 +43,9 @@ export const progressStageOptions = [
   "released",
 ] as const
 
-export function useOrdersQuery(filters: { status?: OrderStatus; includeArchived?: boolean } = {}) {
+export function useOrdersQuery(
+  filters: { status?: OrderStatus; includeArchived?: boolean } = {}
+) {
   return useQuery({
     queryKey: [...ordersQueryKey, filters] as const,
     queryFn: () => listOrders(filters),
@@ -55,7 +60,9 @@ export function useArchiveOrderMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
       await queryClient.invalidateQueries({ queryKey: orderInvoicesQueryKey })
-      await queryClient.invalidateQueries({ queryKey: orderProgressEventsQueryKey })
+      await queryClient.invalidateQueries({
+        queryKey: orderProgressEventsQueryKey,
+      })
     },
   })
 }
@@ -86,7 +93,9 @@ export function useCancelOrderMutation() {
     mutationFn: (id: string) => cancelOrder(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
-      await queryClient.invalidateQueries({ queryKey: orderProgressEventsQueryKey })
+      await queryClient.invalidateQueries({
+        queryKey: orderProgressEventsQueryKey,
+      })
     },
   })
 }
@@ -95,8 +104,13 @@ export function useUpdateOrderMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: UpdateOrderPayload }) =>
-      updateOrder(id, payload),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string
+      payload: UpdateOrderPayload
+    }) => updateOrder(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
     },
@@ -107,7 +121,8 @@ export function useUpdateOrderPrioritiesMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: UpdateOrderPrioritiesPayload) => updateOrderPriorities(payload),
+    mutationFn: (payload: UpdateOrderPrioritiesPayload) =>
+      updateOrderPriorities(payload),
     onMutate: async (payload) => {
       await queryClient.cancelQueries({ queryKey: ordersQueryKey })
 
@@ -136,10 +151,18 @@ export function useUpdateOrderPrioritiesMutation() {
   })
 }
 
-export function useProgressEventsQuery(orderLineItemId: string | null, enabled = true) {
+export function useProgressEventsQuery(
+  orderLineItemId: string | null,
+  componentItemType?: "cup" | "lid",
+  enabled = true
+) {
   return useQuery({
-    queryKey: [...orderProgressEventsQueryKey, orderLineItemId] as const,
-    queryFn: () => listProgressEvents(orderLineItemId ?? ""),
+    queryKey: [
+      ...orderProgressEventsQueryKey,
+      orderLineItemId,
+      componentItemType ?? null,
+    ] as const,
+    queryFn: () => listProgressEvents(orderLineItemId ?? "", componentItemType),
     enabled: enabled && Boolean(orderLineItemId),
   })
 }
@@ -158,7 +181,11 @@ export function useCreateProgressEventMutation() {
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
       await queryClient.invalidateQueries({
-        queryKey: [...orderProgressEventsQueryKey, variables.orderLineItemId],
+        queryKey: [
+          ...orderProgressEventsQueryKey,
+          variables.orderLineItemId,
+          variables.payload.component_item_type ?? null,
+        ],
       })
     },
   })
@@ -187,14 +214,18 @@ export function useGenerateOrderInvoiceMutation() {
   })
 }
 
-function applyPriorityOrderToOrders(orders: Order[], orderIds: string[]): Order[] {
+function applyPriorityOrderToOrders(
+  orders: Order[],
+  orderIds: string[]
+): Order[] {
   const requestedIds = new Set(orderIds)
   const currentOrderIds = orders
     .slice()
     .sort((left, right) => {
       if (left.priority === right.priority) {
         return (
-          new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+          new Date(right.created_at).getTime() -
+          new Date(left.created_at).getTime()
         )
       }
 

@@ -1,8 +1,17 @@
-import type { Cup, Customer, Lid, NonStockItem, ProductBundle } from "../../db/schema/index.js"
+import type {
+  Cup,
+  Customer,
+  Lid,
+  NonStockItem,
+  ProductBundle,
+} from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 import { toCustomerDto } from "../customers/customers.types.js"
-import type { OrderWithRelations, ProgressEventWithRelations } from "./orders.repository.js"
+import type {
+  OrderWithRelations,
+  ProgressEventWithRelations,
+} from "./orders.repository.js"
 import type { OrderLineItemProgressStage } from "./orders.schemas.js"
 
 interface OrderCupDto {
@@ -49,7 +58,12 @@ interface OrderProductBundleDto {
 
 interface BaseOrderItemDto {
   id: string
-  item_type: "cup" | "lid" | "non_stock_item" | "custom_charge" | "product_bundle"
+  item_type:
+    | "cup"
+    | "lid"
+    | "non_stock_item"
+    | "custom_charge"
+    | "product_bundle"
   cup: OrderCupDto | null
   lid: OrderLidDto | null
   non_stock_item: OrderNonStockItemDto | null
@@ -106,6 +120,7 @@ export interface ProgressTotalsDto {
 export interface OrderLineItemProgressEventDto {
   id: string
   order_line_item_id: string
+  component_item_type: "cup" | "lid" | null
   stage: OrderLineItemProgressStage
   quantity: number
   note: string | null
@@ -117,7 +132,10 @@ export interface OrderLineItemProgressEventDto {
   created_at: string
 }
 
-export function toOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto {
+export function toOrderDto(
+  order: OrderWithRelations,
+  user: SafeUser
+): OrderDto {
   return shapePermissionAwareResponse(user, "orders.pricing.view", {
     allowed: () => toAdminOrderDto(order, user),
     restricted: () => toStaffOrderDto(order, user),
@@ -139,7 +157,9 @@ function toStaffOrderDto(order: OrderWithRelations, user: SafeUser): OrderDto {
 function toBaseOrderDto(
   order: OrderWithRelations,
   user: SafeUser,
-  mapItem: (item: OrderWithRelations["items"][number]) => AdminOrderItemDto | StaffOrderItemDto,
+  mapItem: (
+    item: OrderWithRelations["items"][number]
+  ) => AdminOrderItemDto | StaffOrderItemDto
 ): OrderDto {
   return {
     id: order.id,
@@ -155,7 +175,9 @@ function toBaseOrderDto(
   }
 }
 
-function toBaseOrderItemDto(item: OrderWithRelations["items"][number]): StaffOrderItemDto {
+function toBaseOrderItemDto(
+  item: OrderWithRelations["items"][number]
+): StaffOrderItemDto {
   if (item.itemType === "cup") {
     return {
       id: item.id,
@@ -275,7 +297,7 @@ function toNonStockItemDto(nonStockItem: NonStockItem): OrderNonStockItemDto {
 }
 
 function toProductBundleDto(
-  productBundle: ProductBundle & { cup?: Cup | null; lid?: Lid | null },
+  productBundle: ProductBundle & { cup?: Cup | null; lid?: Lid | null }
 ): OrderProductBundleDto {
   return {
     id: productBundle.id,
@@ -283,17 +305,27 @@ function toProductBundleDto(
     description: productBundle.description ?? null,
     cup_qty_per_set: productBundle.cupQtyPerSet,
     lid_qty_per_set: productBundle.lidQtyPerSet,
-    cup: productBundle.cupId && productBundle.cup ? toCupDto(productBundle.cup as Cup) : null,
-    lid: productBundle.lidId && productBundle.lid ? toLidDto(productBundle.lid as Lid) : null,
+    cup:
+      productBundle.cupId && productBundle.cup
+        ? toCupDto(productBundle.cup as Cup)
+        : null,
+    lid:
+      productBundle.lidId && productBundle.lid
+        ? toLidDto(productBundle.lid as Lid)
+        : null,
   }
 }
 
 export function toProgressEventDto(
-  event: ProgressEventWithRelations,
+  event: ProgressEventWithRelations
 ): OrderLineItemProgressEventDto {
   return {
     id: event.id,
     order_line_item_id: event.orderLineItemId,
+    component_item_type:
+      event.componentItemType === "cup" || event.componentItemType === "lid"
+        ? event.componentItemType
+        : null,
     stage: event.stage,
     quantity: event.quantity,
     note: event.note ?? null,
