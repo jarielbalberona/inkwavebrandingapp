@@ -33,7 +33,11 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
+import {
+  appPermissions,
+  getDefaultAuthorizedRoute,
+  hasPermission,
+} from "@/features/auth/permissions"
 import type {
   Order,
   ProgressEvent,
@@ -48,15 +52,87 @@ import {
 } from "@/features/orders/hooks/use-orders"
 import { ArrowLeftIcon, BoxIcon } from "lucide-react"
 
+type BundleFulfillmentPart = "cup" | "lid"
+
+type TrackedLineItem = Order["items"][number] & {
+  item_type: "cup" | "lid" | "product_bundle"
+}
+
+type FulfillmentRow = {
+  key: string
+  item: TrackedLineItem
+  bundlePart: BundleFulfillmentPart | null
+}
+
+type ProgressStageRuleSet = "lid" | "bundle" | "default"
+
+function getProgressStageRuleSet(
+  itemType: Order["items"][number]["item_type"],
+  row: FulfillmentRow | null
+): ProgressStageRuleSet {
+  if (itemType === "lid") {
+    return "lid"
+  }
+  if (itemType === "product_bundle" && row?.bundlePart === "lid") {
+    return "lid"
+  }
+  if (itemType === "product_bundle") {
+    return "bundle"
+  }
+  return "default"
+}
+
+function buildFulfillmentRows(order: Order | null): FulfillmentRow[] {
+  if (!order) {
+    return []
+  }
+
+  const rows: FulfillmentRow[] = []
+
+  for (const raw of order.items) {
+    if (
+      raw.item_type === "non_stock_item" ||
+      raw.item_type === "custom_charge"
+    ) {
+      continue
+    }
+
+    const item = raw as TrackedLineItem
+
+    if (item.item_type === "product_bundle") {
+      const b = item.product_bundle
+      let hasPart = false
+      if (b.cup) {
+        rows.push({ key: `${item.id}:cup`, item, bundlePart: "cup" })
+        hasPart = true
+      }
+      if (b.lid) {
+        rows.push({ key: `${item.id}:lid`, item, bundlePart: "lid" })
+        hasPart = true
+      }
+      if (!hasPart) {
+        rows.push({ key: item.id, item, bundlePart: null })
+      }
+      continue
+    }
+
+    rows.push({ key: item.id, item, bundlePart: null })
+  }
+
+  return rows
+}
+
 export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
   const orderQuery = useOrderQuery(orderId)
   const canRecordFulfillment = hasPermission(
     currentUser.data,
-    appPermissions.ordersFulfillmentRecord,
+    appPermissions.ordersFulfillmentRecord
   )
   const createProgressEventMutation = useCreateProgressEventMutation()
-  const [selectedLineItemId, setSelectedLineItemId] = useState<string | null>(null)
+  const [selectedFulfillmentKey, setSelectedFulfillmentKey] = useState<
+    string | null
+  >(null)
   const [progressStage, setProgressStage] = useState<ProgressStage>("printed")
   const [progressQuantity, setProgressQuantity] = useState("1")
   const [progressNote, setProgressNote] = useState("")
@@ -67,14 +143,52 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
   const [progressSuccess, setProgressSuccess] = useState<string | null>(null)
 
   const order = orderQuery.data ?? null
-  const trackedLineItems = useMemo(
-    () =>
-      order?.items.filter(
-        (item) =>
-          item.item_type !== "non_stock_item" && item.item_type !== "custom_charge"
-      ) ?? [],
-    [order]
+  const fulfillmentRows = useMemo(() => buildFulfillmentRows(order), [order])
+  const activeFulfillmentKey =
+    selectedFulfillmentKey ?? fulfillmentRows[0]?.key ?? null
+  const selectedRow = activeFulfillmentKey
+    ? (fulfillmentRows.find((row) => row.key === activeFulfillmentKey) ?? null)
+    : null
+  const selectedLineItem = selectedRow?.item ?? null
+
+  useEffect(() => {
+    if (fulfillmentRows.length === 0) {
+      if (selectedFulfillmentKey !== null) {
+        setSelectedFulfillmentKey(null)
+      }
+      return
+    }
+
+    const firstKey = fulfillmentRows[0]?.key
+    if (
+      firstKey &&
+      (selectedFulfillmentKey === null ||
+        !fulfillmentRows.some((row) => row.key === selectedFulfillmentKey))
+    ) {
+      setSelectedFulfillmentKey(firstKey)
+    }
+  }, [fulfillmentRows, selectedFulfillmentKey])
+
+  const progressEventsQuery = useProgressEventsQuery(
+    selectedLineItem?.id ?? null
   )
+  const availableProgressStages = getAllowedProgressStagesForRow(selectedRow)
+  const defaultProgressStage: ProgressStage =
+    availableProgressStages[0] ?? "printed"
+  const effectiveProgressStage = availableProgressStages.includes(progressStage)
+    ? progressStage
+    : defaultProgressStage
+
+  useEffect(() => {
+    if (!activeFulfillmentKey) {
+      return
+    }
+    const row = fulfillmentRows.find((r) => r.key === activeFulfillmentKey) ?? null
+    const allowed = getAllowedProgressStagesForRow(row)
+    setProgressStage((current) =>
+      allowed.includes(current) ? current : (allowed[0] ?? "packed")
+    )
+  }, [activeFulfillmentKey, fulfillmentRows])
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -89,46 +203,26 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
 
     return (
       <Alert>
-        <AlertDescription>Fulfillment updates require fulfillment-record permission.</AlertDescription>
+        <AlertDescription>
+          Fulfillment updates require fulfillment-record permission.
+        </AlertDescription>
       </Alert>
     )
   }
-  const selectedLineItem =
-    trackedLineItems.find((item) => item.id === selectedLineItemId) ??
-    trackedLineItems[0] ??
-    null
-
-  useEffect(() => {
-    if (!selectedLineItem && trackedLineItems[0]) {
-      setSelectedLineItemId(trackedLineItems[0].id)
-      return
-    }
-
-    if (
-      selectedLineItemId &&
-      !trackedLineItems.some((item) => item.id === selectedLineItemId)
-    ) {
-      setSelectedLineItemId(trackedLineItems[0]?.id ?? null)
-    }
-  }, [selectedLineItem, selectedLineItemId, trackedLineItems])
-
-  const progressEventsQuery = useProgressEventsQuery(selectedLineItem?.id ?? null)
-  const availableProgressStages = getAllowedProgressStages(selectedLineItem?.item_type)
-  const effectiveProgressStage = availableProgressStages.includes(progressStage)
-    ? progressStage
-    : (availableProgressStages[0] ?? "printed")
 
   async function handleCreateProgressEvent() {
     setProgressError(null)
     setProgressSuccess(null)
 
-    if (!order || !selectedLineItem) {
+    if (!order || !selectedLineItem || !selectedRow) {
       setProgressError("Select an order line item before recording progress.")
       return
     }
 
     if (order.status === "canceled" || order.status === "completed") {
-      setProgressError("Canceled or completed orders cannot receive new progress events.")
+      setProgressError(
+        "Canceled or completed orders cannot receive new progress events."
+      )
       return
     }
 
@@ -147,11 +241,16 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
     const totals = progressEventsQuery.data?.totals
 
     if (totals) {
+      const stageRules = getProgressStageRuleSet(
+        selectedLineItem.item_type,
+        selectedRow
+      )
       const maxQuantity = maxQuantityForStage(
         selectedLineItem.item_type,
         effectiveProgressStage,
         selectedLineItem.quantity,
-        totals
+        totals,
+        stageRules
       )
 
       if (quantity > maxQuantity) {
@@ -159,7 +258,8 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
           buildProgressQuantityError(
             selectedLineItem.item_type,
             effectiveProgressStage,
-            maxQuantity
+            maxQuantity,
+            selectedRow
           )
         )
         return
@@ -201,7 +301,10 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link to="/orders"><ArrowLeftIcon className="size-4" />Orders</Link>
+              <Link to="/orders">
+                <ArrowLeftIcon className="size-4" />
+                Orders
+              </Link>
             </Button>
             {order ? (
               <Button asChild variant="outline" size="sm">
@@ -233,7 +336,7 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                   {order.customer.business_name} · {formatStatus(order.status)}
                 </p>
                 <p className="text-muted-foreground">
-                  {trackedLineItems.length.toLocaleString()} tracked line items
+                  {fulfillmentRows.length.toLocaleString()} fulfillable line(s)
                 </p>
               </div>
               <Badge variant="secondary">
@@ -241,7 +344,7 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
               </Badge>
             </div>
 
-            {trackedLineItems.length === 0 ? (
+            {fulfillmentRows.length === 0 ? (
               <Alert>
                 <AlertDescription>
                   This order only contains non-inventory lines. There is no
@@ -250,161 +353,210 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                 </AlertDescription>
               </Alert>
             ) : (
-              <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-                <div className="grid gap-3">
-                  <div className="grid gap-2 bg-orange-300 p-3">
-                    <Label>Select Order Item</Label>
-                    <Select
-                      value={selectedLineItem?.id}
-                      onValueChange={(lineItemId) => {
-                        setSelectedLineItemId(lineItemId)
-                        setProgressError(null)
-                        setProgressSuccess(null)
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select line item" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {trackedLineItems.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {formatOrderItemLabel(item)} x{" "}
-                            {item.quantity.toLocaleString()}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {selectedLineItem ? (
-                    <div className="grid gap-2 border p-3 text-sm">
-                      <div>
-                        <p className="font-medium">
-                          {formatOrderItemLabel(selectedLineItem)}
-                        </p>
-                        <p className="text-muted-foreground">
-                          {formatOrderItemDetails(selectedLineItem)}
-                        </p>
-                      </div>
-                      <Badge variant="secondary" className="w-fit">
-                        Ordered {selectedLineItem.quantity.toLocaleString()}
-                      </Badge>
-                    </div>
-                  ) : null}
-
-                  <div className="grid gap-3 border p-3">
-                    <div className="grid gap-2">
-                      <Label>Stage</Label>
-                      <Select
-                        value={effectiveProgressStage}
-                        onValueChange={(value) => setProgressStage(value as ProgressStage)}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableProgressStages.map((stage) => (
-                            <SelectItem key={stage} value={stage}>
-                              {formatStatus(stage)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedLineItem && progressEventsQuery.data ? (
-                        <p className="text-xs text-muted-foreground">
-                          {describeStageBalance(
-                            selectedLineItem.item_type,
-                            effectiveProgressStage,
-                            selectedLineItem.quantity,
-                            progressEventsQuery.data.totals
-                          )}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="progress-quantity">Quantity</Label>
-                      <Input.Number
-                        id="progress-quantity"
-                        min={1}
-                        value={Number(progressQuantity)}
-                        onChange={(value) => setProgressQuantity(String(value ?? 0))}
-                      />
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="progress-date">Event date</Label>
-                      <Input
-                        id="progress-date"
-                        type="date"
-                        value={progressEventDate}
-                        onChange={(event) => setProgressEventDate(event.target.value)}
-                      />
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="progress-note">Note</Label>
-                      <Textarea
-                        id="progress-note"
-                        value={progressNote}
-                        placeholder="Optional fulfillment note"
-                        onChange={(event) => setProgressNote(event.target.value)}
-                      />
-                    </div>
-
-                    {progressError ? (
-                      <Alert variant="destructive">
-                        <AlertDescription>{progressError}</AlertDescription>
-                      </Alert>
-                    ) : null}
-
-                    {progressSuccess ? (
-                      <Alert>
-                        <AlertDescription>{progressSuccess}</AlertDescription>
-                      </Alert>
-                    ) : null}
-
-                    <Button
-                      type="button"
-                      disabled={
-                        createProgressEventMutation.isPending ||
-                        order.status === "canceled" ||
-                        order.status === "completed" ||
-                        !selectedLineItem
-                      }
-                      onClick={handleCreateProgressEvent}
-                    >
-                      {createProgressEventMutation.isPending
-                        ? "Recording progress..."
-                        : "Record progress"}
-                    </Button>
-                  </div>
+              <div className="">
+                <div className="grid gap-2 bg-orange-300 p-3 mb-4">
+                  <Label>Select Order Item</Label>
+                  <Select
+                    value={activeFulfillmentKey ?? undefined}
+                    onValueChange={(rowKey) => {
+                      setSelectedFulfillmentKey(rowKey)
+                      setProgressError(null)
+                      setProgressSuccess(null)
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select line item" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fulfillmentRows.map((row) => (
+                        <SelectItem key={row.key} value={row.key}>
+                          {formatFulfillmentRowLabel(row)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div className="grid gap-3">
+                    {selectedLineItem && selectedRow ? (
+                      <div className="grid gap-2 border p-3 text-sm">
+                        <div>
+                          <p className="font-medium">
+                            {formatBundleAwareTitle(
+                              selectedLineItem,
+                              selectedRow.bundlePart
+                            )}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {formatOrderItemDetails(selectedLineItem)}
+                          </p>
+                          {selectedLineItem.item_type === "product_bundle" &&
+                          selectedRow.bundlePart ? (
+                            <p className="text-xs text-muted-foreground">
+                              {formatBundleComponentInventoryHint(
+                                selectedLineItem,
+                                selectedRow.bundlePart
+                              )}
+                            </p>
+                          ) : null}
+                          {selectedLineItem.item_type === "product_bundle" &&
+                          selectedRow.bundlePart ? (
+                            <p className="text-xs text-muted-foreground">
+                              {selectedRow.bundlePart === "lid" ? (
+                                <>
+                                  Lids follow the same <span className="font-medium">packed → ready → released</span>{" "}
+                                  rules as a stand-alone lid (no printed/QA on the lid). Quantities are in{" "}
+                                  <span className="font-medium">bundle sets</span>, shared with the cup row.
+                                  Use the <span className="font-medium">cup</span> row for printed/QA when working
+                                  on cups.
+                                </>
+                              ) : (
+                                <>
+                                  Quantities and stages follow{" "}
+                                  <span className="font-medium">bundle sets</span> (same line as the
+                                  other component). Progress applies to the whole line.
+                                </>
+                              )}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Badge variant="secondary" className="w-fit">
+                          {formatOrderedQuantityLine(
+                            selectedLineItem,
+                            selectedRow.bundlePart
+                          )}
+                        </Badge>
+                      </div>
+                    ) : null}
 
-                <div className="grid content-start gap-4 self-start">
-                  {progressEventsQuery.isLoading ? (
-                    <p className="text-sm text-muted-foreground">
-                      Loading progress totals...
-                    </p>
-                  ) : null}
+                    <div className="grid gap-3 border p-3">
+                      <div className="grid gap-2">
+                        <Label>Stage</Label>
+                        <Select
+                          value={effectiveProgressStage}
+                          onValueChange={(value) =>
+                            setProgressStage(value as ProgressStage)
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableProgressStages.map((stage) => (
+                              <SelectItem key={stage} value={stage}>
+                                {formatStatus(stage)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {selectedLineItem && progressEventsQuery.data ? (
+                          <p className="text-xs text-muted-foreground">
+                            {describeStageBalance(
+                              selectedLineItem.item_type,
+                              effectiveProgressStage,
+                              selectedLineItem.quantity,
+                              progressEventsQuery.data.totals,
+                              selectedRow
+                            )}
+                          </p>
+                        ) : null}
+                      </div>
 
-                  {progressEventsQuery.isError ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>
-                        {progressEventsQuery.error.message}
-                      </AlertDescription>
-                    </Alert>
-                  ) : null}
+                      <div className="grid gap-2">
+                        <Label htmlFor="progress-quantity">Quantity</Label>
+                        <Input.Number
+                          id="progress-quantity"
+                          min={1}
+                          value={Number(progressQuantity)}
+                          onChange={(value) =>
+                            setProgressQuantity(String(value ?? 0))
+                          }
+                        />
+                      </div>
 
-                  {selectedLineItem && progressEventsQuery.data ? (
-                    <>
-                      <ProgressTotalsGrid
-                        itemType={selectedLineItem.item_type}
-                        totals={progressEventsQuery.data.totals}
-                      />
-                      <ProgressHistory events={progressEventsQuery.data.events} />
-                    </>
-                  ) : null}
+                      <div className="grid gap-2">
+                        <Label htmlFor="progress-date">Event date</Label>
+                        <Input
+                          id="progress-date"
+                          type="date"
+                          value={progressEventDate}
+                          onChange={(event) =>
+                            setProgressEventDate(event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="progress-note">Note</Label>
+                        <Textarea
+                          id="progress-note"
+                          value={progressNote}
+                          placeholder="Optional fulfillment note"
+                          onChange={(event) =>
+                            setProgressNote(event.target.value)
+                          }
+                        />
+                      </div>
+
+                      {progressError ? (
+                        <Alert variant="destructive">
+                          <AlertDescription>{progressError}</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      {progressSuccess ? (
+                        <Alert>
+                          <AlertDescription>{progressSuccess}</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      <Button
+                        type="button"
+                        disabled={
+                          createProgressEventMutation.isPending ||
+                          order.status === "canceled" ||
+                          order.status === "completed" ||
+                          !selectedLineItem
+                        }
+                        onClick={handleCreateProgressEvent}
+                      >
+                        {createProgressEventMutation.isPending
+                          ? "Recording progress..."
+                          : "Record progress"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid content-start gap-4 self-start">
+                    {progressEventsQuery.isLoading ? (
+                      <p className="text-sm text-muted-foreground">
+                        Loading progress totals...
+                      </p>
+                    ) : null}
+
+                    {progressEventsQuery.isError ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          {progressEventsQuery.error.message}
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
+
+                    {selectedLineItem && progressEventsQuery.data ? (
+                      <>
+                        <ProgressTotalsGrid
+                          showPrintedQa={showPrintedQaColumns(
+                            selectedLineItem.item_type,
+                            selectedRow
+                          )}
+                          totals={progressEventsQuery.data.totals}
+                        />
+                        <ProgressHistory
+                          events={progressEventsQuery.data.events}
+                        />
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             )}
@@ -463,43 +615,132 @@ function formatOrderItemDetails(item: Order["items"][number]): string {
   return item.non_stock_item.description?.trim() || item.description_snapshot
 }
 
-function getAllowedProgressStages(
-  itemType: Order["items"][number]["item_type"] | undefined
+function formatFulfillmentRowLabel(row: FulfillmentRow): string {
+  const item = row.item
+  const qty = item.quantity.toLocaleString()
+  if (item.item_type !== "product_bundle" || !row.bundlePart) {
+    return `${formatOrderItemLabel(item)} × ${qty}`
+  }
+
+  const b = item.product_bundle
+  if (row.bundlePart === "cup" && b.cup) {
+    return `${b.name} — cup ${b.cup.sku} × ${qty} set(s)`
+  }
+  if (row.bundlePart === "lid" && b.lid) {
+    return `${b.name} — lid ${b.lid.sku} × ${qty} set(s)`
+  }
+
+  return `${formatOrderItemLabel(item)} × ${qty}`
+}
+
+function formatBundleAwareTitle(
+  item: TrackedLineItem,
+  bundlePart: BundleFulfillmentPart | null
+): string {
+  if (item.item_type !== "product_bundle" || !bundlePart) {
+    return formatOrderItemLabel(item)
+  }
+
+  const b = item.product_bundle
+  if (bundlePart === "cup" && b.cup) {
+    return `${b.name} — cup (${b.cup.sku})`
+  }
+  if (bundlePart === "lid" && b.lid) {
+    return `${b.name} — lid (${b.lid.sku})`
+  }
+
+  return formatOrderItemLabel(item)
+}
+
+function formatBundleComponentInventoryHint(
+  item: Extract<TrackedLineItem, { item_type: "product_bundle" }>,
+  bundlePart: BundleFulfillmentPart
+): string {
+  const b = item.product_bundle
+  const sets = item.quantity
+  if (bundlePart === "cup" && b.cup) {
+    const units = sets * b.cup_qty_per_set
+    return `Cup pieces for this order: ${units.toLocaleString()} (${sets.toLocaleString()} set(s) × ${b.cup_qty_per_set} per set). Cup reservation is drawn when you record Printed.`
+  }
+  if (bundlePart === "lid" && b.lid) {
+    const units = sets * b.lid_qty_per_set
+    return `Lid pieces for this order: ${units.toLocaleString()} (${sets.toLocaleString()} set(s) × ${b.lid_qty_per_set} per set). Lid reservation is drawn when you record Released.`
+  }
+  return ""
+}
+
+function formatOrderedQuantityLine(
+  item: TrackedLineItem,
+  bundlePart: BundleFulfillmentPart | null
+): string {
+  if (item.item_type !== "product_bundle" || !bundlePart) {
+    return `Ordered ${item.quantity.toLocaleString()}`
+  }
+
+  const b = item.product_bundle
+  const sets = item.quantity
+  if (bundlePart === "cup" && b.cup) {
+    return `Ordered ${sets.toLocaleString()} set(s) · ${(sets * b.cup_qty_per_set).toLocaleString()} cup pieces`
+  }
+  if (bundlePart === "lid" && b.lid) {
+    return `Ordered ${sets.toLocaleString()} set(s) · ${(sets * b.lid_qty_per_set).toLocaleString()} lid pieces`
+  }
+
+  return `Ordered ${sets.toLocaleString()}`
+}
+
+function getAllowedProgressStagesForRow(
+  row: FulfillmentRow | null
 ): ProgressStage[] {
-  if (
-    itemType === "non_stock_item" ||
-    itemType === "custom_charge" ||
-    itemType === undefined
-  ) {
+  if (!row) {
     return []
   }
-
-  if (itemType === "lid") {
+  if (row.item.item_type === "lid") {
     return ["packed", "ready_for_release", "released"]
   }
-
+  if (row.item.item_type === "product_bundle" && row.bundlePart === "lid") {
+    return ["packed", "ready_for_release", "released"]
+  }
   return [...progressStageOptions]
 }
 
+function showPrintedQaColumns(
+  itemType: Order["items"][number]["item_type"],
+  row: FulfillmentRow | null
+): boolean {
+  if (itemType === "cup") {
+    return true
+  }
+  if (itemType === "product_bundle") {
+    return row?.bundlePart !== "lid"
+  }
+  return false
+}
+
 function ProgressTotalsGrid({
-  itemType,
+  showPrintedQa,
   totals,
 }: {
-  itemType: Order["items"][number]["item_type"]
+  showPrintedQa: boolean
   totals: ProgressTotals
 }) {
   return (
-    <div className="grid gap-1 self-start text-xs sm:grid-cols-7">
+    <div
+      className={cn(
+        "grid gap-1 self-start text-xs",
+        showPrintedQa ? "sm:grid-cols-7" : "sm:grid-cols-5"
+      )}
+    >
       <div className="flex h-14 flex-col justify-between border bg-muted/30 p-2">
         <p className="text-muted-foreground">Status</p>
         <p className="text-base font-semibold">
           {formatStatus(totals.line_item_status)}
         </p>
       </div>
-      {itemType === "cup" || itemType === "product_bundle" ? (
+      {showPrintedQa ? (
         <ProgressTotal label="Printed" value={totals.total_printed} />
       ) : null}
-      {itemType === "cup" || itemType === "product_bundle" ? (
+      {showPrintedQa ? (
         <ProgressTotal label="QA passed" value={totals.total_qa_passed} />
       ) : null}
       <ProgressTotal label="Packed" value={totals.total_packed} />
@@ -528,7 +769,7 @@ function ProgressTotal({
   className?: string
 }) {
   return (
-        <div
+    <div
       className={cn(
         "flex h-14 flex-col justify-between border bg-muted/30 p-2",
         className
@@ -571,11 +812,15 @@ function ProgressHistory({ events }: { events: ProgressEvent[] }) {
                     {new Date(event.event_date).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{formatStatus(event.stage)}</Badge>
+                    <Badge variant="secondary">
+                      {formatStatus(event.stage)}
+                    </Badge>
                   </TableCell>
                   <TableCell>{event.quantity.toLocaleString()}</TableCell>
                   <TableCell>{event.note ?? "—"}</TableCell>
-                  <TableCell>{event.created_by?.display_name ?? "System"}</TableCell>
+                  <TableCell>
+                    {event.created_by?.display_name ?? "System"}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {new Date(event.created_at).toLocaleString()}
                   </TableCell>
@@ -593,13 +838,14 @@ function maxQuantityForStage(
   itemType: Order["items"][number]["item_type"],
   stage: ProgressStage,
   orderedQuantity: number,
-  totals: ProgressTotals
+  totals: ProgressTotals,
+  stageRules: ProgressStageRuleSet
 ): number {
   if (itemType === "non_stock_item" || itemType === "custom_charge") {
     return 0
   }
 
-  if (itemType === "lid") {
+  if (stageRules === "lid") {
     switch (stage) {
       case "packed":
         return Math.max(orderedQuantity - totals.total_packed, 0)
@@ -612,6 +858,24 @@ function maxQuantityForStage(
         )
       default:
         return 0
+    }
+  }
+
+  if (stageRules === "bundle") {
+    switch (stage) {
+      case "printed":
+        return Number.MAX_SAFE_INTEGER
+      case "qa_passed":
+        return Math.max(totals.total_printed - totals.total_qa_passed, 0)
+      case "packed":
+        return Math.max(orderedQuantity - totals.total_packed, 0)
+      case "ready_for_release":
+        return Math.max(totals.total_packed - totals.total_ready_for_release, 0)
+      case "released":
+        return Math.max(
+          totals.total_ready_for_release - totals.total_released,
+          0
+        )
     }
   }
 
@@ -633,13 +897,58 @@ function describeStageBalance(
   itemType: Order["items"][number]["item_type"],
   stage: ProgressStage,
   orderedQuantity: number,
-  totals: ProgressTotals
+  totals: ProgressTotals,
+  row: FulfillmentRow | null
 ): string {
+  const stageRules = getProgressStageRuleSet(itemType, row)
+  if (stageRules === "lid") {
+    const maxQuantity = maxQuantityForStage(
+      itemType,
+      stage,
+      orderedQuantity,
+      totals,
+      "lid"
+    )
+    switch (stage) {
+      case "packed":
+        return `Up to ${maxQuantity.toLocaleString()} more can be packed for this line.`
+      case "ready_for_release":
+        return `Up to ${maxQuantity.toLocaleString()} more can move to ready for release.`
+      case "released":
+        return `Up to ${maxQuantity.toLocaleString()} more can be released.`
+      default:
+        return ""
+    }
+  }
+
+  if (stageRules === "bundle") {
+    const maxQuantity = maxQuantityForStage(
+      itemType,
+      stage,
+      orderedQuantity,
+      totals,
+      "bundle"
+    )
+    switch (stage) {
+      case "printed":
+        return "Printed supports overrun. Record the actual printed quantity."
+      case "qa_passed":
+        return `Available from printed: ${maxQuantity.toLocaleString()}.`
+      case "packed":
+        return `Up to ${maxQuantity.toLocaleString()} more can be packed within the ordered quantity (independent of the QA total).`
+      case "ready_for_release":
+        return `Available from packed: ${maxQuantity.toLocaleString()}.`
+      case "released":
+        return `Available from ready for release: ${maxQuantity.toLocaleString()}.`
+    }
+  }
+
   const maxQuantity = maxQuantityForStage(
     itemType,
     stage,
     orderedQuantity,
-    totals
+    totals,
+    "default"
   )
 
   switch (stage) {
@@ -659,8 +968,38 @@ function describeStageBalance(
 function buildProgressQuantityError(
   itemType: Order["items"][number]["item_type"],
   stage: ProgressStage,
-  maxQuantity: number
+  maxQuantity: number,
+  row: FulfillmentRow | null
 ): string {
+  const rules = getProgressStageRuleSet(itemType, row)
+  if (rules === "lid") {
+    switch (stage) {
+      case "packed":
+        return `Packed quantity cannot exceed ${maxQuantity} (remaining to pack on this line).`
+      case "ready_for_release":
+        return `Ready for release quantity cannot exceed the current moveable packed balance of ${maxQuantity}.`
+      case "released":
+        return `Released quantity cannot exceed the current ready-for-release balance of ${maxQuantity}.`
+      default:
+        return `This stage is not used for lid line items.`
+    }
+  }
+
+  if (rules === "bundle") {
+    switch (stage) {
+      case "packed":
+        return `Packed quantity cannot exceed ${maxQuantity} (remaining to pack for this line; not limited by QA).`
+      case "ready_for_release":
+        return `Ready for release quantity cannot exceed the current moveable packed balance of ${maxQuantity}.`
+      case "released":
+        return `Released quantity cannot exceed the current ready-for-release balance of ${maxQuantity}.`
+      case "qa_passed":
+        return `QA passed quantity cannot exceed the current printed balance of ${maxQuantity}.`
+      case "printed":
+        return "Printed supports overrun and should not be capped here."
+    }
+  }
+
   switch (stage) {
     case "ready_for_release":
       return `Ready for release quantity cannot exceed the current packed balance of ${maxQuantity}.`

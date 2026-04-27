@@ -61,14 +61,18 @@ const orderCustomChargeSchema = z.object({
   description_snapshot: z.string(),
 })
 
+const nullableOmittedField = <T extends z.ZodTypeAny>(schema: T) =>
+  schema.nullish().transform((value) => value ?? null)
+
 const orderProductBundleSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   description: z.string().nullable(),
+  cup_qty_per_set: z.number().int().nonnegative(),
+  lid_qty_per_set: z.number().int().nonnegative(),
+  cup: nullableOmittedField(orderCupSchema),
+  lid: nullableOmittedField(orderLidSchema),
 })
-
-const nullableOmittedField = <T extends z.ZodTypeAny>(schema: T) =>
-  schema.nullish().transform((value) => value ?? null)
 
 const orderItemSchema = z.discriminatedUnion("item_type", [
   z.object({

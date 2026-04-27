@@ -39,6 +39,12 @@ interface OrderProductBundleDto {
   id: string
   name: string
   description: string | null
+  /** Units of this cup per ordered bundle (set) */
+  cup_qty_per_set: number
+  /** Units of this lid per ordered bundle (set) */
+  lid_qty_per_set: number
+  cup: OrderCupDto | null
+  lid: OrderLidDto | null
 }
 
 interface BaseOrderItemDto {
@@ -268,11 +274,17 @@ function toNonStockItemDto(nonStockItem: NonStockItem): OrderNonStockItemDto {
   }
 }
 
-function toProductBundleDto(productBundle: ProductBundle): OrderProductBundleDto {
+function toProductBundleDto(
+  productBundle: ProductBundle & { cup?: Cup | null; lid?: Lid | null },
+): OrderProductBundleDto {
   return {
     id: productBundle.id,
     name: productBundle.name,
     description: productBundle.description ?? null,
+    cup_qty_per_set: productBundle.cupQtyPerSet,
+    lid_qty_per_set: productBundle.lidQtyPerSet,
+    cup: productBundle.cupId && productBundle.cup ? toCupDto(productBundle.cup as Cup) : null,
+    lid: productBundle.lidId && productBundle.lid ? toLidDto(productBundle.lid as Lid) : null,
   }
 }
 

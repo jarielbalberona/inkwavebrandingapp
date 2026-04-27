@@ -43,13 +43,22 @@ export function logError(payload: LogPayload): void {
   logger.error(payload)
 }
 
-export function serializeError(error: unknown): Record<string, JsonValue> {
+const MAX_ERROR_CAUSE_DEPTH = 6
+
+export function serializeError(
+  error: unknown,
+  depth = 0,
+): Record<string, JsonValue> {
   if (error instanceof Error) {
-    return {
+    const payload: Record<string, JsonValue> = {
       name: error.name,
       message: error.message,
       stack: error.stack ?? null,
     }
+    if (depth < MAX_ERROR_CAUSE_DEPTH && error.cause !== undefined) {
+      payload.cause = serializeError(error.cause, depth + 1) as JsonValue
+    }
+    return payload
   }
 
   return {

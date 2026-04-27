@@ -2134,7 +2134,7 @@ function calculateProgressTotals(
   return totals
 }
 
-function validateProgressTotals(
+export function validateProgressTotals(
   itemType: OrderTrackedLineItemType,
   orderedQuantity: number,
   totals: ProgressTotalsDto,
@@ -2162,6 +2162,25 @@ function validateProgressTotals(
       throw new OrderProgressValidationError("Released quantity cannot exceed ready for release quantity")
     }
 
+    return
+  }
+
+  if (itemType === "product_bundle") {
+    if (totals.total_qa_passed > totals.total_printed) {
+      throw new OrderProgressValidationError("QA passed quantity cannot exceed printed quantity")
+    }
+    for (const stage of ["packed", "ready_for_release", "released"] as const) {
+      const total = totalForStage(totals, stage)
+      if (total > orderedQuantity) {
+        throw new OrderProgressValidationError(`${stage} total cannot exceed ordered quantity`)
+      }
+    }
+    if (totals.total_ready_for_release > totals.total_packed) {
+      throw new OrderProgressValidationError("Ready for release quantity cannot exceed packed quantity")
+    }
+    if (totals.total_released > totals.total_ready_for_release) {
+      throw new OrderProgressValidationError("Released quantity cannot exceed ready for release quantity")
+    }
     return
   }
 
