@@ -11,6 +11,14 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@workspace/ui/components/combobox"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,13 +36,6 @@ import {
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
 import {
   Table,
   TableBody,
@@ -211,19 +212,15 @@ export function SellableProductPriceRulesPage() {
 
           <div className="grid gap-2 sm:max-w-sm">
             <Label htmlFor="pricing-bundle-filter">Bundle</Label>
-            <Select value={bundleFilter} onValueChange={setBundleFilter}>
-              <SelectTrigger id="pricing-bundle-filter" className="w-full">
-                <SelectValue placeholder="All bundles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All bundles</SelectItem>
-                {(productBundlesQuery.data ?? []).map((bundle) => (
-                  <SelectItem key={bundle.id} value={bundle.id}>
-                    {bundle.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <BundleCombobox
+              inputId="pricing-bundle-filter"
+              value={bundleFilter}
+              onValueChange={setBundleFilter}
+              bundles={productBundlesQuery.data ?? []}
+              includeAllOption
+              placeholder={productBundlesQuery.isLoading ? "Loading bundles..." : "Search bundles"}
+              emptyLabel="No bundles found."
+            />
           </div>
 
           {!pricingRulesQuery.isLoading && pricingRulesQuery.data?.length === 0 ? (
@@ -302,20 +299,17 @@ export function SellableProductPriceRulesPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Bundle</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select bundle" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(productBundlesQuery.data ?? []).map((bundle) => (
-                          <SelectItem key={bundle.id} value={bundle.id}>
-                            {bundle.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <BundleCombobox
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        bundles={productBundlesQuery.data ?? []}
+                        placeholder={
+                          productBundlesQuery.isLoading ? "Loading bundles..." : "Search bundles"
+                        }
+                        emptyLabel="No bundles found."
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -450,6 +444,73 @@ function toFormValues(rule: SellableProductPriceRule): PricingRuleFormValues {
     unit_price: Number(rule.unit_price),
     is_active: rule.is_active,
   }
+}
+
+type BundleComboboxOption = {
+  id: string
+  label: string
+  bundle: ProductBundle | null
+}
+
+function BundleCombobox({
+  inputId,
+  value,
+  onValueChange,
+  bundles,
+  includeAllOption = false,
+  placeholder,
+  emptyLabel,
+}: {
+  inputId?: string
+  value: string
+  onValueChange: (value: string) => void
+  bundles: ProductBundle[]
+  includeAllOption?: boolean
+  placeholder: string
+  emptyLabel: string
+}) {
+  const options = useMemo<BundleComboboxOption[]>(
+    () => [
+      ...(includeAllOption ? [{ id: "all", label: "All bundles", bundle: null }] : []),
+      ...bundles.map((bundle) => ({
+        id: bundle.id,
+        label: bundle.name,
+        bundle,
+      })),
+    ],
+    [bundles, includeAllOption],
+  )
+  const selectedOption = options.find((option) => option.id === value) ?? null
+
+  return (
+    <Combobox
+      value={selectedOption}
+      onValueChange={(option: BundleComboboxOption | null) => {
+        onValueChange(option?.id ?? (includeAllOption ? "all" : ""))
+      }}
+      items={options}
+      itemToStringLabel={(option) => option?.label ?? ""}
+      itemToStringValue={(option) => option?.id ?? ""}
+      isItemEqualToValue={(option, selected) => option?.id === selected?.id}
+    >
+      <ComboboxInput
+        id={inputId}
+        placeholder={placeholder}
+        showClear
+        className="w-full min-w-0"
+      />
+      <ComboboxContent>
+        <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
+        <ComboboxList>
+          {options.map((option) => (
+            <ComboboxItem key={option.id} value={option}>
+              {option.label}
+            </ComboboxItem>
+          ))}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
 }
 
 function filterAndSortPricingRules(

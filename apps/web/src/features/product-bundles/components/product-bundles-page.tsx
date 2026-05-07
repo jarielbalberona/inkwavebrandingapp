@@ -11,6 +11,14 @@ import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@workspace/ui/components/combobox"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -28,13 +36,6 @@ import {
 } from "@workspace/ui/components/form"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@workspace/ui/components/select"
 import {
   Table,
   TableBody,
@@ -399,21 +400,17 @@ export function ProductBundlesPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cup component</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="No cup" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value={noneValue}>No cup</SelectItem>
-                          {(cupsQuery.data ?? []).map((cup) => (
-                            <SelectItem key={cup.id} value={cup.id}>
-                              {formatCupLabel(cup)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <CatalogCombobox
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          items={cupsQuery.data ?? []}
+                          noneLabel="No cup"
+                          placeholder={cupsQuery.isLoading ? "Loading cups..." : "Search cups"}
+                          emptyLabel="No cups found."
+                          itemToLabel={formatCupLabel}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -445,21 +442,17 @@ export function ProductBundlesPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Lid component</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="No lid" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value={noneValue}>No lid</SelectItem>
-                          {(lidsQuery.data ?? []).map((lid) => (
-                            <SelectItem key={lid.id} value={lid.id}>
-                              {formatLidLabel(lid)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <CatalogCombobox
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          items={lidsQuery.data ?? []}
+                          noneLabel="No lid"
+                          placeholder={lidsQuery.isLoading ? "Loading lids..." : "Search lids"}
+                          emptyLabel="No lids found."
+                          itemToLabel={formatLidLabel}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -533,6 +526,64 @@ function toFormValues(bundle: ProductBundle): ProductBundleFormValues {
     lid_qty_per_set: bundle.lid_qty_per_set,
     is_active: bundle.is_active,
   }
+}
+
+type CatalogComboboxOption<T extends { id: string }> = {
+  id: string
+  label: string
+  item: T | null
+}
+
+function CatalogCombobox<T extends { id: string }>({
+  value,
+  onValueChange,
+  items,
+  noneLabel,
+  placeholder,
+  emptyLabel,
+  itemToLabel,
+}: {
+  value: string
+  onValueChange: (value: string) => void
+  items: T[]
+  noneLabel: string
+  placeholder: string
+  emptyLabel: string
+  itemToLabel: (item: T) => string
+}) {
+  const options = useMemo(
+    () => [
+      { id: noneValue, label: noneLabel, item: null },
+      ...items.map((item) => ({ id: item.id, label: itemToLabel(item), item })),
+    ],
+    [itemToLabel, items, noneLabel],
+  )
+  const selectedOption = options.find((option) => option.id === value) ?? options[0]
+
+  return (
+    <Combobox
+      value={selectedOption}
+      onValueChange={(option: CatalogComboboxOption<T> | null) => {
+        onValueChange(option?.id ?? noneValue)
+      }}
+      items={options}
+      itemToStringLabel={(option) => option?.label ?? ""}
+      itemToStringValue={(option) => option?.id ?? ""}
+      isItemEqualToValue={(option, selected) => option?.id === selected?.id}
+    >
+      <ComboboxInput placeholder={placeholder} showClear className="w-full min-w-0" />
+      <ComboboxContent>
+        <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
+        <ComboboxList>
+          {options.map((option) => (
+            <ComboboxItem key={option.id} value={option}>
+              {option.label}
+            </ComboboxItem>
+          ))}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
 }
 
 function filterAndSortBundles(

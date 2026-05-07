@@ -16,6 +16,14 @@ import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@workspace/ui/components/combobox"
+import {
   Form,
   FormControl,
   FormField,
@@ -100,6 +108,7 @@ const orderEditSchema = z.object({
 })
 
 type OrderEditValues = z.infer<typeof orderEditSchema>
+type SelectableOrderItem = ProductBundle | Cup | Lid | NonStockItem
 
 const emptyLineItem: OrderEditValues["line_items"][number] = {
   item_type: "product_bundle",
@@ -527,7 +536,7 @@ function OrderEditLineItemFields({
       control,
       name: `line_items.${index}.item_type`,
     }) ?? "cup"
-  const availableItems =
+  const availableItems: readonly SelectableOrderItem[] =
     itemType === "product_bundle"
       ? activeProductBundles
       : itemType === "cup"
@@ -657,47 +666,53 @@ function OrderEditLineItemFields({
                       ? "Lid"
                       : "General Item"}
                 </FormLabel>
-                <Select
-                  disabled={disabled}
-                  key={`${fieldId}-${itemType}`}
-                  value={resolveSelectableItemId(field.value, availableItems)}
-                  onValueChange={field.onChange}
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue
-                        placeholder={
-                          itemType === "cup"
-                            ? cupsLoading
-                              ? "Loading cups..."
-                              : "Select cup"
-                            : itemType === "product_bundle"
-                              ? "Select product bundle"
-                            : itemType === "lid"
-                              ? lidsLoading
-                                ? "Loading lids..."
-                                : "Select lid"
-                              : nonStockItemsLoading
-                                ? "Loading general items..."
-                                : "Select general item"
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {availableItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {itemType === "cup"
-                          ? formatCupOption(item as Cup)
+                <FormControl>
+                  <Combobox<SelectableOrderItem>
+                    disabled={disabled}
+                    key={`${fieldId}-${itemType}`}
+                    value={resolveSelectableItem(field.value, availableItems)}
+                    onValueChange={(item: SelectableOrderItem | null) => {
+                      field.onChange(item?.id)
+                    }}
+                    items={availableItems}
+                    itemToStringLabel={(item) =>
+                      item ? formatSelectableOrderItemOption(item, itemType) : ""
+                    }
+                    itemToStringValue={(item) => item?.id ?? ""}
+                    isItemEqualToValue={(item, selected) => item?.id === selected?.id}
+                  >
+                    <ComboboxInput
+                      disabled={disabled}
+                      placeholder={
+                        itemType === "cup"
+                          ? cupsLoading
+                            ? "Loading cups..."
+                            : "Search cups"
                           : itemType === "product_bundle"
-                            ? formatProductBundleOption(item as ProductBundle)
+                            ? "Search product bundles"
                           : itemType === "lid"
-                            ? formatLidOption(item as Lid)
-                            : formatNonStockItemOption(item as NonStockItem)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                            ? lidsLoading
+                              ? "Loading lids..."
+                              : "Search lids"
+                            : nonStockItemsLoading
+                              ? "Loading general items..."
+                              : "Search general items"
+                      }
+                      showClear
+                      className="w-full min-w-0"
+                    />
+                    <ComboboxContent>
+                      <ComboboxEmpty>No matching items found.</ComboboxEmpty>
+                      <ComboboxList>
+                        {availableItems.map((item) => (
+                          <ComboboxItem key={item.id} value={item}>
+                            {formatSelectableOrderItemOption(item, itemType)}
+                          </ComboboxItem>
+                        ))}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                </FormControl>
               </FormItem>
             )}
           />
@@ -748,15 +763,34 @@ function OrderEditLineItemFields({
   )
 }
 
-function resolveSelectableItemId(
+function resolveSelectableItem(
   raw: string | undefined,
-  items: readonly { id: string }[],
-): string | undefined {
+  items: readonly SelectableOrderItem[],
+): SelectableOrderItem | null {
   if (!raw) {
-    return undefined
+    return null
   }
 
-  return items.some((item) => item.id === raw) ? raw : undefined
+  return items.find((item) => item.id === raw) ?? null
+}
+
+function formatSelectableOrderItemOption(
+  item: SelectableOrderItem,
+  itemType: OrderEditValues["line_items"][number]["item_type"],
+): string {
+  if (itemType === "cup") {
+    return formatCupOption(item as Cup)
+  }
+
+  if (itemType === "product_bundle") {
+    return formatProductBundleOption(item as ProductBundle)
+  }
+
+  if (itemType === "lid") {
+    return formatLidOption(item as Lid)
+  }
+
+  return formatNonStockItemOption(item as NonStockItem)
 }
 
 function formatCupOption(cup: Cup): string {

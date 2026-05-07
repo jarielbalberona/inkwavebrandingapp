@@ -12,6 +12,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@workspace/ui/components/combobox"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import {
@@ -358,28 +366,37 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                 </AlertDescription>
               </Alert>
             ) : (
-              <div className="">
+              <div>
                 <div className="mb-4 grid gap-2 bg-orange-300 p-3">
                   <Label>Select Order Item</Label>
-                  <Select
-                    value={activeFulfillmentKey ?? undefined}
-                    onValueChange={(rowKey) => {
-                      setSelectedFulfillmentKey(rowKey)
+                  <Combobox
+                    value={selectedRow}
+                    onValueChange={(row: FulfillmentRow | null) => {
+                      setSelectedFulfillmentKey(row?.key ?? null)
                       setProgressError(null)
                       setProgressSuccess(null)
                     }}
+                    items={fulfillmentRows}
+                    itemToStringLabel={formatFulfillmentRowLabel}
+                    itemToStringValue={(row) => row.key}
+                    isItemEqualToValue={(row, selected) => row.key === selected.key}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select line item" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fulfillmentRows.map((row) => (
-                        <SelectItem key={row.key} value={row.key}>
-                          {formatFulfillmentRowLabel(row)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <ComboboxInput
+                      placeholder="Search line items"
+                      showClear
+                      className="w-full min-w-0"
+                    />
+                    <ComboboxContent>
+                      <ComboboxEmpty>No matching line items found.</ComboboxEmpty>
+                      <ComboboxList>
+                        {fulfillmentRows.map((row) => (
+                          <ComboboxItem key={row.key} value={row}>
+                            {formatFulfillmentRowLabel(row)}
+                          </ComboboxItem>
+                        ))}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
                 </div>
                 <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
                   <div className="grid gap-3">

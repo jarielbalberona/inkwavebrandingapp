@@ -110,6 +110,7 @@ const orderCreateSchema = z.object({
 })
 
 type OrderCreateValues = z.infer<typeof orderCreateSchema>
+type SelectableOrderItem = ProductBundle | Cup | Lid | NonStockItem
 
 const emptyLineItem: OrderCreateValues["line_items"][number] = {
   item_type: "product_bundle",
@@ -322,15 +323,41 @@ function OrderCustomerCombobox({
   )
 }
 
-function resolveSelectableItemId(
+function resolveSelectableItem(
   raw: string | undefined,
-  items: readonly { id: string }[],
-): string | undefined {
+  items: readonly SelectableOrderItem[],
+): SelectableOrderItem | null {
   if (!raw) {
-    return undefined
+    return null
   }
 
-  return items.some((item) => item.id === raw) ? raw : undefined
+  return items.find((item) => item.id === raw) ?? null
+}
+
+function formatSelectableOrderItemOption(
+  item: SelectableOrderItem,
+  itemType: OrderCreateValues["line_items"][number]["item_type"],
+  availableQuantityByTrackedItemKey: Map<string, number>,
+): string {
+  if (itemType === "product_bundle") {
+    return formatProductBundleOption(item as ProductBundle)
+  }
+
+  if (itemType === "cup") {
+    return formatCupOption(
+      item as Cup,
+      availableQuantityByTrackedItemKey.get(toTrackedItemKey("cup", item.id)),
+    )
+  }
+
+  if (itemType === "lid") {
+    return formatLidOption(
+      item as Lid,
+      availableQuantityByTrackedItemKey.get(toTrackedItemKey("lid", item.id)),
+    )
+  }
+
+  return formatNonStockItemOption(item as NonStockItem)
 }
 
 function OrderCreateLineItemFields({
@@ -379,7 +406,7 @@ function OrderCreateLineItemFields({
     control,
     name: `line_items.${index}.unit_sell_price`,
   })
-  const availableItems =
+  const availableItems: readonly SelectableOrderItem[] =
     itemType === "product_bundle"
       ? activeProductBundles
       : itemType === "cup"
@@ -552,52 +579,61 @@ function OrderCreateLineItemFields({
                       ? "Lid"
                       : "General Item"}
                 </FormLabel>
-                <Select
-                  key={`${fieldId}-${itemType}`}
-                  value={resolveSelectableItemId(itemIdField.value, availableItems)}
-                  onValueChange={itemIdField.onChange}
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue
-                        placeholder={
-                          itemType === "product_bundle"
-                            ? "Select product bundle"
-                            : itemType === "cup"
-                            ? cupsLoading
-                              ? "Loading cups..."
-                              : "Select cup"
-                            : itemType === "lid"
-                              ? lidsLoading
-                                ? "Loading lids..."
-                                : "Select lid"
-                              : nonStockItemsLoading
-                                ? "Loading general items..."
-                                : "Select general item"
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {availableItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {itemType === "product_bundle"
-                          ? formatProductBundleOption(item as ProductBundle)
+                <FormControl>
+                  <Combobox<SelectableOrderItem>
+                    key={`${fieldId}-${itemType}`}
+                    value={resolveSelectableItem(itemIdField.value, availableItems)}
+                    onValueChange={(item: SelectableOrderItem | null) => {
+                      itemIdField.onChange(item?.id)
+                    }}
+                    items={availableItems}
+                    itemToStringLabel={(item) =>
+                      item
+                        ? formatSelectableOrderItemOption(
+                            item,
+                            itemType,
+                            availableQuantityByTrackedItemKey,
+                          )
+                        : ""
+                    }
+                    itemToStringValue={(item) => item?.id ?? ""}
+                    isItemEqualToValue={(item, selected) => item?.id === selected?.id}
+                  >
+                    <ComboboxInput
+                      placeholder={
+                        itemType === "product_bundle"
+                          ? "Search product bundles"
                           : itemType === "cup"
-                          ? formatCupOption(
-                              item as Cup,
-                              availableQuantityByTrackedItemKey.get(toTrackedItemKey("cup", item.id)),
-                            )
+                          ? cupsLoading
+                            ? "Loading cups..."
+                            : "Search cups"
                           : itemType === "lid"
-                            ? formatLidOption(
-                                item as Lid,
-                                availableQuantityByTrackedItemKey.get(toTrackedItemKey("lid", item.id)),
-                              )
-                            : formatNonStockItemOption(item as NonStockItem)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                            ? lidsLoading
+                              ? "Loading lids..."
+                              : "Search lids"
+                            : nonStockItemsLoading
+                              ? "Loading general items..."
+                              : "Search general items"
+                      }
+                      showClear
+                      className="w-full min-w-0"
+                    />
+                    <ComboboxContent>
+                      <ComboboxEmpty>No matching items found.</ComboboxEmpty>
+                      <ComboboxList>
+                        {availableItems.map((item) => (
+                          <ComboboxItem key={item.id} value={item}>
+                            {formatSelectableOrderItemOption(
+                              item,
+                              itemType,
+                              availableQuantityByTrackedItemKey,
+                            )}
+                          </ComboboxItem>
+                        ))}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                </FormControl>
               </FormItem>
             )}
           />

@@ -733,7 +733,7 @@ function CatalogFilterSelect({
 }: {
   label: string
   value: string
-  options: string[]
+  options: readonly string[]
   onValueChange: (value: string) => void
 }) {
   return (
