@@ -844,6 +844,7 @@ export class OrdersService {
             priority: ((await ordersRepository.getMinimumPriority()) ?? 0) - 1,
             status: "pending",
             notes: parsedInput.notes,
+            internalNotes: parsedInput.internal_notes,
             createdByUserId: user.id,
           },
           items: resolvedItems.map((item) => {
@@ -1607,6 +1608,7 @@ export class OrdersService {
         await ordersRepository.updateOrderMetadata(order.id, {
           customerId: parsedInput.customer_id,
           notes: parsedInput.notes,
+          internalNotes: parsedInput.internal_notes,
         })
 
         const updatedOrder = await ordersRepository.findByIdWithRelations(

@@ -260,6 +260,13 @@
       "when": 1777973872955,
       "tag": "0037_thick_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1778171205656,
+      "tag": "0038_pink_mordo",
+      "breakpoints": true
     }
   ]
 }

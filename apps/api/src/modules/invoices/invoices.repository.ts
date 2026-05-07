@@ -19,13 +19,16 @@ export class InvoicesRepository {
   constructor(private readonly db: DatabaseClient) {}
 
   async transaction<T>(
-    handler: (context: { db: DatabaseClient; invoicesRepository: InvoicesRepository }) => Promise<T>,
+    handler: (context: {
+      db: DatabaseClient
+      invoicesRepository: InvoicesRepository
+    }) => Promise<T>
   ): Promise<T> {
     return this.db.transaction((tx) =>
       handler({
         db: tx as DatabaseClient,
         invoicesRepository: new InvoicesRepository(tx as DatabaseClient),
-      }),
+      })
     )
   }
 
@@ -36,10 +39,12 @@ export class InvoicesRepository {
             ilike(invoices.invoiceNumber, `%${query.search}%`),
             ilike(invoices.orderNumberSnapshot, `%${query.search}%`),
             ilike(invoices.customerBusinessNameSnapshot, `%${query.search}%`),
-            ilike(invoices.customerCodeSnapshot, `%${query.search}%`),
+            ilike(invoices.customerCodeSnapshot, `%${query.search}%`)
           )
         : undefined,
-      query.customer_id ? eq(invoices.customerId, query.customer_id) : undefined,
+      query.customer_id
+        ? eq(invoices.customerId, query.customer_id)
+        : undefined,
       query.order_id ? eq(invoices.orderId, query.order_id) : undefined,
       query.start_date ? gte(invoices.createdAt, query.start_date) : undefined,
       query.end_date ? lte(invoices.createdAt, query.end_date) : undefined,
@@ -58,7 +63,10 @@ export class InvoicesRepository {
     invoice: NewInvoice
     items: Omit<NewInvoiceItem, "invoiceId">[]
   }): Promise<InvoiceWithRelations> {
-    const rows = await this.db.insert(invoices).values(input.invoice).returning()
+    const rows = await this.db
+      .insert(invoices)
+      .values(input.invoice)
+      .returning()
     const invoice = rows[0]
 
     if (!invoice) {
@@ -92,6 +100,7 @@ export class InvoicesRepository {
       | "customerContactNumberSnapshot"
       | "customerEmailSnapshot"
       | "customerAddressSnapshot"
+      | "notes"
       | "subtotal"
       | "totalAmount"
       | "remainingBalance"
@@ -106,15 +115,21 @@ export class InvoicesRepository {
       })
       .where(eq(invoices.id, input.invoiceId))
 
-    await this.db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.invoiceId))
+    await this.db
+      .delete(invoiceItems)
+      .where(eq(invoiceItems.invoiceId, input.invoiceId))
 
     if (input.items.length > 0) {
       await this.db
         .insert(invoiceItems)
-        .values(input.items.map((item) => ({ ...item, invoiceId: input.invoiceId })))
+        .values(
+          input.items.map((item) => ({ ...item, invoiceId: input.invoiceId }))
+        )
     }
 
-    const invoiceWithRelations = await this.findByIdWithRelations(input.invoiceId)
+    const invoiceWithRelations = await this.findByIdWithRelations(
+      input.invoiceId
+    )
 
     if (!invoiceWithRelations) {
       throw new Error("Failed to load replaced invoice")
@@ -124,7 +139,9 @@ export class InvoicesRepository {
   }
 
   async deleteInvoiceItems(invoiceId: string): Promise<void> {
-    await this.db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId))
+    await this.db
+      .delete(invoiceItems)
+      .where(eq(invoiceItems.invoiceId, invoiceId))
   }
 
   async findByIdWithRelations(id: string) {
@@ -199,8 +216,8 @@ export class InvoicesRepository {
         and(
           eq(invoicePayments.id, input.paymentId),
           eq(invoicePayments.invoiceId, input.invoiceId),
-          isNull(invoicePayments.archivedAt),
-        ),
+          isNull(invoicePayments.archivedAt)
+        )
       )
       .returning()
 
@@ -215,8 +232,8 @@ export class InvoicesRepository {
         and(
           eq(invoicePayments.id, input.paymentId),
           eq(invoicePayments.invoiceId, input.invoiceId),
-          isNull(invoicePayments.archivedAt),
-        ),
+          isNull(invoicePayments.archivedAt)
+        )
       )
       .returning()
 
@@ -225,7 +242,7 @@ export class InvoicesRepository {
 
   async updateFinancialState(
     invoiceId: string,
-    input: Pick<NewInvoice, "status" | "paidAmount" | "remainingBalance">,
+    input: Pick<NewInvoice, "status" | "paidAmount" | "remainingBalance">
   ): Promise<void> {
     await this.db
       .update(invoices)
@@ -238,7 +255,10 @@ export class InvoicesRepository {
       .where(eq(invoices.id, invoiceId))
   }
 
-  async setDocumentAssetId(invoiceId: string, documentAssetId: string | null): Promise<void> {
+  async setDocumentAssetId(
+    invoiceId: string,
+    documentAssetId: string | null
+  ): Promise<void> {
     await this.db
       .update(invoices)
       .set({

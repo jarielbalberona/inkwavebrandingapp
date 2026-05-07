@@ -120,6 +120,7 @@ export const orderLineItemProgressStageSchema = z.enum([
 export const createOrderSchema = z.object({
   customer_id: z.string().uuid(),
   notes: optionalText(1000),
+  internal_notes: optionalText(1000),
   line_items: z.array(createOrderLineItemSchema).min(1),
 })
 
@@ -139,6 +140,7 @@ export const updateOrderSchema = z
   .object({
     customer_id: z.string().uuid().optional(),
     notes: nullableOptionalText(1000),
+    internal_notes: nullableOptionalText(1000),
     line_items: z.array(updateOrderLineItemSchema).min(1).optional(),
   })
   .strict()
@@ -146,6 +148,7 @@ export const updateOrderSchema = z
     (input) =>
       input.customer_id !== undefined ||
       input.notes !== undefined ||
+      input.internal_notes !== undefined ||
       input.line_items !== undefined,
     {
       message: "At least one supported order field is required",

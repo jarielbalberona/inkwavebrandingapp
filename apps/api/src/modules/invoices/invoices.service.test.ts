@@ -45,10 +45,13 @@ test("generateForOrder rejects staff access", async () => {
     } as never,
     {
       findByIdWithRelations: async () => null,
-    } as never,
+    } as never
   )
 
-  await assert.rejects(() => service.generateForOrder("order-1", staffUser), AuthorizationError)
+  await assert.rejects(
+    () => service.generateForOrder("order-1", staffUser),
+    AuthorizationError
+  )
 })
 
 test("generateForOrder rejects duplicate invoices for the same order", async () => {
@@ -58,12 +61,17 @@ test("generateForOrder rejects duplicate invoices for the same order", async () 
     } as never,
     {
       findByIdWithRelations: async () => {
-        throw new Error("orders repository should not be reached when invoice already exists")
+        throw new Error(
+          "orders repository should not be reached when invoice already exists"
+        )
       },
-    } as never,
+    } as never
   )
 
-  await assert.rejects(() => service.generateForOrder("order-1", adminUser), InvoiceAlreadyExistsError)
+  await assert.rejects(
+    () => service.generateForOrder("order-1", adminUser),
+    InvoiceAlreadyExistsError
+  )
 })
 
 test("generateForOrder rejects canceled orders", async () => {
@@ -76,10 +84,13 @@ test("generateForOrder rejects canceled orders", async () => {
         id: "order-1",
         status: "canceled",
       }),
-    } as never,
+    } as never
   )
 
-  await assert.rejects(() => service.generateForOrder("order-1", adminUser), InvoiceOrderCanceledError)
+  await assert.rejects(
+    () => service.generateForOrder("order-1", adminUser),
+    InvoiceOrderCanceledError
+  )
 })
 
 test("generateForOrder snapshots order sell pricing and subtotal into the invoice", async () => {
@@ -140,6 +151,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
         id: "order-1",
         orderNumber: "ORD-001",
         status: "pending",
+        notes: "Deliver before Friday.",
         customer: {
           id: "customer-1",
           customerCode: "CUST-001",
@@ -168,7 +180,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
           },
         ],
       }),
-    } as never,
+    } as never
   )
 
   const dto = await service.generateForOrder("order-1", adminUser)
@@ -193,6 +205,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       totalAmount: string
       paidAmount: string
       remainingBalance: string
+      notes: string | null
       createdByUserId: string
     }
     items: Array<{
@@ -217,45 +230,46 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       },
     },
     {
-    invoice: {
-      invoiceNumber: "<generated>",
-      orderId: "order-1",
-      orderNumberSnapshot: "ORD-001",
-      customerId: "customer-1",
-      customerCodeSnapshot: "CUST-001",
-      customerBusinessNameSnapshot: "Ink Wave Cafe",
-      customerContactPersonSnapshot: "Jane Doe",
-      customerContactNumberSnapshot: "09170000000",
-      customerEmailSnapshot: "jane@example.com",
-      customerAddressSnapshot: "Manila",
-      status: "pending",
-      subtotal: "2400.00",
-      totalAmount: "2400.00",
-      paidAmount: "0.00",
-      remainingBalance: "2400.00",
-      createdByUserId: adminUser.id,
-    },
-    items: [
-      {
-        orderItemId: "line-1",
-        itemType: "cup",
-        descriptionSnapshot: "12oz kraft paper cup",
-        notes: "Front logo, black print",
-        quantity: 100,
-        unitPrice: "15.00",
-        lineTotal: "1500.00",
+      invoice: {
+        invoiceNumber: "<generated>",
+        orderId: "order-1",
+        orderNumberSnapshot: "ORD-001",
+        customerId: "customer-1",
+        customerCodeSnapshot: "CUST-001",
+        customerBusinessNameSnapshot: "Ink Wave Cafe",
+        customerContactPersonSnapshot: "Jane Doe",
+        customerContactNumberSnapshot: "09170000000",
+        customerEmailSnapshot: "jane@example.com",
+        customerAddressSnapshot: "Manila",
+        status: "pending",
+        notes: "Deliver before Friday.",
+        subtotal: "2400.00",
+        totalAmount: "2400.00",
+        paidAmount: "0.00",
+        remainingBalance: "2400.00",
+        createdByUserId: adminUser.id,
       },
-      {
-        orderItemId: "line-2",
-        itemType: "lid",
-        descriptionSnapshot: "80mm coffee lid",
-        notes: null,
-        quantity: 180,
-        unitPrice: "5.00",
-        lineTotal: "900.00",
-      },
-    ],
-    },
+      items: [
+        {
+          orderItemId: "line-1",
+          itemType: "cup",
+          descriptionSnapshot: "12oz kraft paper cup",
+          notes: "Front logo, black print",
+          quantity: 100,
+          unitPrice: "15.00",
+          lineTotal: "1500.00",
+        },
+        {
+          orderItemId: "line-2",
+          itemType: "lid",
+          descriptionSnapshot: "80mm coffee lid",
+          notes: null,
+          quantity: 180,
+          unitPrice: "5.00",
+          lineTotal: "900.00",
+        },
+      ],
+    }
   )
 
   assert.equal(dto.subtotal, "2400.00")
@@ -352,7 +366,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
           },
         ],
       }),
-    } as never,
+    } as never
   )
 
   const dto = await service.generateForOrder("order-2", adminUser)
@@ -410,27 +424,44 @@ test("generateForOrder includes custom_charge lines without any master-data depe
 })
 
 test("assertInvoiceAllowsStructuralChanges allows pending invoices", () => {
-  assert.doesNotThrow(() => assertInvoiceAllowsStructuralChanges({ status: "pending", paidAmount: "0.00" }))
+  assert.doesNotThrow(() =>
+    assertInvoiceAllowsStructuralChanges({
+      status: "pending",
+      paidAmount: "0.00",
+    })
+  )
 })
 
 test("assertInvoiceAllowsStructuralChanges rejects paid invoices", () => {
   assert.throws(
-    () => assertInvoiceAllowsStructuralChanges({ status: "paid", paidAmount: "100.00" }),
-    InvoicePaidLockError,
+    () =>
+      assertInvoiceAllowsStructuralChanges({
+        status: "paid",
+        paidAmount: "100.00",
+      }),
+    InvoicePaidLockError
   )
 })
 
 test("assertInvoiceAllowsStructuralChanges rejects void invoices", () => {
   assert.throws(
-    () => assertInvoiceAllowsStructuralChanges({ status: "void", paidAmount: "0.00" }),
-    InvoiceVoidLockError,
+    () =>
+      assertInvoiceAllowsStructuralChanges({
+        status: "void",
+        paidAmount: "0.00",
+      }),
+    InvoiceVoidLockError
   )
 })
 
 test("assertInvoiceAllowsStructuralChanges rejects invoices with recorded payments", () => {
   assert.throws(
-    () => assertInvoiceAllowsStructuralChanges({ status: "pending", paidAmount: "1.00" }),
-    InvoicePaymentLockError,
+    () =>
+      assertInvoiceAllowsStructuralChanges({
+        status: "pending",
+        paidAmount: "1.00",
+      }),
+    InvoicePaymentLockError
   )
 })
 
@@ -461,8 +492,12 @@ test("recordPayment persists a partial payment and keeps the invoice pending", a
   }
 
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
-      handler({ invoicesRepository, db: {} }),
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) => handler({ invoicesRepository, db: {} }),
     findByIdWithRelations: async () => currentInvoice,
     createPayment: async (input: unknown) => {
       recordedPayments.push(input)
@@ -507,7 +542,7 @@ test("recordPayment persists a partial payment and keeps the invoice pending", a
       payment_date: new Date("2026-04-24T08:00:00.000Z"),
       note: "Initial deposit",
     },
-    adminUser,
+    adminUser
   )
 
   assert.deepEqual(recordedPayments, [
@@ -560,8 +595,12 @@ test("recordPayment settles the invoice when the remaining balance is paid exact
   }
 
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
-      handler({ invoicesRepository, db: {} }),
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) => handler({ invoicesRepository, db: {} }),
     findByIdWithRelations: async () => currentInvoice,
     createPayment: async () => null,
     updateFinancialState: async (_invoiceId: string, input: unknown) => {
@@ -581,7 +620,7 @@ test("recordPayment settles the invoice when the remaining balance is paid exact
       amount: "600.00",
       payment_date: new Date("2026-04-24T08:00:00.000Z"),
     },
-    adminUser,
+    adminUser
   )
 
   assert.deepEqual(updatedState, {
@@ -603,7 +642,12 @@ test("recordPayment settles the invoice when the remaining balance is paid exact
 test("recordPayment rejects overpayment", async () => {
   const service = new InvoicesService(
     {
-      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      transaction: async (
+        handler: (context: {
+          invoicesRepository: unknown
+          db: unknown
+        }) => Promise<unknown>
+      ) =>
         handler({
           invoicesRepository: {
             findByIdWithRelations: async () => ({
@@ -617,7 +661,7 @@ test("recordPayment rejects overpayment", async () => {
           db: {},
         }),
     } as never,
-    {} as never,
+    {} as never
   )
 
   await assert.rejects(
@@ -628,16 +672,21 @@ test("recordPayment rejects overpayment", async () => {
           amount: "900.00",
           payment_date: new Date("2026-04-24T08:00:00.000Z"),
         },
-        adminUser,
+        adminUser
       ),
-    InvoicePaymentOverpaymentError,
+    InvoicePaymentOverpaymentError
   )
 })
 
 test("recordPayment rejects void invoices", async () => {
   const service = new InvoicesService(
     {
-      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      transaction: async (
+        handler: (context: {
+          invoicesRepository: unknown
+          db: unknown
+        }) => Promise<unknown>
+      ) =>
         handler({
           invoicesRepository: {
             findByIdWithRelations: async () => ({
@@ -651,7 +700,7 @@ test("recordPayment rejects void invoices", async () => {
           db: {},
         }),
     } as never,
-    {} as never,
+    {} as never
   )
 
   await assert.rejects(
@@ -662,16 +711,21 @@ test("recordPayment rejects void invoices", async () => {
           amount: "100.00",
           payment_date: new Date("2026-04-24T08:00:00.000Z"),
         },
-        adminUser,
+        adminUser
       ),
-    InvoicePaymentVoidError,
+    InvoicePaymentVoidError
   )
 })
 
 test("recordPayment rejects already paid invoices", async () => {
   const service = new InvoicesService(
     {
-      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      transaction: async (
+        handler: (context: {
+          invoicesRepository: unknown
+          db: unknown
+        }) => Promise<unknown>
+      ) =>
         handler({
           invoicesRepository: {
             findByIdWithRelations: async () => ({
@@ -685,7 +739,7 @@ test("recordPayment rejects already paid invoices", async () => {
           db: {},
         }),
     } as never,
-    {} as never,
+    {} as never
   )
 
   await assert.rejects(
@@ -696,9 +750,9 @@ test("recordPayment rejects already paid invoices", async () => {
           amount: "100.00",
           payment_date: new Date("2026-04-24T08:00:00.000Z"),
         },
-        adminUser,
+        adminUser
       ),
-    InvoiceAlreadyPaidError,
+    InvoiceAlreadyPaidError
   )
 })
 
@@ -713,9 +767,9 @@ test("recordPayment rejects staff access", async () => {
           amount: "100.00",
           payment_date: new Date("2026-04-24T08:00:00.000Z"),
         },
-        staffUser,
+        staffUser
       ),
-    AuthorizationError,
+    AuthorizationError
   )
 })
 
@@ -758,8 +812,12 @@ test("updatePayment recalculates paid amount and reopens a paid invoice when cor
   }
 
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
-      handler({ invoicesRepository, db: {} }),
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) => handler({ invoicesRepository, db: {} }),
     findByIdWithRelations: async () => currentInvoice,
     updatePayment: async (input: unknown) => {
       updatedPayment = input
@@ -794,7 +852,7 @@ test("updatePayment recalculates paid amount and reopens a paid invoice when cor
       payment_date: new Date("2026-04-24T09:00:00.000Z"),
       note: "Corrected",
     },
-    adminUser,
+    adminUser
   )
 
   assert.deepEqual(updatedPayment, {
@@ -866,8 +924,12 @@ test("deletePayment recalculates paid amount after removing a payment line", asy
   }
 
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
-      handler({ invoicesRepository, db: {} }),
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) => handler({ invoicesRepository, db: {} }),
     findByIdWithRelations: async () => currentInvoice,
     deletePayment: async (input: unknown) => {
       deletedPaymentInput = input
@@ -889,7 +951,11 @@ test("deletePayment recalculates paid amount after removing a payment line", asy
 
   const service = new InvoicesService(invoicesRepository as never, {} as never)
 
-  const invoice = await service.deletePayment("invoice-1", "payment-2", adminUser)
+  const invoice = await service.deletePayment(
+    "invoice-1",
+    "payment-2",
+    adminUser
+  )
 
   assert.deepEqual(deletedPaymentInput, {
     invoiceId: "invoice-1",
@@ -944,8 +1010,12 @@ test("archive marks an invoice archived without deleting financial history", asy
 
   const archivedAt = new Date("2026-04-24T10:00:00.000Z")
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
-      handler({ invoicesRepository, db: {} }),
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) => handler({ invoicesRepository, db: {} }),
     findByIdWithRelations: async () => currentInvoice,
     archive: async (invoiceId: string) => {
       archivedInvoiceId = invoiceId
@@ -970,8 +1040,12 @@ test("archive rejects invoices that are not void", async () => {
   let archiveAttempted = false
 
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
-      handler({ invoicesRepository, db: {} }),
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) => handler({ invoicesRepository, db: {} }),
     findByIdWithRelations: async () => ({
       id: "invoice-1",
       status: "pending",
@@ -984,7 +1058,10 @@ test("archive rejects invoices that are not void", async () => {
 
   const service = new InvoicesService(invoicesRepository as never, {} as never)
 
-  await assert.rejects(() => service.archive("invoice-1", adminUser), InvoiceArchiveStatusError)
+  await assert.rejects(
+    () => service.archive("invoice-1", adminUser),
+    InvoiceArchiveStatusError
+  )
   assert.equal(archiveAttempted, false)
 })
 
@@ -1014,8 +1091,12 @@ test("void marks an unpaid invoice as void", async () => {
   }
 
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
-      handler({ invoicesRepository, db: {} }),
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) => handler({ invoicesRepository, db: {} }),
     findByIdWithRelations: async () => currentInvoice,
     updateFinancialState: async (_invoiceId: string, input: unknown) => {
       updatedState = input
@@ -1033,7 +1114,10 @@ test("void marks an unpaid invoice as void", async () => {
     }),
   }
 
-  const service = new InvoicesService(invoicesRepository as never, ordersRepository as never)
+  const service = new InvoicesService(
+    invoicesRepository as never,
+    ordersRepository as never
+  )
 
   const invoice = await service.void("invoice-1", adminUser)
 
@@ -1050,7 +1134,12 @@ test("void marks an unpaid invoice as void", async () => {
 test("void rejects invoices with recorded payments", async () => {
   const service = new InvoicesService(
     {
-      transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+      transaction: async (
+        handler: (context: {
+          invoicesRepository: unknown
+          db: unknown
+        }) => Promise<unknown>
+      ) =>
         handler({
           invoicesRepository: {
             findByIdWithRelations: async () => ({
@@ -1064,15 +1153,23 @@ test("void rejects invoices with recorded payments", async () => {
           db: {},
         }),
     } as never,
-    {} as never,
+    {} as never
   )
 
-  await assert.rejects(() => service.void("invoice-1", adminUser), InvoiceVoidAfterPaymentError)
+  await assert.rejects(
+    () => service.void("invoice-1", adminUser),
+    InvoiceVoidAfterPaymentError
+  )
 })
 
 test("void rejects invoices whose linked order is not canceled", async () => {
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) =>
       handler({
         invoicesRepository: {
           findByIdWithRelations: async () => ({
@@ -1101,12 +1198,20 @@ test("void rejects invoices whose linked order is not canceled", async () => {
 
   const service = new InvoicesService(invoicesRepository, ordersRepository)
 
-  await assert.rejects(() => service.void("invoice-1", adminUser), InvoiceVoidActiveOrderError)
+  await assert.rejects(
+    () => service.void("invoice-1", adminUser),
+    InvoiceVoidActiveOrderError
+  )
 })
 
 test("void rejects invoices whose linked order is missing", async () => {
   const invoicesRepository = {
-    transaction: async (handler: (context: { invoicesRepository: unknown; db: unknown }) => Promise<unknown>) =>
+    transaction: async (
+      handler: (context: {
+        invoicesRepository: unknown
+        db: unknown
+      }) => Promise<unknown>
+    ) =>
       handler({
         invoicesRepository: {
           findByIdWithRelations: async () => ({
@@ -1129,7 +1234,10 @@ test("void rejects invoices whose linked order is missing", async () => {
 
   const service = new InvoicesService(invoicesRepository, ordersRepository)
 
-  await assert.rejects(() => service.void("invoice-1", adminUser), InvoiceOrderNotFoundError)
+  await assert.rejects(
+    () => service.void("invoice-1", adminUser),
+    InvoiceOrderNotFoundError
+  )
 })
 
 test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not exist", async () => {
@@ -1170,6 +1278,7 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
     {
       id: "order-3",
       orderNumber: "ORD-003",
+      notes: "Customer-facing order note.",
       customer: {
         id: "customer-1",
         customerCode: "CUST-001",
@@ -1190,7 +1299,7 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
         },
       ],
     },
-    adminUser.id,
+    adminUser.id
   )
 
   const createInput = capturedInput as {
@@ -1202,6 +1311,7 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
       totalAmount: string
       paidAmount: string
       remainingBalance: string
+      notes: string | null
     }
   }
 
@@ -1212,6 +1322,7 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
   assert.equal(createInput.invoice.totalAmount, "240.00")
   assert.equal(createInput.invoice.paidAmount, "0.00")
   assert.equal(createInput.invoice.remainingBalance, "240.00")
+  assert.equal(createInput.invoice.notes, "Customer-facing order note.")
   assert.equal(invoice.id, "invoice-1")
 })
 
@@ -1256,6 +1367,7 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
     {
       id: "order-4",
       orderNumber: "ORD-004",
+      notes: "Updated customer note.",
       customer: {
         id: "customer-1",
         customerCode: "CUST-001",
@@ -1276,7 +1388,7 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
         },
       ],
     },
-    adminUser.id,
+    adminUser.id
   )
 
   const replaceInput = replacedInput as {
@@ -1286,6 +1398,7 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
       totalAmount: string
       remainingBalance: string
       customerAddressSnapshot: string | null
+      notes: string | null
     }
     items: Array<{
       orderItemId: string
@@ -1298,6 +1411,7 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
   assert.equal(replaceInput.invoice.totalAmount, "325.00")
   assert.equal(replaceInput.invoice.remainingBalance, "325.00")
   assert.equal(replaceInput.invoice.customerAddressSnapshot, "Updated Address")
+  assert.equal(replaceInput.invoice.notes, "Updated customer note.")
   assert.deepEqual(replaceInput.items, [
     {
       orderItemId: "line-1",
@@ -1331,6 +1445,7 @@ test("syncInvoiceSnapshotForOrder rejects paid invoices", async () => {
         {
           id: "order-5",
           orderNumber: "ORD-005",
+          notes: null,
           customer: {
             id: "customer-1",
             customerCode: "CUST-001",
@@ -1342,8 +1457,8 @@ test("syncInvoiceSnapshotForOrder rejects paid invoices", async () => {
           },
           items: [],
         },
-        adminUser.id,
+        adminUser.id
       ),
-    InvoicePaidLockError,
+    InvoicePaidLockError
   )
 })

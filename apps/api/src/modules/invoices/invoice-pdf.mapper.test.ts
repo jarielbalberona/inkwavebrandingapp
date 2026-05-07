@@ -10,6 +10,7 @@ test("toInvoicePdfData uses persisted payment rollups for partially paid invoice
     total_amount: "2400.00",
     paid_amount: "750.00",
     remaining_balance: "1650.00",
+    notes: "Deliver before Friday.",
   })
 
   const pdfData = toInvoicePdfData(invoice)
@@ -19,6 +20,7 @@ test("toInvoicePdfData uses persisted payment rollups for partially paid invoice
   assert.equal(pdfData.total, "2400.00")
   assert.equal(pdfData.paid_amount, "750.00")
   assert.equal(pdfData.remaining_balance, "1650.00")
+  assert.equal(pdfData.notes, "Deliver before Friday.")
   assert.equal(pdfData.line_items[0]?.notes, "Front logo, black print")
 })
 

@@ -1,6 +1,11 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 
-import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd"
+import {
+  DragDropContext,
+  Draggable,
+  Droppable,
+  type DropResult,
+} from "@hello-pangea/dnd"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Link, Navigate, useNavigate } from "@tanstack/react-router"
 import { GripVertical, TrashIcon } from "lucide-react"
@@ -15,7 +20,12 @@ import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import {
   Combobox,
   ComboboxContent,
@@ -44,7 +54,11 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { formatCurrency } from "@workspace/ui/lib/number"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
+import {
+  appPermissions,
+  getDefaultAuthorizedRoute,
+  hasPermission,
+} from "@/features/auth/permissions"
 import type { Cup } from "@/features/cups/api/cups-client"
 import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import type { Customer } from "@/features/customers/api/customers-client"
@@ -64,14 +78,24 @@ import { useSellableProductPriceRulesQuery } from "@/features/sellable-product-p
 const orderCreateSchema = z.object({
   customer_id: z.string().uuid({ message: "Select a customer." }),
   notes: z.string().trim().max(1000).optional(),
+  internal_notes: z.string().trim().max(1000).optional(),
   line_items: z
     .array(
       z
         .object({
-          item_type: z.enum(["product_bundle", "cup", "lid", "non_stock_item", "custom_charge"]),
+          item_type: z.enum([
+            "product_bundle",
+            "cup",
+            "lid",
+            "non_stock_item",
+            "custom_charge",
+          ]),
           item_id: z.string().uuid().optional(),
           description_snapshot: z.string().trim().max(500).optional(),
-          quantity: z.number().int().positive("Quantity must be a positive whole number."),
+          quantity: z
+            .number()
+            .int()
+            .positive("Quantity must be a positive whole number."),
           unit_sell_price: z.number().nonnegative().optional(),
           unit_cost_price: z.number().nonnegative().optional(),
           notes: z.string().trim().max(500).optional(),
@@ -104,7 +128,7 @@ const orderCreateSchema = z.object({
               message: "Select a source item.",
             })
           }
-        }),
+        })
     )
     .min(1, "Add at least one line item."),
 })
@@ -132,11 +156,7 @@ function parseMoneyAmount(value: string | undefined | null): number | null {
 }
 
 function resolveCatalogLineItemUnitAmount(
-  item:
-    | Cup
-    | Lid
-    | NonStockItem
-    | undefined,
+  item: Cup | Lid | NonStockItem | undefined
 ): number | null {
   if (!item || !("default_sell_price" in item)) {
     return null
@@ -148,7 +168,7 @@ function resolveCatalogLineItemUnitAmount(
 function resolveBundleDefaultUnitAmount(
   pricingRules: SellableProductPriceRule[],
   productBundleId: string | undefined,
-  quantity: number,
+  quantity: number
 ): number | null {
   if (!productBundleId || !Number.isInteger(quantity) || quantity <= 0) {
     return null
@@ -159,7 +179,10 @@ function resolveBundleDefaultUnitAmount(
       return false
     }
 
-    return rule.min_qty <= quantity && (rule.max_qty === null || quantity <= rule.max_qty)
+    return (
+      rule.min_qty <= quantity &&
+      (rule.max_qty === null || quantity <= rule.max_qty)
+    )
   })
 
   return parseMoneyAmount(matchingRule?.unit_price)
@@ -187,9 +210,12 @@ function OrderCustomerCombobox({
   /** Last customer chosen from the list; stabilizes combobox value when `customers` is briefly empty. */
   const [lastPicked, setLastPicked] = useState<Customer | null>(null)
   const customersQuery = useCustomersQuery({
-    search: open ? (deferredListSearch || undefined) : undefined,
+    search: open ? deferredListSearch || undefined : undefined,
   })
-  const customers = useMemo(() => customersQuery.data ?? [], [customersQuery.data])
+  const customers = useMemo(
+    () => customersQuery.data ?? [],
+    [customersQuery.data]
+  )
   const valueRef = useRef(value)
   /** After open, ignore one input sync that repeats the selected label so list search stays unfiltered. */
   const skipListSearchSyncRef = useRef(false)
@@ -201,7 +227,8 @@ function OrderCustomerCombobox({
   const selectedCustomer =
     value === ""
       ? null
-      : (customers.find((c) => c.id === value) ?? (lastPicked?.id === value ? lastPicked : null))
+      : (customers.find((c) => c.id === value) ??
+        (lastPicked?.id === value ? lastPicked : null))
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen)
@@ -230,7 +257,9 @@ function OrderCustomerCombobox({
     if (open) {
       if (skipListSearchSyncRef.current) {
         const committed = selectedCustomer
-        const committedLabel = committed ? formatCustomerComboboxLabel(committed) : ""
+        const committedLabel = committed
+          ? formatCustomerComboboxLabel(committed)
+          : ""
         if (committedLabel !== "" && next === committedLabel) {
           skipListSearchSyncRef.current = false
           return
@@ -251,7 +280,7 @@ function OrderCustomerCombobox({
     // customer's canonical label (typical list selection).
     if (expectedLabel !== null && next !== expectedLabel) {
       const nextMatchesListedCustomer = customers.some(
-        (c) => formatCustomerComboboxLabel(c) === next,
+        (c) => formatCustomerComboboxLabel(c) === next
       )
       if (nextMatchesListedCustomer) {
         return
@@ -295,11 +324,14 @@ function OrderCustomerCombobox({
         />
         <ComboboxContent>
           <ComboboxEmpty>
-            No active customers found. Create or reactivate a customer before creating an order.
+            No active customers found. Create or reactivate a customer before
+            creating an order.
           </ComboboxEmpty>
           <ComboboxList>
             {customersQuery.isLoading ? (
-              <div className="px-3 py-2 text-muted-foreground text-sm">Searching customers…</div>
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                Searching customers…
+              </div>
             ) : customers.length === 0 ? null : (
               (customer: Customer) => (
                 <ComboboxItem
@@ -307,10 +339,19 @@ function OrderCustomerCombobox({
                   value={customer}
                   disabled={!customer.is_active}
                 >
-                  <div className="flex items-center align-middle gap-2">
-                    <span className="font-medium">{customer.business_name}</span>
+                  <div className="flex items-center gap-2 align-middle">
+                    <span className="font-medium">
+                      {customer.business_name}
+                    </span>
                     <span className="text-xs text-muted-foreground">
-                      ({customer.contact_person ? `${customer.contact_person}` : ""} {customer.contact_number ? ` · ${customer.contact_number}` : ""})
+                      (
+                      {customer.contact_person
+                        ? `${customer.contact_person}`
+                        : ""}{" "}
+                      {customer.contact_number
+                        ? ` · ${customer.contact_number}`
+                        : ""}
+                      )
                     </span>
                   </div>
                 </ComboboxItem>
@@ -325,7 +366,7 @@ function OrderCustomerCombobox({
 
 function resolveSelectableItem(
   raw: string | undefined,
-  items: readonly SelectableOrderItem[],
+  items: readonly SelectableOrderItem[]
 ): SelectableOrderItem | null {
   if (!raw) {
     return null
@@ -337,7 +378,7 @@ function resolveSelectableItem(
 function formatSelectableOrderItemOption(
   item: SelectableOrderItem,
   itemType: OrderCreateValues["line_items"][number]["item_type"],
-  availableQuantityByTrackedItemKey: Map<string, number>,
+  availableQuantityByTrackedItemKey: Map<string, number>
 ): string {
   if (itemType === "product_bundle") {
     return formatProductBundleOption(item as ProductBundle)
@@ -346,14 +387,14 @@ function formatSelectableOrderItemOption(
   if (itemType === "cup") {
     return formatCupOption(
       item as Cup,
-      availableQuantityByTrackedItemKey.get(toTrackedItemKey("cup", item.id)),
+      availableQuantityByTrackedItemKey.get(toTrackedItemKey("cup", item.id))
     )
   }
 
   if (itemType === "lid") {
     return formatLidOption(
       item as Lid,
-      availableQuantityByTrackedItemKey.get(toTrackedItemKey("lid", item.id)),
+      availableQuantityByTrackedItemKey.get(toTrackedItemKey("lid", item.id))
     )
   }
 
@@ -410,18 +451,20 @@ function OrderCreateLineItemFields({
     itemType === "product_bundle"
       ? activeProductBundles
       : itemType === "cup"
-      ? activeCups
-      : itemType === "lid"
-        ? activeLids
-        : activeNonStockItems
+        ? activeCups
+        : itemType === "lid"
+          ? activeLids
+          : activeNonStockItems
   const selectedCatalogItem = availableItems.find((item) => item.id === itemId)
   const selectedAvailableQuantity =
     itemType === "cup" || itemType === "lid"
-      ? availableQuantityByTrackedItemKey.get(toTrackedItemKey(itemType, itemId))
+      ? availableQuantityByTrackedItemKey.get(
+          toTrackedItemKey(itemType, itemId)
+        )
       : undefined
   const unitAmount =
     itemType === "custom_charge"
-      ? customChargeUnitSellPrice ?? null
+      ? (customChargeUnitSellPrice ?? null)
       : itemType === "product_bundle"
         ? (customChargeUnitSellPrice ??
           resolveBundleDefaultUnitAmount(activePricingRules, itemId, quantity))
@@ -435,7 +478,9 @@ function OrderCreateLineItemFields({
 
     const currentId = getValues(`line_items.${index}.item_id`)
     if (currentId && !availableItems.some((item) => item.id === currentId)) {
-      setValue(`line_items.${index}.item_id`, undefined, { shouldValidate: true })
+      setValue(`line_items.${index}.item_id`, undefined, {
+        shouldValidate: true,
+      })
     }
   }, [availableItems, getValues, index, itemType, setValue])
 
@@ -451,10 +496,18 @@ function OrderCreateLineItemFields({
               value={itemTypeField.value}
               onValueChange={(value) => {
                 itemTypeField.onChange(value)
-                setValue(`line_items.${index}.item_id`, undefined, { shouldValidate: true })
-                setValue(`line_items.${index}.description_snapshot`, "", { shouldValidate: false })
-                setValue(`line_items.${index}.unit_sell_price`, undefined, { shouldValidate: false })
-                setValue(`line_items.${index}.unit_cost_price`, undefined, { shouldValidate: false })
+                setValue(`line_items.${index}.item_id`, undefined, {
+                  shouldValidate: true,
+                })
+                setValue(`line_items.${index}.description_snapshot`, "", {
+                  shouldValidate: false,
+                })
+                setValue(`line_items.${index}.unit_sell_price`, undefined, {
+                  shouldValidate: false,
+                })
+                setValue(`line_items.${index}.unit_cost_price`, undefined, {
+                  shouldValidate: false,
+                })
               }}
             >
               <FormControl>
@@ -467,7 +520,10 @@ function OrderCreateLineItemFields({
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
-                <SelectItem value="custom_charge" disabled={!canManageCustomCharges}>
+                <SelectItem
+                  value="custom_charge"
+                  disabled={!canManageCustomCharges}
+                >
                   Custom Charge
                 </SelectItem>
               </SelectContent>
@@ -485,7 +541,11 @@ function OrderCreateLineItemFields({
               <FormItem className="md:col-span-2">
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Input {...field} value={field.value ?? ""} placeholder="Rush fee, correction fee, labor charge" />
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    placeholder="Rush fee, correction fee, labor charge"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -557,8 +617,11 @@ function OrderCreateLineItemFields({
 
           {lineTotal !== null ? (
             <div className="md:col-span-2">
-              <p className="text-muted-foreground text-sm">
-                Line total: <span className="font-medium text-foreground">{formatCurrency(lineTotal)}</span>
+              <p className="text-sm text-muted-foreground">
+                Line total:{" "}
+                <span className="font-medium text-foreground">
+                  {formatCurrency(lineTotal)}
+                </span>
               </p>
             </div>
           ) : null}
@@ -574,15 +637,18 @@ function OrderCreateLineItemFields({
                   {itemType === "product_bundle"
                     ? "Product bundle"
                     : itemType === "cup"
-                    ? "Cup SKU"
-                    : itemType === "lid"
-                      ? "Lid"
-                      : "General Item"}
+                      ? "Cup SKU"
+                      : itemType === "lid"
+                        ? "Lid"
+                        : "General Item"}
                 </FormLabel>
                 <FormControl>
                   <Combobox<SelectableOrderItem>
                     key={`${fieldId}-${itemType}`}
-                    value={resolveSelectableItem(itemIdField.value, availableItems)}
+                    value={resolveSelectableItem(
+                      itemIdField.value,
+                      availableItems
+                    )}
                     onValueChange={(item: SelectableOrderItem | null) => {
                       itemIdField.onChange(item?.id)
                     }}
@@ -592,28 +658,30 @@ function OrderCreateLineItemFields({
                         ? formatSelectableOrderItemOption(
                             item,
                             itemType,
-                            availableQuantityByTrackedItemKey,
+                            availableQuantityByTrackedItemKey
                           )
                         : ""
                     }
                     itemToStringValue={(item) => item?.id ?? ""}
-                    isItemEqualToValue={(item, selected) => item?.id === selected?.id}
+                    isItemEqualToValue={(item, selected) =>
+                      item?.id === selected?.id
+                    }
                   >
                     <ComboboxInput
                       placeholder={
                         itemType === "product_bundle"
                           ? "Search product bundles"
                           : itemType === "cup"
-                          ? cupsLoading
-                            ? "Loading cups..."
-                            : "Search cups"
-                          : itemType === "lid"
-                            ? lidsLoading
-                              ? "Loading lids..."
-                              : "Search lids"
-                            : nonStockItemsLoading
-                              ? "Loading general items..."
-                              : "Search general items"
+                            ? cupsLoading
+                              ? "Loading cups..."
+                              : "Search cups"
+                            : itemType === "lid"
+                              ? lidsLoading
+                                ? "Loading lids..."
+                                : "Search lids"
+                              : nonStockItemsLoading
+                                ? "Loading general items..."
+                                : "Search general items"
                       }
                       showClear
                       className="w-full min-w-0"
@@ -626,7 +694,7 @@ function OrderCreateLineItemFields({
                             {formatSelectableOrderItemOption(
                               item,
                               itemType,
-                              availableQuantityByTrackedItemKey,
+                              availableQuantityByTrackedItemKey
                             )}
                           </ComboboxItem>
                         ))}
@@ -678,7 +746,11 @@ function OrderCreateLineItemFields({
             control={control}
             name={`line_items.${index}.notes`}
             render={({ field: notesField }) => (
-              <FormItem className={itemType === "product_bundle" ? undefined : "md:col-span-2"}>
+              <FormItem
+                className={
+                  itemType === "product_bundle" ? undefined : "md:col-span-2"
+                }
+              >
                 <FormLabel>Line note</FormLabel>
                 <FormControl>
                   <Input {...notesField} value={notesField.value ?? ""} />
@@ -689,17 +761,25 @@ function OrderCreateLineItemFields({
 
           {lineTotal !== null || selectedAvailableQuantity !== undefined ? (
             <div className="md:col-span-4">
-              <p className="text-muted-foreground text-sm">
+              <p className="text-sm text-muted-foreground">
                 {lineTotal !== null ? (
                   <>
                     Line total:{" "}
-                    <span className="font-medium text-foreground">{formatCurrency(lineTotal)}</span>
+                    <span className="font-medium text-foreground">
+                      {formatCurrency(lineTotal)}
+                    </span>
                   </>
                 ) : null}
                 {selectedAvailableQuantity !== undefined ? (
                   <span className={lineTotal !== null ? "ml-3" : undefined}>
                     Available stock:{" "}
-                    <span className={selectedAvailableQuantity < quantity ? "font-medium text-destructive" : "font-medium text-foreground"}>
+                    <span
+                      className={
+                        selectedAvailableQuantity < quantity
+                          ? "font-medium text-destructive"
+                          : "font-medium text-foreground"
+                      }
+                    >
                       {selectedAvailableQuantity.toLocaleString()}
                     </span>
                   </span>
@@ -716,7 +796,10 @@ function OrderCreateLineItemFields({
 export function OrderCreatePage() {
   const navigate = useNavigate()
   const currentUser = useCurrentUser()
-  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
+  const canManageOrders = hasPermission(
+    currentUser.data,
+    appPermissions.ordersManage
+  )
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
@@ -727,34 +810,37 @@ export function OrderCreatePage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const canManageCustomCharges = hasPermission(
     currentUser.data,
-    appPermissions.ordersCustomChargesManage,
+    appPermissions.ordersCustomChargesManage
   )
   const activeCups = useMemo(
     () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
-    [cupsQuery.data],
+    [cupsQuery.data]
   )
   const activeLids = useMemo(
     () => (lidsQuery.data ?? []).filter((lid) => lid.is_active),
-    [lidsQuery.data],
+    [lidsQuery.data]
   )
   const activeNonStockItems = useMemo(
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
-    [nonStockItemsQuery.data],
+    [nonStockItemsQuery.data]
   )
   const activeProductBundles = useMemo(
     () => (productBundlesQuery.data ?? []).filter((item) => item.is_active),
-    [productBundlesQuery.data],
+    [productBundlesQuery.data]
   )
   const activePricingRules = useMemo(
     () => (pricingRulesQuery.data ?? []).filter((rule) => rule.is_active),
-    [pricingRulesQuery.data],
+    [pricingRulesQuery.data]
   )
   const availableQuantityByTrackedItemKey = useMemo(() => {
     const quantities = new Map<string, number>()
 
     for (const balance of inventoryBalancesQuery.data ?? []) {
       if (balance.item_type === "cup") {
-        quantities.set(toTrackedItemKey("cup", balance.cup.id), balance.available)
+        quantities.set(
+          toTrackedItemKey("cup", balance.cup.id),
+          balance.available
+        )
         continue
       }
 
@@ -777,7 +863,9 @@ export function OrderCreatePage() {
 
     return (
       <Alert>
-        <AlertDescription>Order creation requires order-management permission.</AlertDescription>
+        <AlertDescription>
+          Order creation requires order-management permission.
+        </AlertDescription>
       </Alert>
     )
   }
@@ -787,6 +875,7 @@ export function OrderCreatePage() {
     defaultValues: {
       customer_id: "",
       notes: "",
+      internal_notes: "",
       line_items: [emptyLineItem],
     },
   })
@@ -799,7 +888,7 @@ export function OrderCreatePage() {
     form.watch("line_items"),
     activeCups,
     activeLids,
-    availableQuantityByTrackedItemKey,
+    availableQuantityByTrackedItemKey
   )
 
   function handleDragEnd(result: DropResult) {
@@ -820,6 +909,7 @@ export function OrderCreatePage() {
       await createOrderMutation.mutateAsync({
         customer_id: values.customer_id,
         notes: values.notes?.trim() || undefined,
+        internal_notes: values.internal_notes?.trim() || undefined,
         line_items: values.line_items.map((item) =>
           item.item_type === "product_bundle"
             ? {
@@ -827,39 +917,43 @@ export function OrderCreatePage() {
                 product_bundle_id: item.item_id!,
                 quantity: item.quantity,
                 unit_sell_price:
-                  item.unit_sell_price === undefined ? undefined : item.unit_sell_price.toFixed(2),
+                  item.unit_sell_price === undefined
+                    ? undefined
+                    : item.unit_sell_price.toFixed(2),
                 notes: item.notes?.trim() || undefined,
               }
             : item.item_type === "cup"
+              ? {
+                  item_type: "cup",
+                  cup_id: item.item_id!,
+                  quantity: item.quantity,
+                  notes: item.notes?.trim() || undefined,
+                }
+              : item.item_type === "lid"
                 ? {
-                    item_type: "cup",
-                    cup_id: item.item_id!,
-                    quantity: item.quantity,
-                    notes: item.notes?.trim() || undefined,
-                  }
-                : item.item_type === "lid"
-                  ? {
                     item_type: "lid",
                     lid_id: item.item_id!,
                     quantity: item.quantity,
                     notes: item.notes?.trim() || undefined,
                   }
-              : item.item_type === "non_stock_item"
-                ? {
-                  item_type: "non_stock_item",
-                  non_stock_item_id: item.item_id!,
-                  quantity: item.quantity,
-                  notes: item.notes?.trim() || undefined,
-                }
-                : {
-                  item_type: "custom_charge",
-                  description_snapshot: item.description_snapshot!.trim(),
-                  quantity: item.quantity,
-                  unit_sell_price: item.unit_sell_price!.toFixed(2),
-                  unit_cost_price:
-                    item.unit_cost_price === undefined ? undefined : item.unit_cost_price.toFixed(2),
-                  notes: item.notes?.trim() || undefined,
-                },
+                : item.item_type === "non_stock_item"
+                  ? {
+                      item_type: "non_stock_item",
+                      non_stock_item_id: item.item_id!,
+                      quantity: item.quantity,
+                      notes: item.notes?.trim() || undefined,
+                    }
+                  : {
+                      item_type: "custom_charge",
+                      description_snapshot: item.description_snapshot!.trim(),
+                      quantity: item.quantity,
+                      unit_sell_price: item.unit_sell_price!.toFixed(2),
+                      unit_cost_price:
+                        item.unit_cost_price === undefined
+                          ? undefined
+                          : item.unit_cost_price.toFixed(2),
+                      notes: item.notes?.trim() || undefined,
+                    }
         ),
       })
 
@@ -872,12 +966,14 @@ export function OrderCreatePage() {
             {
               type: "server",
               message: lineItemError.message,
-            },
+            }
           )
         }
       }
 
-      setSubmitError(error instanceof Error ? error.message : "Unable to create order.")
+      setSubmitError(
+        error instanceof Error ? error.message : "Unable to create order."
+      )
     }
   }
 
@@ -888,7 +984,11 @@ export function OrderCreatePage() {
           <div className="grid min-w-0 gap-1">
             <CardTitle>Create Pending Order</CardTitle>
           </div>
-          <Button asChild variant="outline" className="w-full shrink-0 sm:w-auto">
+          <Button
+            asChild
+            variant="outline"
+            className="w-full shrink-0 sm:w-auto"
+          >
             <Link to="/orders">Back to orders</Link>
           </Button>
         </div>
@@ -913,7 +1013,6 @@ export function OrderCreatePage() {
                     onChange={field.onChange}
                     onBlur={field.onBlur}
                   />
-                  
                 </FormItem>
               )}
             />
@@ -932,7 +1031,11 @@ export function OrderCreatePage() {
                       className="grid gap-3"
                     >
                       {fields.map((field, index) => (
-                        <Draggable key={field.id} draggableId={field.id} index={index}>
+                        <Draggable
+                          key={field.id}
+                          draggableId={field.id}
+                          index={index}
+                        >
                           {(draggableProvided, draggableSnapshot) => (
                             <div
                               ref={draggableProvided.innerRef}
@@ -955,7 +1058,9 @@ export function OrderCreatePage() {
                                     <GripVertical className="h-2 w-2 p-0" />
                                   </Button>
                                   <div className="grid gap-1">
-                                    <p className="font-medium text-sm">Line item {index + 1}</p>
+                                    <p className="text-sm font-medium">
+                                      Line item {index + 1}
+                                    </p>
                                   </div>
                                 </div>
 
@@ -979,10 +1084,14 @@ export function OrderCreatePage() {
                                 activeNonStockItems={activeNonStockItems}
                                 activeProductBundles={activeProductBundles}
                                 activePricingRules={activePricingRules}
-                                availableQuantityByTrackedItemKey={availableQuantityByTrackedItemKey}
+                                availableQuantityByTrackedItemKey={
+                                  availableQuantityByTrackedItemKey
+                                }
                                 cupsLoading={cupsQuery.isLoading}
                                 lidsLoading={lidsQuery.isLoading}
-                                nonStockItemsLoading={nonStockItemsQuery.isLoading}
+                                nonStockItemsLoading={
+                                  nonStockItemsQuery.isLoading
+                                }
                                 canManageCustomCharges={canManageCustomCharges}
                               />
                             </div>
@@ -996,19 +1105,19 @@ export function OrderCreatePage() {
               </DragDropContext>
 
               {form.formState.errors.line_items?.message ? (
-                <p className="text-destructive text-sm">
+                <p className="text-sm text-destructive">
                   {form.formState.errors.line_items.message}
                 </p>
               ) : null}
               <Button
-                  type="button"
-                  variant="ghost"
-                  className="bg-orange-300 w-max-auto"
-                  size="sm"
-                  onClick={() => append({ ...emptyLineItem })}
-                >
-                  Add item
-                </Button>
+                type="button"
+                variant="ghost"
+                className="w-max-auto bg-orange-300"
+                size="sm"
+                onClick={() => append({ ...emptyLineItem })}
+              >
+                Add item
+              </Button>
             </div>
 
             <FormField
@@ -1016,15 +1125,31 @@ export function OrderCreatePage() {
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Order notes</FormLabel>
+                  <FormLabel>Order note</FormLabel>
                   <FormControl>
                     <Textarea
                       {...field}
                       value={field.value ?? ""}
-                      placeholder="Optional order note"
+                      placeholder="Shown on the invoice and invoice PDF"
                     />
                   </FormControl>
-                  
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="internal_notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Internal note</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      value={field.value ?? ""}
+                      placeholder="Only shown on the order detail page"
+                    />
+                  </FormControl>
                 </FormItem>
               )}
             />
@@ -1034,8 +1159,9 @@ export function OrderCreatePage() {
                 <AlertDescription>
                   <div className="grid gap-2">
                     <p>
-                      System note: this order asks for more tracked stock than is currently available.
-                      The backend will reject unsafe reservations.
+                      System note: this order asks for more tracked stock than
+                      is currently available. The backend will reject unsafe
+                      reservations.
                     </p>
                     <ul className="list-disc space-y-1 pl-5">
                       {systemNotes.map((note) => (
@@ -1056,7 +1182,9 @@ export function OrderCreatePage() {
                 inventoryBalancesQuery.isLoading
               }
             >
-              {createOrderMutation.isPending ? "Creating order..." : "Create pending order"}
+              {createOrderMutation.isPending
+                ? "Creating order..."
+                : "Create pending order"}
             </Button>
           </form>
         </Form>
@@ -1065,11 +1193,16 @@ export function OrderCreatePage() {
   )
 }
 
-function toTrackedItemKey(itemType: "cup" | "lid", itemId: string | undefined): string {
+function toTrackedItemKey(
+  itemType: "cup" | "lid",
+  itemId: string | undefined
+): string {
   return `${itemType}:${itemId ?? ""}`
 }
 
-function formatAvailableQuantity(availableQuantity: number | undefined): string {
+function formatAvailableQuantity(
+  availableQuantity: number | undefined
+): string {
   return availableQuantity === undefined
     ? "Available: not loaded"
     : `Available: ${availableQuantity.toLocaleString()}`
@@ -1085,7 +1218,9 @@ function formatLidOption(lid: Lid, availableQuantity?: number): string {
 }
 
 function formatNonStockItemOption(item: NonStockItem): string {
-  return item.description?.trim() ? `${item.name} · ${item.description}` : item.name
+  return item.description?.trim()
+    ? `${item.name} · ${item.description}`
+    : item.name
 }
 
 function formatProductBundleOption(item: ProductBundle): string {
@@ -1102,7 +1237,7 @@ function buildOrderCreationSystemNotes(
   lineItems: OrderCreateValues["line_items"],
   activeCups: Cup[],
   activeLids: Lid[],
-  availableQuantityByTrackedItemKey: Map<string, number>,
+  availableQuantityByTrackedItemKey: Map<string, number>
 ): string[] {
   return lineItems.flatMap((item, index) => {
     if (item.item_type !== "cup" && item.item_type !== "lid") {
@@ -1114,7 +1249,7 @@ function buildOrderCreationSystemNotes(
     }
 
     const availableQuantity = availableQuantityByTrackedItemKey.get(
-      toTrackedItemKey(item.item_type, item.item_id),
+      toTrackedItemKey(item.item_type, item.item_id)
     )
 
     if (availableQuantity === undefined || availableQuantity >= item.quantity) {

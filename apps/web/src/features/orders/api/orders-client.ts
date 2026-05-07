@@ -165,6 +165,7 @@ const orderSchema = z.object({
   customer: customerSchema,
   items: z.array(orderItemSchema),
   notes: z.string().nullable(),
+  internal_notes: z.string().nullable(),
   archived_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -331,6 +332,7 @@ export class CreateOrderError extends Error {
 export interface CreateOrderPayload {
   customer_id: string
   notes?: string
+  internal_notes?: string
   line_items: Array<
     | {
         item_type: "cup"
@@ -379,6 +381,7 @@ export interface CreateProgressEventPayload {
 export interface UpdateOrderPayload {
   customer_id?: string
   notes?: string | null
+  internal_notes?: string | null
   line_items?: Array<
     | {
         id?: string

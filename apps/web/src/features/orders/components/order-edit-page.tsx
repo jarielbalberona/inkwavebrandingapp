@@ -14,7 +14,13 @@ import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import {
   Combobox,
   ComboboxContent,
@@ -41,7 +47,11 @@ import {
 import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
+import {
+  appPermissions,
+  getDefaultAuthorizedRoute,
+  hasPermission,
+} from "@/features/auth/permissions"
 import type { Cup } from "@/features/cups/api/cups-client"
 import { useCupsQuery } from "@/features/cups/hooks/use-cups"
 import { CustomerSearchSelect } from "@/features/customers/components/customer-search-select"
@@ -61,15 +71,25 @@ import { useProductBundlesQuery } from "@/features/product-bundles/hooks/use-pro
 const orderEditSchema = z.object({
   customer_id: z.string().uuid({ message: "Select a customer." }),
   notes: z.string().trim().max(1000).optional(),
+  internal_notes: z.string().trim().max(1000).optional(),
   line_items: z
     .array(
       z
         .object({
           id: z.string().uuid().optional(),
-          item_type: z.enum(["product_bundle", "cup", "lid", "non_stock_item", "custom_charge"]),
+          item_type: z.enum([
+            "product_bundle",
+            "cup",
+            "lid",
+            "non_stock_item",
+            "custom_charge",
+          ]),
           item_id: z.string().uuid().optional(),
           description_snapshot: z.string().trim().max(500).optional(),
-          quantity: z.number().int().positive("Quantity must be a positive whole number."),
+          quantity: z
+            .number()
+            .int()
+            .positive("Quantity must be a positive whole number."),
           unit_sell_price: z.number().nonnegative().optional(),
           unit_cost_price: z.number().nonnegative().optional(),
           notes: z.string().trim().max(500).optional(),
@@ -102,7 +122,7 @@ const orderEditSchema = z.object({
               message: "Select a source item.",
             })
           }
-        }),
+        })
     )
     .min(1, "Add at least one line item."),
 })
@@ -123,13 +143,22 @@ const emptyLineItem: OrderEditValues["line_items"][number] = {
 export function OrderEditPage({ orderId }: { orderId: string }) {
   const navigate = useNavigate()
   const currentUser = useCurrentUser()
-  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
+  const canManageOrders = hasPermission(
+    currentUser.data,
+    appPermissions.ordersManage
+  )
   const canManageCustomCharges = hasPermission(
     currentUser.data,
-    appPermissions.ordersCustomChargesManage,
+    appPermissions.ordersCustomChargesManage
   )
-  const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
-  const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
+  const canViewInvoices = hasPermission(
+    currentUser.data,
+    appPermissions.invoicesView
+  )
+  const canManageInvoices = hasPermission(
+    currentUser.data,
+    appPermissions.invoicesManage
+  )
   const orderQuery = useOrderQuery(orderId)
   const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canViewInvoices)
   const cupsQuery = useCupsQuery()
@@ -142,19 +171,19 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
 
   const activeCups = useMemo(
     () => (cupsQuery.data ?? []).filter((cup) => cup.is_active),
-    [cupsQuery.data],
+    [cupsQuery.data]
   )
   const activeLids = useMemo(
     () => (lidsQuery.data ?? []).filter((lid) => lid.is_active),
-    [lidsQuery.data],
+    [lidsQuery.data]
   )
   const activeNonStockItems = useMemo(
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
-    [nonStockItemsQuery.data],
+    [nonStockItemsQuery.data]
   )
   const activeProductBundles = useMemo(
     () => (productBundlesQuery.data ?? []).filter((item) => item.is_active),
-    [productBundlesQuery.data],
+    [productBundlesQuery.data]
   )
 
   if (currentUser.isLoading) {
@@ -170,7 +199,9 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
 
     return (
       <Alert>
-        <AlertDescription>Order editing requires order-management permission.</AlertDescription>
+        <AlertDescription>
+          Order editing requires order-management permission.
+        </AlertDescription>
       </Alert>
     )
   }
@@ -180,6 +211,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
     defaultValues: {
       customer_id: "",
       notes: "",
+      internal_notes: "",
       line_items: [emptyLineItem],
     },
   })
@@ -193,9 +225,12 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
   const invoice = orderInvoiceQuery.data ?? null
   const invoiceLocked = invoice?.status === "paid" || invoice?.status === "void"
   const statusLocked =
-    order?.status === "canceled" || order?.status === "completed" || order?.status === "partial_released"
+    order?.status === "canceled" ||
+    order?.status === "completed" ||
+    order?.status === "partial_released"
   const nonAdminCustomChargeLock =
-    !canManageCustomCharges && Boolean(order?.items.some((item) => item.item_type === "custom_charge"))
+    !canManageCustomCharges &&
+    Boolean(order?.items.some((item) => item.item_type === "custom_charge"))
   const formLocked = statusLocked || invoiceLocked || nonAdminCustomChargeLock
 
   useEffect(() => {
@@ -206,6 +241,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
     form.reset({
       customer_id: order.customer.id,
       notes: order.notes ?? "",
+      internal_notes: order.internal_notes ?? "",
       line_items: order.items.map((item) => ({
         id: item.id,
         item_type: item.item_type,
@@ -218,12 +254,18 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                 ? item.non_stock_item.id
                 : item.item_type === "product_bundle"
                   ? item.product_bundle.id
-                : undefined,
+                  : undefined,
         description_snapshot:
-          item.item_type === "custom_charge" ? item.custom_charge.description_snapshot : "",
+          item.item_type === "custom_charge"
+            ? item.custom_charge.description_snapshot
+            : "",
         quantity: item.quantity,
-        unit_sell_price: item.unit_sell_price ? Number(item.unit_sell_price) : undefined,
-        unit_cost_price: item.unit_cost_price ? Number(item.unit_cost_price) : undefined,
+        unit_sell_price: item.unit_sell_price
+          ? Number(item.unit_sell_price)
+          : undefined,
+        unit_cost_price: item.unit_cost_price
+          ? Number(item.unit_cost_price)
+          : undefined,
         notes: item.notes ?? "",
       })),
     })
@@ -242,10 +284,18 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
       const updatedOrder = await updateOrderMutation.mutateAsync({
         id: orderId,
         payload: {
-          customer_id: values.customer_id !== order.customer.id ? values.customer_id : undefined,
+          customer_id:
+            values.customer_id !== order.customer.id
+              ? values.customer_id
+              : undefined,
           notes:
             (values.notes?.trim() || null) !== (order.notes ?? null)
               ? values.notes?.trim() || null
+              : undefined,
+          internal_notes:
+            (values.internal_notes?.trim() || null) !==
+            (order.internal_notes ?? null)
+              ? values.internal_notes?.trim() || null
               : undefined,
           line_items: values.line_items.map((item) =>
             item.item_type === "product_bundle"
@@ -255,45 +305,47 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                   product_bundle_id: item.item_id!,
                   quantity: item.quantity,
                   unit_sell_price:
-                    item.unit_sell_price === undefined ? undefined : item.unit_sell_price.toFixed(2),
+                    item.unit_sell_price === undefined
+                      ? undefined
+                      : item.unit_sell_price.toFixed(2),
                   notes: item.notes?.trim() || undefined,
                 }
               : item.item_type === "cup"
-              ? {
-                  id: item.id,
-                  item_type: "cup" as const,
-                  cup_id: item.item_id!,
-                  quantity: item.quantity,
-                  notes: item.notes?.trim() || undefined,
-                }
-              : item.item_type === "lid"
                 ? {
                     id: item.id,
-                    item_type: "lid" as const,
-                    lid_id: item.item_id!,
+                    item_type: "cup" as const,
+                    cup_id: item.item_id!,
                     quantity: item.quantity,
                     notes: item.notes?.trim() || undefined,
                   }
-                : item.item_type === "non_stock_item"
+                : item.item_type === "lid"
                   ? {
                       id: item.id,
-                      item_type: "non_stock_item" as const,
-                      non_stock_item_id: item.item_id!,
+                      item_type: "lid" as const,
+                      lid_id: item.item_id!,
                       quantity: item.quantity,
                       notes: item.notes?.trim() || undefined,
                     }
-                  : {
-                      id: item.id,
-                      item_type: "custom_charge" as const,
-                      description_snapshot: item.description_snapshot!.trim(),
-                      quantity: item.quantity,
-                      unit_sell_price: item.unit_sell_price!.toFixed(2),
-                      unit_cost_price:
-                        item.unit_cost_price === undefined
-                          ? undefined
-                          : item.unit_cost_price.toFixed(2),
-                      notes: item.notes?.trim() || undefined,
-                    },
+                  : item.item_type === "non_stock_item"
+                    ? {
+                        id: item.id,
+                        item_type: "non_stock_item" as const,
+                        non_stock_item_id: item.item_id!,
+                        quantity: item.quantity,
+                        notes: item.notes?.trim() || undefined,
+                      }
+                    : {
+                        id: item.id,
+                        item_type: "custom_charge" as const,
+                        description_snapshot: item.description_snapshot!.trim(),
+                        quantity: item.quantity,
+                        unit_sell_price: item.unit_sell_price!.toFixed(2),
+                        unit_cost_price:
+                          item.unit_cost_price === undefined
+                            ? undefined
+                            : item.unit_cost_price.toFixed(2),
+                        notes: item.notes?.trim() || undefined,
+                      }
           ),
         },
       })
@@ -308,12 +360,14 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
             {
               type: "server",
               message: lineItemError.message,
-            },
+            }
           )
         }
       }
 
-      setSubmitError(error instanceof Error ? error.message : "Unable to update order.")
+      setSubmitError(
+        error instanceof Error ? error.message : "Unable to update order."
+      )
     }
   }
 
@@ -324,7 +378,8 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
           <div className="grid gap-1">
             <CardTitle>Edit Order</CardTitle>
             <CardDescription>
-              Structural order changes stay on the order while the invoice is unpaid. Paid or voided invoices lock this form.
+              Structural order changes stay on the order while the invoice is
+              unpaid. Paid or voided invoices lock this form.
             </CardDescription>
           </div>
           <Button asChild variant="outline">
@@ -361,9 +416,13 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
           <>
             <div className="grid gap-2 border p-4 text-sm">
               <p className="font-medium">{order.order_number}</p>
-              <p className="text-muted-foreground">Order status: {order.status}</p>
+              <p className="text-muted-foreground">
+                Order status: {order.status}
+              </p>
               {canManageInvoices && invoice ? (
-                <p className="text-muted-foreground">Invoice status: {invoice.status}</p>
+                <p className="text-muted-foreground">
+                  Invoice status: {invoice.status}
+                </p>
               ) : null}
               {formLocked ? (
                 <p className="text-destructive">
@@ -377,13 +436,17 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                 </p>
               ) : (
                 <p className="text-muted-foreground">
-                  Add, edit, or remove line items here. The linked unpaid invoice will be resynced from this order.
+                  Add, edit, or remove line items here. The linked unpaid
+                  invoice will be resynced from this order.
                 </p>
               )}
             </div>
 
             <Form {...form}>
-              <form className="grid gap-5" onSubmit={form.handleSubmit(onSubmit)}>
+              <form
+                className="grid gap-5"
+                onSubmit={form.handleSubmit(onSubmit)}
+              >
                 <FormField
                   control={form.control}
                   name="customer_id"
@@ -426,7 +489,9 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                       <div key={field.id} className="grid gap-3 border p-3">
                         <div className="flex items-start justify-between gap-3 border-b pb-3">
                           <div className="grid gap-1">
-                            <p className="font-medium text-sm">Line item {index + 1}</p>
+                            <p className="text-sm font-medium">
+                              Line item {index + 1}
+                            </p>
                           </div>
                           {fields.length > 1 ? (
                             <Button
@@ -452,14 +517,14 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                           lidsLoading={lidsQuery.isLoading}
                           nonStockItemsLoading={nonStockItemsQuery.isLoading}
                           disabled={formLocked}
-                                canManageCustomCharges={canManageCustomCharges}
+                          canManageCustomCharges={canManageCustomCharges}
                         />
                       </div>
                     ))}
                   </div>
 
                   {form.formState.errors.line_items?.message ? (
-                    <p className="text-destructive text-sm">
+                    <p className="text-sm text-destructive">
                       {form.formState.errors.line_items.message}
                     </p>
                   ) : null}
@@ -470,13 +535,31 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Order notes</FormLabel>
+                      <FormLabel>Order note</FormLabel>
                       <FormControl>
                         <Textarea
                           {...field}
                           disabled={formLocked}
                           value={field.value ?? ""}
-                          placeholder="Optional order note"
+                          placeholder="Shown on the invoice and invoice PDF"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="internal_notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Internal note</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          disabled={formLocked}
+                          value={field.value ?? ""}
+                          placeholder="Only shown on the order detail page"
                         />
                       </FormControl>
                     </FormItem>
@@ -490,11 +573,13 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                     updateOrderMutation.isPending ||
                     cupsQuery.isLoading ||
                     lidsQuery.isLoading ||
-                    nonStockItemsQuery.isLoading
-                    || productBundlesQuery.isLoading
+                    nonStockItemsQuery.isLoading ||
+                    productBundlesQuery.isLoading
                   }
                 >
-                  {updateOrderMutation.isPending ? "Saving order..." : "Save order changes"}
+                  {updateOrderMutation.isPending
+                    ? "Saving order..."
+                    : "Save order changes"}
                 </Button>
               </form>
             </Form>
@@ -540,10 +625,10 @@ function OrderEditLineItemFields({
     itemType === "product_bundle"
       ? activeProductBundles
       : itemType === "cup"
-      ? activeCups
-      : itemType === "lid"
-        ? activeLids
-        : activeNonStockItems
+        ? activeCups
+        : itemType === "lid"
+          ? activeLids
+          : activeNonStockItems
 
   return (
     <div className="grid gap-3">
@@ -558,10 +643,18 @@ function OrderEditLineItemFields({
               value={itemTypeField.value}
               onValueChange={(value) => {
                 itemTypeField.onChange(value)
-                setValue(`line_items.${index}.item_id`, undefined, { shouldValidate: true })
-                setValue(`line_items.${index}.description_snapshot`, "", { shouldValidate: false })
-                setValue(`line_items.${index}.unit_sell_price`, undefined, { shouldValidate: false })
-                setValue(`line_items.${index}.unit_cost_price`, undefined, { shouldValidate: false })
+                setValue(`line_items.${index}.item_id`, undefined, {
+                  shouldValidate: true,
+                })
+                setValue(`line_items.${index}.description_snapshot`, "", {
+                  shouldValidate: false,
+                })
+                setValue(`line_items.${index}.unit_sell_price`, undefined, {
+                  shouldValidate: false,
+                })
+                setValue(`line_items.${index}.unit_cost_price`, undefined, {
+                  shouldValidate: false,
+                })
               }}
             >
               <FormControl>
@@ -574,7 +667,10 @@ function OrderEditLineItemFields({
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
-                <SelectItem value="custom_charge" disabled={!canManageCustomCharges}>
+                <SelectItem
+                  value="custom_charge"
+                  disabled={!canManageCustomCharges}
+                >
                   Custom Charge
                 </SelectItem>
               </SelectContent>
@@ -592,7 +688,12 @@ function OrderEditLineItemFields({
               <FormItem className="md:col-span-2">
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled={disabled} value={field.value ?? ""} placeholder="Rush fee, correction fee, labor charge" />
+                  <Input
+                    {...field}
+                    disabled={disabled}
+                    value={field.value ?? ""}
+                    placeholder="Rush fee, correction fee, labor charge"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -605,7 +706,12 @@ function OrderEditLineItemFields({
               <FormItem>
                 <FormLabel>Quantity</FormLabel>
                 <FormControl>
-                  <Input.Number disabled={disabled} min={1} value={field.value} onChange={(value) => field.onChange(value ?? 0)} />
+                  <Input.Number
+                    disabled={disabled}
+                    min={1}
+                    value={field.value}
+                    onChange={(value) => field.onChange(value ?? 0)}
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -618,7 +724,12 @@ function OrderEditLineItemFields({
               <FormItem>
                 <FormLabel>Unit sell price</FormLabel>
                 <FormControl>
-                  <Input.Currency disabled={disabled} value={field.value} onChange={field.onChange} placeholder="0.00" />
+                  <Input.Currency
+                    disabled={disabled}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="0.00"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -631,7 +742,12 @@ function OrderEditLineItemFields({
               <FormItem>
                 <FormLabel>Unit cost price</FormLabel>
                 <FormControl>
-                  <Input.Currency disabled={disabled} value={field.value} onChange={field.onChange} placeholder="0.00" />
+                  <Input.Currency
+                    disabled={disabled}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="0.00"
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -644,7 +760,11 @@ function OrderEditLineItemFields({
               <FormItem className="md:col-span-2">
                 <FormLabel>Line note</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled={disabled} value={field.value ?? ""} />
+                  <Input
+                    {...field}
+                    disabled={disabled}
+                    value={field.value ?? ""}
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -662,9 +782,9 @@ function OrderEditLineItemFields({
                     ? "Cup SKU"
                     : itemType === "product_bundle"
                       ? "Product bundle"
-                    : itemType === "lid"
-                      ? "Lid"
-                      : "General Item"}
+                      : itemType === "lid"
+                        ? "Lid"
+                        : "General Item"}
                 </FormLabel>
                 <FormControl>
                   <Combobox<SelectableOrderItem>
@@ -676,10 +796,14 @@ function OrderEditLineItemFields({
                     }}
                     items={availableItems}
                     itemToStringLabel={(item) =>
-                      item ? formatSelectableOrderItemOption(item, itemType) : ""
+                      item
+                        ? formatSelectableOrderItemOption(item, itemType)
+                        : ""
                     }
                     itemToStringValue={(item) => item?.id ?? ""}
-                    isItemEqualToValue={(item, selected) => item?.id === selected?.id}
+                    isItemEqualToValue={(item, selected) =>
+                      item?.id === selected?.id
+                    }
                   >
                     <ComboboxInput
                       disabled={disabled}
@@ -690,13 +814,13 @@ function OrderEditLineItemFields({
                             : "Search cups"
                           : itemType === "product_bundle"
                             ? "Search product bundles"
-                          : itemType === "lid"
-                            ? lidsLoading
-                              ? "Loading lids..."
-                              : "Search lids"
-                            : nonStockItemsLoading
-                              ? "Loading general items..."
-                              : "Search general items"
+                            : itemType === "lid"
+                              ? lidsLoading
+                                ? "Loading lids..."
+                                : "Search lids"
+                              : nonStockItemsLoading
+                                ? "Loading general items..."
+                                : "Search general items"
                       }
                       showClear
                       className="w-full min-w-0"
@@ -724,7 +848,12 @@ function OrderEditLineItemFields({
               <FormItem>
                 <FormLabel>Quantity</FormLabel>
                 <FormControl>
-                  <Input.Number disabled={disabled} min={1} value={field.value} onChange={(value) => field.onChange(value ?? 0)} />
+                  <Input.Number
+                    disabled={disabled}
+                    min={1}
+                    value={field.value}
+                    onChange={(value) => field.onChange(value ?? 0)}
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -738,7 +867,12 @@ function OrderEditLineItemFields({
                 <FormItem>
                   <FormLabel>Override price</FormLabel>
                   <FormControl>
-                    <Input.Currency disabled={disabled} value={field.value} onChange={field.onChange} placeholder="Default" />
+                    <Input.Currency
+                      disabled={disabled}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Default"
+                    />
                   </FormControl>
                 </FormItem>
               )}
@@ -752,7 +886,11 @@ function OrderEditLineItemFields({
               <FormItem>
                 <FormLabel>Line note</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled={disabled} value={field.value ?? ""} />
+                  <Input
+                    {...field}
+                    disabled={disabled}
+                    value={field.value ?? ""}
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -765,7 +903,7 @@ function OrderEditLineItemFields({
 
 function resolveSelectableItem(
   raw: string | undefined,
-  items: readonly SelectableOrderItem[],
+  items: readonly SelectableOrderItem[]
 ): SelectableOrderItem | null {
   if (!raw) {
     return null
@@ -776,7 +914,7 @@ function resolveSelectableItem(
 
 function formatSelectableOrderItemOption(
   item: SelectableOrderItem,
-  itemType: OrderEditValues["line_items"][number]["item_type"],
+  itemType: OrderEditValues["line_items"][number]["item_type"]
 ): string {
   if (itemType === "cup") {
     return formatCupOption(item as Cup)
@@ -803,9 +941,13 @@ function formatLidOption(lid: Lid): string {
 }
 
 function formatNonStockItemOption(item: NonStockItem): string {
-  return item.description?.trim() ? `${item.name} · ${item.description}` : item.name
+  return item.description?.trim()
+    ? `${item.name} · ${item.description}`
+    : item.name
 }
 
 function formatProductBundleOption(item: ProductBundle): string {
-  return item.description?.trim() ? `${item.name} · ${item.description.trim()}` : item.name
+  return item.description?.trim()
+    ? `${item.name} · ${item.description.trim()}`
+    : item.name
 }

@@ -1,8 +1,4 @@
-import {
-  Document,
-  Text,
-  View,
-} from "@react-pdf/renderer"
+import { Document, Text, View } from "@react-pdf/renderer"
 
 import { formatMoney } from "../shared/format.js"
 import { IW_LOGO_PATH } from "../iw-logo-path.js"
@@ -30,7 +26,12 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
             title={invoice.document_title}
             reference={invoice.invoice_number}
             subtitle={invoice.order_reference}
-            status={<PdfStatusBadge label={invoice.status.label} tone={invoice.status.tone} />}
+            status={
+              <PdfStatusBadge
+                label={invoice.status.label}
+                tone={invoice.status.tone}
+              />
+            }
           />
         }
         footerLeft={`Generated ${invoice.generated_at}`}
@@ -42,10 +43,7 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
         </View>
 
         <PdfSection>
-          <PdfPartiesBlock
-            left={invoice.from}
-            right={invoice.to}
-          />
+          <PdfPartiesBlock left={invoice.from} right={invoice.to} />
         </PdfSection>
 
         <PdfSection>
@@ -57,6 +55,12 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
           />
         </PdfSection>
 
+        {invoice.notes?.trim() ? (
+          <PdfSection title="Order note">
+            <Text style={sharedStyles.body}>{invoice.notes}</Text>
+          </PdfSection>
+        ) : null}
+
         <PdfSection
           title="Charges"
           description="Order-specific line items for this print job."
@@ -67,7 +71,10 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
                 key: "item",
                 title: "Item",
                 width: "54%",
-                render: (item) => item.notes?.trim() ? `${item.item}\nNote: ${item.notes}` : item.item,
+                render: (item) =>
+                  item.notes?.trim()
+                    ? `${item.item}\nNote: ${item.notes}`
+                    : item.item,
               },
               {
                 key: "quantity",
@@ -138,7 +145,9 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
             ))}
           </View>
 
-          {invoice.footer_note ? <Text style={sharedStyles.muted}>{invoice.footer_note}</Text> : null}
+          {invoice.footer_note ? (
+            <Text style={sharedStyles.muted}>{invoice.footer_note}</Text>
+          ) : null}
         </PdfSection>
       </PdfPageShell>
     </Document>

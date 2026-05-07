@@ -32,8 +32,16 @@ import {
 } from "@workspace/ui/components/table"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
-import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
-import type { Invoice, Order, OrderStatus } from "@/features/orders/api/orders-client"
+import {
+  appPermissions,
+  getDefaultAuthorizedRoute,
+  hasPermission,
+} from "@/features/auth/permissions"
+import type {
+  Invoice,
+  Order,
+  OrderStatus,
+} from "@/features/orders/api/orders-client"
 import { openInvoicePdfInNewTab } from "@/features/invoices/api/invoices-client"
 import {
   useCancelOrderMutation,
@@ -46,15 +54,27 @@ import { formatMoneyValue } from "@/lib/money"
 
 export function OrderViewPage({ orderId }: { orderId: string }) {
   const currentUser = useCurrentUser()
-  const canViewOrders = hasPermission(currentUser.data, appPermissions.ordersView)
-  const canManageOrders = hasPermission(currentUser.data, appPermissions.ordersManage)
+  const canViewOrders = hasPermission(
+    currentUser.data,
+    appPermissions.ordersView
+  )
+  const canManageOrders = hasPermission(
+    currentUser.data,
+    appPermissions.ordersManage
+  )
   const canRecordFulfillment = hasPermission(
     currentUser.data,
-    appPermissions.ordersFulfillmentRecord,
+    appPermissions.ordersFulfillmentRecord
   )
   const orderQuery = useOrderQuery(orderId)
-  const canViewInvoices = hasPermission(currentUser.data, appPermissions.invoicesView)
-  const canManageInvoices = hasPermission(currentUser.data, appPermissions.invoicesManage)
+  const canViewInvoices = hasPermission(
+    currentUser.data,
+    appPermissions.invoicesView
+  )
+  const canManageInvoices = hasPermission(
+    currentUser.data,
+    appPermissions.invoicesManage
+  )
   const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canViewInvoices)
   const generateOrderInvoiceMutation = useGenerateOrderInvoiceMutation()
   const cancelOrderMutation = useCancelOrderMutation()
@@ -91,7 +111,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
 
     return (
       <Alert>
-        <AlertDescription>Order visibility requires order-view permission.</AlertDescription>
+        <AlertDescription>
+          Order visibility requires order-view permission.
+        </AlertDescription>
       </Alert>
     )
   }
@@ -108,10 +130,12 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       const canceledOrder = await cancelOrderMutation.mutateAsync(order.id)
       setIsCancelDialogOpen(false)
       setPageSuccess(
-        `Canceled ${canceledOrder.order_number}. Unconsumed reservations were released. Void any unpaid invoice from the invoice detail page when you are ready.`,
+        `Canceled ${canceledOrder.order_number}. Unconsumed reservations were released. Void any unpaid invoice from the invoice detail page when you are ready.`
       )
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : "Unable to cancel order.")
+      setPageError(
+        error instanceof Error ? error.message : "Unable to cancel order."
+      )
     }
   }
 
@@ -127,7 +151,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       const invoice = await generateOrderInvoiceMutation.mutateAsync(order.id)
       setPageSuccess(`Generated invoice ${invoice.invoice_number}.`)
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : "Unable to generate invoice.")
+      setPageError(
+        error instanceof Error ? error.message : "Unable to generate invoice."
+      )
     }
   }
 
@@ -144,7 +170,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
       setIsArchiveDialogOpen(false)
       setPageSuccess(`Archived ${archivedOrder.order_number}.`)
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : "Unable to archive order.")
+      setPageError(
+        error instanceof Error ? error.message : "Unable to archive order."
+      )
     }
   }
 
@@ -155,8 +183,8 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
           <div className="grid gap-1">
             <CardTitle>Order Details</CardTitle>
             <CardDescription>
-              View the order record, line items, and permission-gated invoice actions without mixing
-              them into fulfillment progress.
+              View the order record, line items, and permission-gated invoice
+              actions without mixing them into fulfillment progress.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -166,7 +194,10 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
             {order ? (
               canRecordFulfillment ? (
                 <Button asChild variant="outline">
-                  <Link to="/orders/$orderId/fulfillment" params={{ orderId: order.id }}>
+                  <Link
+                    to="/orders/$orderId/fulfillment"
+                    params={{ orderId: order.id }}
+                  >
                     Fulfillment
                   </Link>
                 </Button>
@@ -175,7 +206,10 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
             {order ? (
               canOpenEdit ? (
                 <Button asChild variant="outline">
-                  <Link to="/orders/$orderId/edit" params={{ orderId: order.id }}>
+                  <Link
+                    to="/orders/$orderId/edit"
+                    params={{ orderId: order.id }}
+                  >
                     Edit
                   </Link>
                 </Button>
@@ -240,19 +274,35 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                   </p>
                 </div>
                 <div className="grid gap-1">
-                  <p className="text-xs text-muted-foreground">Notes</p>
-                  <p>{order.notes?.trim() ? order.notes : "No notes recorded."}</p>
+                  <p className="text-xs text-muted-foreground">Order note</p>
+                  <p>
+                    {order.notes?.trim() ? order.notes : "No notes recorded."}
+                  </p>
+                </div>
+                <div className="grid gap-1">
+                  <p className="text-xs text-muted-foreground">Internal note</p>
+                  <p>
+                    {order.internal_notes?.trim()
+                      ? order.internal_notes
+                      : "No internal note recorded."}
+                  </p>
                 </div>
               </div>
 
               <div className="grid gap-3 border p-4 text-sm">
                 <div className="grid gap-1">
                   <p className="text-xs text-muted-foreground">Line items</p>
-                  <p className="font-medium">{order.items.length.toLocaleString()}</p>
+                  <p className="font-medium">
+                    {order.items.length.toLocaleString()}
+                  </p>
                 </div>
                 <div className="grid gap-1">
-                  <p className="text-xs text-muted-foreground">Total quantity</p>
-                  <p className="font-medium">{totalQuantity(order).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total quantity
+                  </p>
+                  <p className="font-medium">
+                    {totalQuantity(order).toLocaleString()}
+                  </p>
                 </div>
                 <div className="grid gap-1">
                   <p className="text-xs text-muted-foreground">Last updated</p>
@@ -282,7 +332,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                         setIsCancelDialogOpen(true)
                       }}
                     >
-                      {cancelOrderMutation.isPending ? "Canceling..." : "Cancel order"}
+                      {cancelOrderMutation.isPending
+                        ? "Canceling..."
+                        : "Cancel order"}
                     </Button>
                   ) : null}
                   {canManageOrders ? (
@@ -299,7 +351,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                         setIsArchiveDialogOpen(true)
                       }}
                     >
-                      {archiveOrderMutation.isPending ? "Archiving..." : "Archive order"}
+                      {archiveOrderMutation.isPending
+                        ? "Archiving..."
+                        : "Archive order"}
                     </Button>
                   ) : null}
                 </div>
@@ -309,7 +363,11 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
             {canManageInvoices ? (
               <InvoicePanel
                 invoice={orderInvoiceQuery.data}
-                invoiceError={orderInvoiceQuery.isError ? orderInvoiceQuery.error.message : null}
+                invoiceError={
+                  orderInvoiceQuery.isError
+                    ? orderInvoiceQuery.error.message
+                    : null
+                }
                 isGenerating={generateOrderInvoiceMutation.isPending}
                 isLoading={orderInvoiceQuery.isLoading}
                 onGenerate={handleGenerateInvoice}
@@ -336,11 +394,15 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                 <TableBody>
                   {order.items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{formatOrderItemLabel(item)}</TableCell>
+                      <TableCell className="font-medium">
+                        {formatOrderItemLabel(item)}
+                      </TableCell>
                       <TableCell>{item.item_type}</TableCell>
                       <TableCell>{formatOrderItemDetails(item)}</TableCell>
                       <TableCell>{item.quantity.toLocaleString()}</TableCell>
-                      <TableCell>{item.notes?.trim() ? item.notes : "—"}</TableCell>
+                      <TableCell>
+                        {item.notes?.trim() ? item.notes : "—"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -349,7 +411,10 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
           </>
         ) : null}
       </CardContent>
-      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+      <AlertDialog
+        open={isCancelDialogOpen}
+        onOpenChange={setIsCancelDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel order?</AlertDialogTitle>
@@ -360,7 +425,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={cancelOrderMutation.isPending}>Keep order</AlertDialogCancel>
+            <AlertDialogCancel disabled={cancelOrderMutation.isPending}>
+              Keep order
+            </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={cancelOrderMutation.isPending}
@@ -373,7 +440,10 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog open={isArchiveDialogOpen} onOpenChange={setIsArchiveDialogOpen}>
+      <AlertDialog
+        open={isArchiveDialogOpen}
+        onOpenChange={setIsArchiveDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Archive order?</AlertDialogTitle>
@@ -384,7 +454,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={archiveOrderMutation.isPending}>Keep order</AlertDialogCancel>
+            <AlertDialogCancel disabled={archiveOrderMutation.isPending}>
+              Keep order
+            </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={archiveOrderMutation.isPending || !order}
@@ -392,7 +464,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                 void handleArchiveOrder()
               }}
             >
-              {archiveOrderMutation.isPending ? "Archiving..." : "Archive order"}
+              {archiveOrderMutation.isPending
+                ? "Archiving..."
+                : "Archive order"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -427,17 +501,27 @@ function InvoicePanel({
         <div className="grid gap-1">
           <p className="font-medium">Invoice</p>
           <p className="text-muted-foreground">
-            Admin-only financial snapshot. While no payment has been recorded, structural changes must go through the order. Once payment starts, or once it is paid or voided, structural edits are locked.
+            Admin-only financial snapshot. While no payment has been recorded,
+            structural changes must go through the order. Once payment starts,
+            or once it is paid or voided, structural edits are locked.
           </p>
         </div>
         {canGenerate ? (
-          <Button type="button" size="sm" variant="outline" disabled={isGenerating} onClick={() => void onGenerate()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isGenerating}
+            onClick={() => void onGenerate()}
+          >
             {isGenerating ? "Generating..." : "Generate invoice"}
           </Button>
         ) : null}
       </div>
 
-      {isLoading ? <p className="text-muted-foreground">Loading invoice state...</p> : null}
+      {isLoading ? (
+        <p className="text-muted-foreground">Loading invoice state...</p>
+      ) : null}
 
       {resolvedInvoice ? (
         <div className="grid gap-2 md:grid-cols-4">
@@ -453,29 +537,42 @@ function InvoicePanel({
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Subtotal</p>
-            <p className="font-medium">{formatMoneyValue(resolvedInvoice.subtotal)}</p>
+            <p className="font-medium">
+              {formatMoneyValue(resolvedInvoice.subtotal)}
+            </p>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Paid</p>
-            <p className="font-medium">{formatMoneyValue(resolvedInvoice.paid_amount)}</p>
+            <p className="font-medium">
+              {formatMoneyValue(resolvedInvoice.paid_amount)}
+            </p>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Remaining</p>
-            <p className="font-medium">{formatMoneyValue(resolvedInvoice.remaining_balance)}</p>
+            <p className="font-medium">
+              {formatMoneyValue(resolvedInvoice.remaining_balance)}
+            </p>
           </div>
           <div className="border p-3">
             <p className="text-xs text-muted-foreground">Generated</p>
-            <p className="font-medium">{new Date(resolvedInvoice.created_at).toLocaleString()}</p>
+            <p className="font-medium">
+              {new Date(resolvedInvoice.created_at).toLocaleString()}
+            </p>
           </div>
         </div>
       ) : null}
 
-      {pdfOpenError ? <p className="text-sm text-destructive">{pdfOpenError}</p> : null}
+      {pdfOpenError ? (
+        <p className="text-sm text-destructive">{pdfOpenError}</p>
+      ) : null}
 
       {resolvedInvoice ? (
         <div className="flex flex-wrap gap-2">
           <Button asChild type="button" size="sm" variant="outline">
-            <Link to="/invoices/$invoiceId" params={{ invoiceId: resolvedInvoice.id }}>
+            <Link
+              to="/invoices/$invoiceId"
+              params={{ invoiceId: resolvedInvoice.id }}
+            >
               Open invoice
             </Link>
           </Button>
@@ -487,7 +584,9 @@ function InvoicePanel({
               setPdfOpenError(null)
               void openInvoicePdfInNewTab(resolvedInvoice.id).catch((error) => {
                 setPdfOpenError(
-                  error instanceof Error ? error.message : "Unable to open the PDF.",
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to open the PDF."
                 )
               })
             }}
@@ -516,7 +615,9 @@ function formatStatus(status: string): string {
   return status.replaceAll("_", " ")
 }
 
-function statusVariant(status: OrderStatus): "default" | "secondary" | "destructive" {
+function statusVariant(
+  status: OrderStatus
+): "default" | "secondary" | "destructive" {
   if (status === "canceled") {
     return "destructive"
   }
@@ -528,7 +629,9 @@ function statusVariant(status: OrderStatus): "default" | "secondary" | "destruct
   return "secondary"
 }
 
-function invoiceStatusVariant(status: Invoice["status"]): "default" | "secondary" | "destructive" {
+function invoiceStatusVariant(
+  status: Invoice["status"]
+): "default" | "secondary" | "destructive" {
   if (status === "paid") {
     return "default"
   }

@@ -2,7 +2,9 @@ import type { InvoicePdfData } from "@workspace/pdfs/server"
 
 import { toInvoiceDto } from "./invoices.types.js"
 
-export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): InvoicePdfData {
+export function toInvoicePdfData(
+  invoice: ReturnType<typeof toInvoiceDto>
+): InvoicePdfData {
   return {
     brand_name: "Ink Wave Branding",
     document_title: "Invoice",
@@ -13,10 +15,7 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
     from: {
       label: "From",
       name: "Ink Wave Branding",
-      lines: [
-        "hello@inkwavebrand.ing",
-        "+63 917 7755 537",
-      ],
+      lines: ["hello@inkwavebrand.ing", "+63 917 7755 537"],
     },
     to: {
       label: "To",
@@ -31,13 +30,20 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
     left_meta: [
       { label: "Invoice number", value: invoice.invoice_number },
       { label: "Generated", value: formatInvoicePdfDate(invoice.created_at) },
-      { label: "Invoice status", value: toInvoicePdfStatus(invoice.status).label },
+      {
+        label: "Invoice status",
+        value: toInvoicePdfStatus(invoice.status).label,
+      },
     ],
     right_meta: [
       { label: "Order reference", value: invoice.order_number_snapshot },
-      { label: "Customer code", value: invoice.customer.customer_code ?? "N/A" },
+      {
+        label: "Customer code",
+        value: invoice.customer.customer_code ?? "N/A",
+      },
       { label: "Line items", value: invoice.items.length.toLocaleString() },
     ],
+    notes: invoice.notes,
     line_items: invoice.items.map((item) => ({
       item: item.description_snapshot,
       notes: item.notes,
@@ -56,7 +62,10 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
       "hello@inkwavebrand.ing",
       "+63 917 7755 537",
     ],
-    footer_note: invoice.status === "void" ? "This invoice has been voided." : "Thank you for your order.",
+    footer_note:
+      invoice.status === "void"
+        ? "This invoice has been voided."
+        : "Thank you for your order.",
   }
 }
 
@@ -79,12 +88,18 @@ function toInvoicePdfStatus(status: ReturnType<typeof toInvoiceDto>["status"]) {
   }
 }
 
-function toInvoicePdfPaymentInstructions(status: ReturnType<typeof toInvoiceDto>["status"]) {
+function toInvoicePdfPaymentInstructions(
+  status: ReturnType<typeof toInvoiceDto>["status"]
+) {
   switch (status) {
     case "paid":
-      return ["Payment received. Production or release may proceed per operations workflow."]
+      return [
+        "Payment received. Production or release may proceed per operations workflow.",
+      ]
     case "void":
-      return ["This invoice is void and should not be used for payment collection."]
+      return [
+        "This invoice is void and should not be used for payment collection.",
+      ]
     default:
       return [
         "Send payment to:",

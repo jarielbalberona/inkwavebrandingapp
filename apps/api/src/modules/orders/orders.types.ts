@@ -91,6 +91,7 @@ interface BaseOrderDto {
   customer: ReturnType<typeof toCustomerDto>
   items: Array<AdminOrderItemDto | StaffOrderItemDto>
   notes: string | null
+  internal_notes: string | null
   archived_at: string | null
   created_at: string
   updated_at: string
@@ -169,6 +170,7 @@ function toBaseOrderDto(
     customer: toCustomerDto(order.customer as Customer, user),
     items: order.items.map(mapItem),
     notes: order.notes ?? null,
+    internal_notes: order.internalNotes ?? null,
     archived_at: order.archivedAt?.toISOString() ?? null,
     created_at: order.createdAt.toISOString(),
     updated_at: order.updatedAt.toISOString(),

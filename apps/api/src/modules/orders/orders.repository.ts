@@ -206,13 +206,18 @@ export class OrdersRepository {
 
   async updateOrderMetadata(
     orderId: string,
-    input: { customerId?: string; notes?: string | null }
+    input: {
+      customerId?: string
+      notes?: string | null
+      internalNotes?: string | null
+    }
   ): Promise<void> {
     await this.db
       .update(orders)
       .set({
         customerId: input.customerId,
         notes: input.notes,
+        internalNotes: input.internalNotes,
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId))

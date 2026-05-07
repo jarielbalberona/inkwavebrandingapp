@@ -52,6 +52,7 @@ export const orders = pgTable(
     priority: integer("priority").notNull().default(0),
     status: orderStatusEnum("status").notNull().default("pending"),
     notes: text("notes"),
+    internalNotes: text("internal_notes"),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -76,6 +77,14 @@ export const orders = pgTable(
     check(
       "orders_order_number_not_blank",
       sql`length(trim(${table.orderNumber})) > 0`
+    ),
+    check(
+      "orders_notes_not_blank",
+      sql`${table.notes} is null or length(trim(${table.notes})) > 0`
+    ),
+    check(
+      "orders_internal_notes_not_blank",
+      sql`${table.internalNotes} is null or length(trim(${table.internalNotes})) > 0`
     ),
   ]
 )

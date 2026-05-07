@@ -33,6 +33,7 @@ export interface InvoicePdfData {
   to: InvoicePdfParty
   left_meta: InvoicePdfMetaItem[]
   right_meta: InvoicePdfMetaItem[]
+  notes: string | null
   line_items: InvoicePdfLineItem[]
   subtotal: string
   discount: string

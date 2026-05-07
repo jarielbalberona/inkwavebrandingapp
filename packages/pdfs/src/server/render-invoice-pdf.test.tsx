@@ -34,6 +34,7 @@ test("renderInvoicePdf returns a PDF buffer for invoice data", async () => {
       { label: "Customer code", value: "CUST-001" },
       { label: "Line items", value: "2" },
     ],
+    notes: "Deliver before Friday.",
     line_items: [
       {
         item: "12oz kraft paper cup",
@@ -102,6 +103,7 @@ test("renderInvoicePdf supports custom_charge invoice lines", async () => {
       { label: "Customer code", value: "CUST-001" },
       { label: "Line items", value: "1" },
     ],
+    notes: null,
     line_items: [
       {
         item: "Rush fee",
