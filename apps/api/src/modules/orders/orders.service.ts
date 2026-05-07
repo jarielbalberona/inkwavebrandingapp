@@ -102,14 +102,6 @@ export class OrderLidInactiveError extends Error {
   }
 }
 
-export class DuplicateOrderItemError extends Error {
-  readonly statusCode = 400
-
-  constructor() {
-    super("Duplicate source item in order line items")
-  }
-}
-
 export interface OrderCreateLineItemErrorDetail {
   lineItemIndex: number
   itemType:
@@ -340,59 +332,6 @@ interface ExistingTrackedItemProgress {
   minimumAllowedQuantity: number
 }
 
-function assertNoDuplicateSourceItems(
-  items: Array<CreateOrderLineItemInput | UpdateOrderLineItemInput>
-): void {
-  const duplicateIndexesByKey = new Map<string, number[]>()
-
-  for (const [index, item] of items.entries()) {
-    if (item.item_type === "custom_charge") {
-      continue
-    }
-
-    const key =
-      item.item_type === "cup"
-        ? `cup:${item.cup_id}`
-        : item.item_type === "lid"
-          ? `lid:${item.lid_id}`
-          : item.item_type === "non_stock_item"
-            ? `non_stock_item:${item.non_stock_item_id}`
-            : `product_bundle:${item.product_bundle_id}`
-    const duplicateIndexes = duplicateIndexesByKey.get(key) ?? []
-    duplicateIndexes.push(index)
-    duplicateIndexesByKey.set(key, duplicateIndexes)
-  }
-
-  const duplicateLineItemDetails = Array.from(
-    duplicateIndexesByKey.entries()
-  ).flatMap(([key, indexes]) => {
-    if (indexes.length < 2) {
-      return []
-    }
-
-    const [itemType, itemId] = key.split(":") as [
-      "cup" | "lid" | "non_stock_item" | "product_bundle",
-      string,
-    ]
-
-    return indexes.map((lineItemIndex) => ({
-      lineItemIndex,
-      itemType,
-      itemId,
-      field: "item_id" as const,
-      message: `Line item ${lineItemIndex + 1} duplicates another selected ${itemType}. Each source item can only appear once per order.`,
-    }))
-  })
-
-  if (duplicateLineItemDetails.length > 0) {
-    throw new OrderCreateValidationError(
-      "Duplicate source items found in order line items",
-      400,
-      duplicateLineItemDetails
-    )
-  }
-}
-
 async function resolveOrderLineItems(
   items: Array<CreateOrderLineItemInput | UpdateOrderLineItemInput>,
   dependencies: {
@@ -404,8 +343,6 @@ async function resolveOrderLineItems(
     user: SafeUser
   }
 ): Promise<ResolvedOrderLineItem[]> {
-  assertNoDuplicateSourceItems(items)
-
   const resolvedItems: ResolvedOrderLineItem[] = []
 
   for (const [index, item] of items.entries()) {
@@ -1458,7 +1395,7 @@ export class OrdersService {
 
             if (seenExistingIds.has(existingItemId)) {
               throw new OrderCreateValidationError(
-                "Duplicate source items found in order line items",
+                "Duplicate existing order line found in order line items",
                 400,
                 [
                   {

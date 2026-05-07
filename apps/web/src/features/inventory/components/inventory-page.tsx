@@ -90,12 +90,15 @@ const emptyAdjustmentValues: AdjustmentFormValues = {
   note: "",
 }
 
+const inventoryTypeOptions = ["cup", "lid"] as const
+
 export function InventoryPage() {
   const currentUser = useCurrentUser()
   const balancesQuery = useInventoryBalancesQuery()
   const stockIntake = useStockIntakeMutation()
   const inventoryAdjustment = useInventoryAdjustmentMutation()
   const [search, setSearch] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
   const [brandFilter, setBrandFilter] = useState("all")
   const [sizeFilter, setSizeFilter] = useState("all")
   const [colorFilter, setColorFilter] = useState("all")
@@ -120,8 +123,8 @@ export function InventoryPage() {
   })
 
   const filteredBalances = useMemo(
-    () => filterBalances(balancesQuery.data, { search, brandFilter, sizeFilter, colorFilter }),
-    [balancesQuery.data, brandFilter, colorFilter, search, sizeFilter],
+    () => filterBalances(balancesQuery.data, { search, typeFilter, brandFilter, sizeFilter, colorFilter }),
+    [balancesQuery.data, brandFilter, colorFilter, search, sizeFilter, typeFilter],
   )
   const brandOptions = useMemo(() => getInventoryFilterOptions(balancesQuery.data, "brand"), [balancesQuery.data])
   const sizeOptions = useMemo(() => getInventoryFilterOptions(balancesQuery.data, "size"), [balancesQuery.data])
@@ -343,7 +346,13 @@ export function InventoryPage() {
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <CatalogFilterSelect
+              label="Type"
+              value={typeFilter}
+              options={inventoryTypeOptions}
+              onValueChange={setTypeFilter}
+            />
             <CatalogFilterSelect
               label="Brand"
               value={brandFilter}
@@ -751,6 +760,7 @@ function filterBalances(
   balances: InventoryBalance[] | undefined,
   filters: {
     search: string
+    typeFilter: string
     brandFilter: string
     sizeFilter: string
     colorFilter: string
@@ -763,6 +773,10 @@ function filterBalances(
   const normalizedSearch = filters.search.trim().toLowerCase()
 
   return balances.filter((balance) => {
+    if (filters.typeFilter !== "all" && balance.item_type !== filters.typeFilter) {
+      return false
+    }
+
     if (filters.brandFilter !== "all" && getInventoryFilterValue(balance, "brand") !== filters.brandFilter) {
       return false
     }

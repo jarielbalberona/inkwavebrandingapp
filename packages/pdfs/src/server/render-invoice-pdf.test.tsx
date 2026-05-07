@@ -37,12 +37,14 @@ test("renderInvoicePdf returns a PDF buffer for invoice data", async () => {
     line_items: [
       {
         item: "12oz kraft paper cup",
+        notes: "Front logo, black print",
         quantity: 100,
         unit_price: "15.00",
         total: "1500.00",
       },
       {
         item: "80mm coffee lid",
+        notes: null,
         quantity: 180,
         unit_price: "5.00",
         total: "900.00",
@@ -103,6 +105,7 @@ test("renderInvoicePdf supports custom_charge invoice lines", async () => {
     line_items: [
       {
         item: "Rush fee",
+        notes: "Approved by customer",
         quantity: 1,
         unit_price: "500.00",
         total: "500.00",

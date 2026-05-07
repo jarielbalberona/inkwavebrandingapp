@@ -67,7 +67,7 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
                 key: "item",
                 title: "Item",
                 width: "54%",
-                render: (item) => item.item,
+                render: (item) => item.notes?.trim() ? `${item.item}\nNote: ${item.notes}` : item.item,
               },
               {
                 key: "quantity",

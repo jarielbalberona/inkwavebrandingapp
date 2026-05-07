@@ -1,0 +1,2 @@
+ALTER TABLE "invoice_items" ADD COLUMN "notes" text;--> statement-breakpoint
+ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_notes_not_blank" CHECK ("invoice_items"."notes" is null or length(trim("invoice_items"."notes")) > 0);

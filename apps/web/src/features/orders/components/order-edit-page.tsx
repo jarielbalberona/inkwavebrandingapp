@@ -229,36 +229,6 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
     setSubmitSuccess(null)
     form.clearErrors()
 
-    const uniqueKeys = values.line_items
-      .filter((item) => item.item_type !== "custom_charge" && item.item_id)
-      .map((item) => `${item.item_type}:${item.item_id}`)
-
-    if (new Set(uniqueKeys).size !== uniqueKeys.length) {
-      const duplicateIndexesByKey = new Map<string, number[]>()
-
-      uniqueKeys.forEach((key, index) => {
-        const indexes = duplicateIndexesByKey.get(key) ?? []
-        indexes.push(index)
-        duplicateIndexesByKey.set(key, indexes)
-      })
-
-      for (const indexes of duplicateIndexesByKey.values()) {
-        if (indexes.length < 2) {
-          continue
-        }
-
-        for (const lineItemIndex of indexes) {
-          form.setError(`line_items.${lineItemIndex}.item_id`, {
-            type: "manual",
-            message: `Line item ${lineItemIndex + 1} duplicates another selected item.`,
-          })
-        }
-      }
-
-      setSubmitError("Duplicate source items found in order line items.")
-      return
-    }
-
     try {
       const updatedOrder = await updateOrderMutation.mutateAsync({
         id: orderId,

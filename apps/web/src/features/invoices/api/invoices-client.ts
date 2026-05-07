@@ -29,6 +29,7 @@ const invoiceItemSchema = z.object({
   order_line_item_id: z.string().uuid(),
   item_type: z.enum(["cup", "lid", "non_stock_item", "custom_charge", "product_bundle"]),
   description_snapshot: z.string(),
+  notes: z.string().nullable(),
   quantity: z.number().int().positive(),
   unit_price: z.string(),
   line_total: z.string(),

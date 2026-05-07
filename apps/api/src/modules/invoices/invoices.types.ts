@@ -30,6 +30,7 @@ export interface InvoiceItemDto {
   order_line_item_id: string
   item_type: "cup" | "lid" | "non_stock_item" | "custom_charge" | "product_bundle"
   description_snapshot: string
+  notes: string | null
   quantity: number
   unit_price: string
   line_total: string
@@ -131,6 +132,7 @@ export function toInvoiceDto(invoice: InvoiceWithRelations, user: SafeUser): Inv
       order_line_item_id: item.orderItemId,
       item_type: item.itemType,
       description_snapshot: item.descriptionSnapshot,
+      notes: item.notes ?? null,
       quantity: item.quantity,
       unit_price: toMoneyString(item.unitPrice),
       line_total: toMoneyString(item.lineTotal),

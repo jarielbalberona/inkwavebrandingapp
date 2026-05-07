@@ -19,6 +19,7 @@ test("toInvoicePdfData uses persisted payment rollups for partially paid invoice
   assert.equal(pdfData.total, "2400.00")
   assert.equal(pdfData.paid_amount, "750.00")
   assert.equal(pdfData.remaining_balance, "1650.00")
+  assert.equal(pdfData.line_items[0]?.notes, "Front logo, black print")
 })
 
 test("toInvoicePdfData preserves paid invoice rollups from persisted state", () => {
@@ -66,6 +67,7 @@ function buildInvoiceDto(overrides: Partial<InvoiceDto> = {}): InvoiceDto {
         order_line_item_id: "order-item-1",
         item_type: "cup",
         description_snapshot: "12oz kraft paper cup",
+        notes: "Front logo, black print",
         quantity: 100,
         unit_price: "24.00",
         line_total: "2400.00",

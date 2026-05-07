@@ -154,6 +154,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
             id: "line-1",
             itemType: "cup",
             descriptionSnapshot: "12oz kraft paper cup",
+            notes: "Front logo, black print",
             quantity: 100,
             unitSellPrice: "15.00",
           },
@@ -161,6 +162,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
             id: "line-2",
             itemType: "lid",
             descriptionSnapshot: "80mm coffee lid",
+            notes: null,
             quantity: 180,
             unitSellPrice: "5.00",
           },
@@ -197,6 +199,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
       orderItemId: string
       itemType: "cup" | "lid"
       descriptionSnapshot: string
+      notes: string | null
       quantity: number
       unitPrice: string
       lineTotal: string
@@ -237,6 +240,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
         orderItemId: "line-1",
         itemType: "cup",
         descriptionSnapshot: "12oz kraft paper cup",
+        notes: "Front logo, black print",
         quantity: 100,
         unitPrice: "15.00",
         lineTotal: "1500.00",
@@ -245,6 +249,7 @@ test("generateForOrder snapshots order sell pricing and subtotal into the invoic
         orderItemId: "line-2",
         itemType: "lid",
         descriptionSnapshot: "80mm coffee lid",
+        notes: null,
         quantity: 180,
         unitPrice: "5.00",
         lineTotal: "900.00",
@@ -293,6 +298,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
               orderItemId: "line-1",
               itemType: "custom_charge",
               descriptionSnapshot: "Rush fee",
+              notes: "Same-day turnaround",
               quantity: 1,
               unitPrice: "500.00",
               lineTotal: "500.00",
@@ -303,6 +309,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
               orderItemId: "line-2",
               itemType: "non_stock_item",
               descriptionSnapshot: "Screen printing mold",
+              notes: null,
               quantity: 1,
               unitPrice: "650.00",
               lineTotal: "650.00",
@@ -331,6 +338,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
             id: "line-1",
             itemType: "custom_charge",
             descriptionSnapshot: "Rush fee",
+            notes: "Same-day turnaround",
             quantity: 1,
             unitSellPrice: "500.00",
           },
@@ -338,6 +346,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
             id: "line-2",
             itemType: "non_stock_item",
             descriptionSnapshot: "Screen printing mold",
+            notes: null,
             quantity: 1,
             unitSellPrice: "650.00",
           },
@@ -353,6 +362,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
       orderItemId: string
       itemType: "cup" | "lid" | "non_stock_item" | "custom_charge"
       descriptionSnapshot: string
+      notes: string | null
       quantity: number
       unitPrice: string
       lineTotal: string
@@ -371,6 +381,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
       orderItemId: "line-1",
       itemType: "custom_charge",
       descriptionSnapshot: "Rush fee",
+      notes: "Same-day turnaround",
       quantity: 1,
       unitPrice: "500.00",
       lineTotal: "500.00",
@@ -379,6 +390,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
       orderItemId: "line-2",
       itemType: "non_stock_item",
       descriptionSnapshot: "Screen printing mold",
+      notes: null,
       quantity: 1,
       unitPrice: "650.00",
       lineTotal: "650.00",
@@ -391,6 +403,7 @@ test("generateForOrder includes custom_charge lines without any master-data depe
   assert.equal(createInput.invoice.remainingBalance, "1150.00")
   assert.equal(dto.items[0]?.item_type, "custom_charge")
   assert.equal(dto.items[0]?.description_snapshot, "Rush fee")
+  assert.equal(dto.items[0]?.notes, "Same-day turnaround")
   assert.equal(dto.items[0]?.line_total, "500.00")
   assert.equal(dto.subtotal, "1150.00")
   assert.equal(dto.status, "pending")
@@ -1171,6 +1184,7 @@ test("syncInvoiceSnapshotForOrder creates a pending invoice when one does not ex
           id: "line-1",
           itemType: "cup",
           descriptionSnapshot: "12oz kraft paper cup",
+          notes: null,
           quantity: 16,
           unitSellPrice: "15.00",
         },
@@ -1256,6 +1270,7 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
           id: "line-1",
           itemType: "custom_charge",
           descriptionSnapshot: "Rush fee",
+          notes: null,
           quantity: 1,
           unitSellPrice: "325.00",
         },
@@ -1288,6 +1303,7 @@ test("syncInvoiceSnapshotForOrder replaces the same invoice record when it alrea
       orderItemId: "line-1",
       itemType: "custom_charge",
       descriptionSnapshot: "Rush fee",
+      notes: null,
       quantity: 1,
       unitPrice: "325.00",
       lineTotal: "325.00",

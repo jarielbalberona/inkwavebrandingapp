@@ -578,8 +578,8 @@ function formatOrderItemDetails(item: Order["items"][number]): string {
   }
 
   if (item.item_type === "product_bundle") {
-    return item.product_bundle.description?.trim() || "Product bundle"
+    return "Product bundle"
   }
 
-  return item.non_stock_item.description?.trim() || item.description_snapshot
+  return "General item"
 }

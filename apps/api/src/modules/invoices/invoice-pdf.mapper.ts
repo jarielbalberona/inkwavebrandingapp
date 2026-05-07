@@ -40,6 +40,7 @@ export function toInvoicePdfData(invoice: ReturnType<typeof toInvoiceDto>): Invo
     ],
     line_items: invoice.items.map((item) => ({
       item: item.description_snapshot,
+      notes: item.notes,
       quantity: item.quantity,
       unit_price: item.unit_price,
       total: item.line_total,

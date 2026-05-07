@@ -38,7 +38,6 @@ import {
 } from "./orders.schemas.js"
 import { OrdersRepository } from "./orders.repository.js"
 import {
-  DuplicateOrderItemError,
   OrderClosedUpdateError,
   OrderCompletedCancellationError,
   OrderCreateValidationError,
@@ -326,7 +325,6 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderCupInactiveError ||
     error instanceof OrderLidNotFoundError ||
     error instanceof OrderLidInactiveError ||
-    error instanceof DuplicateOrderItemError ||
     error instanceof OrderLineItemNotFoundError ||
     error instanceof OrderLineItemProgressLockedError ||
     error instanceof OrderNotFoundError ||

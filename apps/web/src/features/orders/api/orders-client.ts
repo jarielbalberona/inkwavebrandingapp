@@ -565,7 +565,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<Order> {
         throw new CreateOrderError(
           orderApiErrorMessage(
             error.data,
-            "Unable to create order. Check customer/item status, duplicate items, or available stock."
+            "Unable to create order. Check customer/item status or available stock."
           ),
           lineItems
         )

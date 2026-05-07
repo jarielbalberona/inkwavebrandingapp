@@ -780,7 +780,14 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                 <TableBody>
                   {invoice.items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.description_snapshot}</TableCell>
+                      <TableCell>
+                        <div className="grid gap-1">
+                          <span className="font-medium">{item.description_snapshot}</span>
+                          {item.notes?.trim() ? (
+                            <span className="text-muted-foreground text-xs">Note: {item.notes}</span>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       <TableCell>{formatInvoiceItemType(item.item_type)}</TableCell>
                       <TableCell>{item.quantity.toLocaleString()}</TableCell>
                       <TableCell>{formatMoneyValue(item.unit_price)}</TableCell>

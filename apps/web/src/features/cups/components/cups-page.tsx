@@ -133,6 +133,7 @@ export function CupsPage() {
   const [selectedCupId, setSelectedCupId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
   const [brandFilter, setBrandFilter] = useState("all")
   const [sizeFilter, setSizeFilter] = useState("all")
   const [colorFilter, setColorFilter] = useState("all")
@@ -143,8 +144,8 @@ export function CupsPage() {
     [cupsQuery.data, selectedCupId],
   )
   const visibleCups = useMemo(
-    () => filterAndSortCups(cupsQuery.data ?? [], { search, brandFilter, sizeFilter, colorFilter }),
-    [brandFilter, colorFilter, cupsQuery.data, search, sizeFilter],
+    () => filterAndSortCups(cupsQuery.data ?? [], { search, typeFilter, brandFilter, sizeFilter, colorFilter }),
+    [brandFilter, colorFilter, cupsQuery.data, search, sizeFilter, typeFilter],
   )
 
   const form = useForm<CupFormValues>({
@@ -288,7 +289,7 @@ export function CupsPage() {
             <p className="text-sm text-muted-foreground">No cups found. Admins can create the first SKU.</p>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_10rem_12rem]">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem_12rem_10rem_12rem]">
             <div className="grid gap-2">
               <Label htmlFor="cup-search">Search cups</Label>
               <Input
@@ -298,6 +299,13 @@ export function CupsPage() {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </div>
+            <CatalogFilterSelect
+              label="Type"
+              value={typeFilter}
+              options={cupTypes}
+              formatLabel={formatCupContractLabel}
+              onValueChange={setTypeFilter}
+            />
             <CatalogFilterSelect
               label="Brand"
               value={brandFilter}
@@ -655,6 +663,7 @@ function filterAndSortCups(
   cups: Cup[],
   filters: {
     search: string
+    typeFilter: string
     brandFilter: string
     sizeFilter: string
     colorFilter: string
@@ -665,6 +674,10 @@ function filterAndSortCups(
   return [...cups]
     .sort((left, right) => left.sku.localeCompare(right.sku, undefined, { numeric: true }))
     .filter((cup) => {
+      if (filters.typeFilter !== "all" && cup.type !== filters.typeFilter) {
+        return false
+      }
+
       if (filters.brandFilter !== "all" && cup.brand !== filters.brandFilter) {
         return false
       }

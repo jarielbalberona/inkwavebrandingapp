@@ -178,6 +178,7 @@ interface InvoiceSnapshotOrder {
     id: string
     itemType: "cup" | "lid" | "non_stock_item" | "custom_charge" | "product_bundle"
     descriptionSnapshot: string
+    notes: string | null
     quantity: number
     unitSellPrice: string
   }>
@@ -192,6 +193,7 @@ function buildInvoiceSnapshotInput(order: InvoiceSnapshotOrder) {
       orderItemId: item.id,
       itemType: item.itemType,
       descriptionSnapshot: item.descriptionSnapshot,
+      notes: item.notes?.trim() || null,
       quantity: item.quantity,
       unitPrice,
       lineTotal,

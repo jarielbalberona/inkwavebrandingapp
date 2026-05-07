@@ -133,6 +133,7 @@ export function LidsPage() {
   const [selectedLidId, setSelectedLidId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
   const [brandFilter, setBrandFilter] = useState("all")
   const [sizeFilter, setSizeFilter] = useState("all")
   const [colorFilter, setColorFilter] = useState("all")
@@ -143,8 +144,8 @@ export function LidsPage() {
     [lidsQuery.data, selectedLidId],
   )
   const visibleLids = useMemo(
-    () => filterAndSortLids(lidsQuery.data ?? [], { search, brandFilter, sizeFilter, colorFilter }),
-    [brandFilter, colorFilter, lidsQuery.data, search, sizeFilter],
+    () => filterAndSortLids(lidsQuery.data ?? [], { search, typeFilter, brandFilter, sizeFilter, colorFilter }),
+    [brandFilter, colorFilter, lidsQuery.data, search, sizeFilter, typeFilter],
   )
 
   const form = useForm<LidFormValues>({
@@ -278,7 +279,7 @@ export function LidsPage() {
             <p className="text-sm text-muted-foreground">No lids found. Admins can create the first lid record.</p>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_10rem_12rem]">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem_12rem_10rem_12rem]">
             <div className="grid gap-2">
               <Label htmlFor="lid-search">Search lids</Label>
               <Input
@@ -288,6 +289,13 @@ export function LidsPage() {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </div>
+            <CatalogFilterSelect
+              label="Type"
+              value={typeFilter}
+              options={lidTypes}
+              formatLabel={formatLidContractLabel}
+              onValueChange={setTypeFilter}
+            />
             <CatalogFilterSelect
               label="Brand"
               value={brandFilter}
@@ -600,6 +608,7 @@ function filterAndSortLids(
   lids: Lid[],
   filters: {
     search: string
+    typeFilter: string
     brandFilter: string
     sizeFilter: string
     colorFilter: string
@@ -610,6 +619,10 @@ function filterAndSortLids(
   return [...lids]
     .sort((left, right) => left.sku.localeCompare(right.sku, undefined, { numeric: true }))
     .filter((lid) => {
+      if (filters.typeFilter !== "all" && lid.type !== filters.typeFilter) {
+        return false
+      }
+
       if (filters.brandFilter !== "all" && lid.brand !== filters.brandFilter) {
         return false
       }
