@@ -128,8 +128,12 @@ export function SellableProductPriceRulesPage() {
       return
     }
 
-    form.reset(selectedRule ? toFormValues(selectedRule) : getEmptyFormValues(productBundlesQuery.data ?? []))
-  }, [dialogOpen, form, productBundlesQuery.data, selectedRule])
+    form.reset(
+      selectedRule
+        ? toFormValues(selectedRule)
+        : getEmptyFormValues(productBundlesQuery.data ?? [], bundleFilter),
+    )
+  }, [bundleFilter, dialogOpen, form, productBundlesQuery.data, selectedRule])
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -169,7 +173,7 @@ export function SellableProductPriceRulesPage() {
 
       setDialogOpen(false)
       setSelectedRuleId(null)
-      form.reset(getEmptyFormValues(productBundlesQuery.data ?? []))
+      form.reset(getEmptyFormValues(productBundlesQuery.data ?? [], bundleFilter))
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to save pricing rule.")
     }
@@ -275,7 +279,7 @@ export function SellableProductPriceRulesPage() {
           if (!open) {
             setSelectedRuleId(null)
             setSubmitError(null)
-            form.reset(getEmptyFormValues(productBundlesQuery.data ?? []))
+            form.reset(getEmptyFormValues(productBundlesQuery.data ?? [], bundleFilter))
           }
         }}
       >
@@ -428,10 +432,15 @@ export function SellableProductPriceRulesPage() {
   )
 }
 
-function getEmptyFormValues(bundles: ProductBundle[]): PricingRuleFormValues {
+function getEmptyFormValues(
+  bundles: ProductBundle[],
+  selectedBundleId?: string,
+): PricingRuleFormValues {
+  const selectedBundle = bundles.find((bundle) => bundle.id === selectedBundleId)
+
   return {
     ...emptyFormValues,
-    product_bundle_id: bundles[0]?.id ?? "",
+    product_bundle_id: selectedBundle?.id ?? bundles[0]?.id ?? "",
   }
 }
 
