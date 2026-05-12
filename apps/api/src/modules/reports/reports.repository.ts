@@ -1,4 +1,4 @@
-import { and, asc, gte, isNotNull, lte, eq, or, sql } from "drizzle-orm"
+import { and, asc, gte, isNotNull, isNull, lte, eq, ne, or, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import { cups, inventoryMovements, invoices, invoiceItems, orders } from "../../db/schema/index.js"
@@ -57,6 +57,7 @@ export class ReportsRepository {
         count: sql<number>`count(*)`,
       })
       .from(orders)
+      .where(and(isNull(orders.archivedAt), ne(orders.status, "canceled")))
       .groupBy(orders.status)
 
     return rows.map((row) => ({
@@ -118,6 +119,8 @@ export class ReportsRepository {
   ): Promise<SalesCostVisibilityRow[]> {
     const conditions = [
       eq(orderLineItemProgressEvents.stage, "released"),
+      isNull(orders.archivedAt),
+      ne(orders.status, "canceled"),
       query.start_date ? gte(orderLineItemProgressEvents.eventDate, query.start_date) : undefined,
       query.end_date ? lte(orderLineItemProgressEvents.eventDate, query.end_date) : undefined,
     ].filter(Boolean)
@@ -144,6 +147,7 @@ export class ReportsRepository {
       })
       .from(orderLineItemProgressEvents)
       .innerJoin(orderItems, eq(orderLineItemProgressEvents.orderLineItemId, orderItems.id))
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
       .innerJoin(cups, eq(orderItems.cupId, cups.id))
       .where(and(...conditions))
       .groupBy(
@@ -176,6 +180,10 @@ export class ReportsRepository {
       ELSE NULL
     END`
     const conditions = [
+      isNull(invoices.archivedAt),
+      ne(invoices.status, "void"),
+      isNull(orders.archivedAt),
+      ne(orders.status, "canceled"),
       query.start_date ? gte(invoices.createdAt, query.start_date) : undefined,
       query.end_date ? lte(invoices.createdAt, query.end_date) : undefined,
       query.item_type ? eq(invoiceItems.itemType, query.item_type) : undefined,
@@ -199,6 +207,7 @@ export class ReportsRepository {
       .from(invoiceItems)
       .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
       .innerJoin(orderItems, eq(invoiceItems.orderItemId, orderItems.id))
+      .innerJoin(orders, eq(invoices.orderId, orders.id))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .groupBy(invoiceItems.itemType, itemIdExpression, invoiceItems.descriptionSnapshot)
       .orderBy(asc(invoiceItems.itemType), asc(invoiceItems.descriptionSnapshot))
@@ -220,6 +229,10 @@ export class ReportsRepository {
     orderCount: number
   }> {
     const conditions = [
+      isNull(invoices.archivedAt),
+      ne(invoices.status, "void"),
+      isNull(orders.archivedAt),
+      ne(orders.status, "canceled"),
       query.start_date ? gte(invoices.createdAt, query.start_date) : undefined,
       query.end_date ? lte(invoices.createdAt, query.end_date) : undefined,
       query.item_type ? eq(invoiceItems.itemType, query.item_type) : undefined,
@@ -236,6 +249,7 @@ export class ReportsRepository {
       .from(invoiceItems)
       .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
       .innerJoin(orderItems, eq(invoiceItems.orderItemId, orderItems.id))
+      .innerJoin(orders, eq(invoices.orderId, orders.id))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
 
     return {

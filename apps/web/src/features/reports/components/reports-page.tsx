@@ -395,7 +395,7 @@ function InventoryReportTable({ items }: { items: InventoryReportItem[] }) {
 function OrderStatusReportSection({ report }: { report: OrderStatusReport | undefined }) {
   return (
     <div className="grid gap-4">
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {report?.statuses.map((item) => (
           <MetricCard
             key={item.status}
@@ -409,7 +409,7 @@ function OrderStatusReportSection({ report }: { report: OrderStatusReport | unde
       {report ? (
         <Card>
           <CardHeader>
-            <CardDescription>Total orders tracked</CardDescription>
+            <CardDescription>Total active orders</CardDescription>
             <CardTitle className="text-2xl">{report.total_orders.toLocaleString()}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -421,8 +421,7 @@ function OrderStatusReportSection({ report }: { report: OrderStatusReport | unde
               ))}
             </div>
             <p className="text-sm text-muted-foreground">
-              `partial_released` remains distinct from `completed` so partial fulfillment does not
-              get flattened into a false done state.
+              Canceled and archived orders are excluded from active order reporting.
             </p>
           </CardContent>
         </Card>
@@ -580,12 +579,12 @@ function CommercialSalesReportSection({
         <MetricCard
           label="Invoices"
           value={report?.totals.total_invoices ?? 0}
-          description="Distinct invoices represented"
+          description="Distinct active invoices represented"
         />
         <MetricCard
           label="Orders"
           value={report?.totals.total_orders ?? 0}
-          description="Distinct orders represented"
+          description="Distinct active orders represented"
         />
       </div>
 
@@ -601,7 +600,8 @@ function CommercialSalesReportSection({
           <CardContent>
             <p className="text-sm text-muted-foreground">
               This report reads customer-facing invoice line snapshots. It does not read inventory
-              movement rows and does not split product bundles into cup/lid components.
+              movement rows, does not split product bundles into cup/lid components, and excludes
+              voided invoices plus canceled or archived orders.
             </p>
           </CardContent>
         </Card>
@@ -653,7 +653,7 @@ function statusDescription(item: OrderStatusReportItem) {
     case "completed":
       return "All ordered quantity released"
     case "canceled":
-      return "Order lifecycle closed"
+      return "Excluded from active order reporting"
   }
 }
 

@@ -33,7 +33,6 @@ export const orderReportStatuses = [
   "in_progress",
   "partial_released",
   "completed",
-  "canceled",
 ] as const
 
 export type OrderReportStatus = (typeof orderReportStatuses)[number]

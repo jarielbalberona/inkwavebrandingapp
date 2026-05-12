@@ -82,12 +82,12 @@ export function InvoicesPage() {
             <MetricCard
               label="Total invoices"
               value={overview.totalInvoices.toLocaleString()}
-              description={`${overview.pendingInvoices.toLocaleString()} pending, ${overview.paidInvoices.toLocaleString()} paid, ${overview.voidInvoices.toLocaleString()} void.`}
+              description={`${overview.pendingInvoices.toLocaleString()} pending, ${overview.paidInvoices.toLocaleString()} paid. Void and archived invoices are excluded.`}
             />
             <MetricCard
               label="Total billed"
               value={formatCurrency(overview.totalBilled)}
-              description="Gross invoice amount across every non-filtered invoice on this page load."
+              description="Gross invoice amount across active pending and paid invoices."
             />
             <MetricCard
               label="Payments collected"
@@ -207,6 +207,10 @@ function filterArchivedInvoices(invoices: InvoiceListItem[]) {
 function summarizeInvoices(invoices: InvoiceListItem[]) {
   return invoices.reduce(
     (summary, invoice) => {
+      if (invoice.status === "void") {
+        return summary
+      }
+
       const totalAmount = Number(invoice.total_amount)
       const paidAmount = Number(invoice.paid_amount)
       const remainingBalance = Number(invoice.remaining_balance)
@@ -218,8 +222,6 @@ function summarizeInvoices(invoices: InvoiceListItem[]) {
 
       if (invoice.status === "paid") {
         summary.paidInvoices += 1
-      } else if (invoice.status === "void") {
-        summary.voidInvoices += 1
       } else {
         summary.pendingInvoices += 1
       }
@@ -230,7 +232,6 @@ function summarizeInvoices(invoices: InvoiceListItem[]) {
       totalInvoices: 0,
       pendingInvoices: 0,
       paidInvoices: 0,
-      voidInvoices: 0,
       totalBilled: 0,
       totalCollected: 0,
       totalOutstanding: 0,

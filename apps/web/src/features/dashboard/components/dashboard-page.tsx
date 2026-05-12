@@ -198,7 +198,7 @@ function OrderStatusCard({ summary }: { summary: DashboardSummary }) {
         <Item variant="muted" size="sm" className="text-sm text-muted-foreground">
           <ItemContent>
             <p>
-              Total orders tracked:{" "}
+              Total active orders:{" "}
               <span className="font-medium text-foreground">
                 {summary.orders.total_orders.toLocaleString()}
               </span>
@@ -260,7 +260,7 @@ function statusDescription(status: DashboardSummary["orders"]["statuses"][number
     case "completed":
       return "All line items have reached full released quantity."
     case "canceled":
-      return "Order was canceled and operationally closed."
+      return "Excluded from active dashboard totals."
   }
 }
 
@@ -268,13 +268,13 @@ function statusBadgeVariant(status: DashboardSummary["orders"]["statuses"][numbe
   switch (status) {
     case "completed":
       return "default"
-    case "canceled":
-      return "secondary"
     case "partial_released":
       return "outline"
     case "in_progress":
       return "outline"
     case "pending":
+      return "secondary"
+    case "canceled":
       return "secondary"
   }
 }
