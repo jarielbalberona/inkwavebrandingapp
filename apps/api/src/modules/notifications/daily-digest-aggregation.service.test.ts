@@ -74,7 +74,8 @@ test("DailyDigestAggregationService builds digest props for a Manila business da
 
   assert.equal(digest.window.timezone, "Asia/Manila")
   assert.equal(digest.props.reportDateLabel, "Monday, April 27, 2026")
-  assert.equal(digest.props.orderSummary.totalOrders, 8)
+  assert.equal(digest.props.orderSummary.totalOrders, 7)
+  assert.equal(digest.props.orderSummary.canceledOrders, 1)
   assert.equal(digest.props.invoiceSummary.totalPaidAmount, 2750)
   assert.equal(digest.props.inventorySummary.outOfStockCount, 1)
   assert.equal(digest.isEmpty, false)
@@ -83,9 +84,10 @@ test("DailyDigestAggregationService builds digest props for a Manila business da
   assert.match(digest.highlights.join(" | "), /Fulfillment progress today/)
   assert.match(digest.highlights.join(" | "), /Orders created today: 2/)
   assert.match(digest.highlights.join(" | "), /Payments recorded today: 2 totaling 2750.00/)
+  assert.doesNotMatch(digest.highlights.join(" | "), /Invoices voided today/)
 })
 
-test("DailyDigestAggregationService can report an empty digest", async () => {
+test("DailyDigestAggregationService treats canceled orders and void invoices as empty cleanup data", async () => {
   const service = new DailyDigestAggregationService({
     async getOrderStatusCounts() {
       return {
@@ -93,14 +95,14 @@ test("DailyDigestAggregationService can report an empty digest", async () => {
         inProgress: 0,
         partialReleased: 0,
         completed: 0,
-        canceled: 0,
+        canceled: 3,
       }
     },
     async getInvoiceSnapshot() {
       return {
         pendingCount: 0,
         paidCount: 0,
-        voidCount: 0,
+        voidCount: 2,
         outstandingBalance: 0,
       }
     },
@@ -109,7 +111,7 @@ test("DailyDigestAggregationService can report an empty digest", async () => {
         ordersCreated: 0,
         ordersUpdated: 0,
         invoicesCreated: 0,
-        invoicesVoided: 0,
+        invoicesVoided: 2,
         paymentsRecorded: 0,
         totalPaidAmount: 0,
         stockIntakeCount: 0,

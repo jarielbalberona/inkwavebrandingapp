@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, isNull, lt, sql } from "drizzle-orm"
+import { and, count, desc, eq, gte, isNull, lt, ne, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
@@ -94,6 +94,7 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
         count: count(),
       })
       .from(orders)
+      .where(isNull(orders.archivedAt))
       .groupBy(orders.status)
 
     const counts = new Map(rows.map((row) => [row.status, Number(row.count)]))
@@ -110,11 +111,14 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
   async getInvoiceSnapshot(): Promise<DailyDigestInvoiceSnapshot> {
     const rows = await this.db
       .select({
-        pendingCount: sql<number>`COUNT(*) FILTER (WHERE ${invoices.status} = 'pending')`,
-        paidCount: sql<number>`COUNT(*) FILTER (WHERE ${invoices.status} = 'paid')`,
-        voidCount: sql<number>`COUNT(*) FILTER (WHERE ${invoices.status} = 'void')`,
+        pendingCount:
+          sql<number>`COUNT(*) FILTER (WHERE ${invoices.status} = 'pending' AND ${invoices.archivedAt} IS NULL)`,
+        paidCount:
+          sql<number>`COUNT(*) FILTER (WHERE ${invoices.status} = 'paid' AND ${invoices.archivedAt} IS NULL)`,
+        voidCount:
+          sql<number>`COUNT(*) FILTER (WHERE ${invoices.status} = 'void' AND ${invoices.archivedAt} IS NULL)`,
         outstandingBalance:
-          sql<string>`COALESCE(SUM(${invoices.remainingBalance}), 0)::text`,
+          sql<string>`COALESCE(SUM(${invoices.remainingBalance}) FILTER (WHERE ${invoices.status} = 'pending' AND ${invoices.archivedAt} IS NULL), 0)::text`,
       })
       .from(invoices)
 
@@ -135,7 +139,11 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
       gte(orderLineItemProgressEvents.eventDate, window.startedAt),
       lt(orderLineItemProgressEvents.eventDate, window.endedAt),
     )
-    const baseJoin = and(eventWindow, isNull(orders.archivedAt))
+    const activeOrderWindow = and(
+      eventWindow,
+      isNull(orders.archivedAt),
+      ne(orders.status, "canceled"),
+    )
 
     const [eventTotalRow, stageRows, recentRaw] = await Promise.all([
       this.db
@@ -143,7 +151,7 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
         .from(orderLineItemProgressEvents)
         .innerJoin(orderItems, eq(orderItems.id, orderLineItemProgressEvents.orderLineItemId))
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
-        .where(baseJoin),
+        .where(activeOrderWindow),
       this.db
         .select({
           stage: orderLineItemProgressEvents.stage,
@@ -153,7 +161,7 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
         .from(orderLineItemProgressEvents)
         .innerJoin(orderItems, eq(orderItems.id, orderLineItemProgressEvents.orderLineItemId))
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
-        .where(baseJoin)
+        .where(activeOrderWindow)
         .groupBy(orderLineItemProgressEvents.stage),
       this.db
         .select({
@@ -165,7 +173,7 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
         .from(orderLineItemProgressEvents)
         .innerJoin(orderItems, eq(orderItems.id, orderLineItemProgressEvents.orderLineItemId))
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
-        .where(baseJoin)
+        .where(activeOrderWindow)
         .orderBy(
           desc(orderLineItemProgressEvents.eventDate),
           desc(orderLineItemProgressEvents.id),
@@ -219,12 +227,20 @@ export class DailyDigestAggregationRepository implements DailyDigestAggregationD
   async getActivityCounts(
     window: DailyDigestAggregationWindow,
   ): Promise<DailyDigestActivityCounts> {
-    const range = and(gte(orders.createdAt, window.startedAt), lt(orders.createdAt, window.endedAt))
+    const activeOrderScope = and(isNull(orders.archivedAt), ne(orders.status, "canceled"))
+    const range = and(
+      activeOrderScope,
+      gte(orders.createdAt, window.startedAt),
+      lt(orders.createdAt, window.endedAt),
+    )
     const updateRange = and(
+      activeOrderScope,
       gte(orders.updatedAt, window.startedAt),
       lt(orders.updatedAt, window.endedAt),
     )
     const invoiceCreatedRange = and(
+      isNull(invoices.archivedAt),
+      ne(invoices.status, "void"),
       gte(invoices.createdAt, window.startedAt),
       lt(invoices.createdAt, window.endedAt),
     )

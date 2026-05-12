@@ -126,8 +126,7 @@ export function DailyBusinessDigestEmail({
           Total orders: <strong>{formatCount(orderSummary.totalOrders)}</strong> · In progress:{" "}
           <strong>{formatCount(orderSummary.inProgressOrders)}</strong> · Partial released:{" "}
           <strong>{formatCount(orderSummary.partialReleasedOrders)}</strong> · Completed:{" "}
-          <strong>{formatCount(orderSummary.completedOrders)}</strong> · Canceled:{" "}
-          <strong>{formatCount(orderSummary.canceledOrders)}</strong>
+          <strong>{formatCount(orderSummary.completedOrders)}</strong>
         </Text>
       </Section>
 
@@ -198,9 +197,7 @@ export function DailyBusinessDigestEmail({
           </Column>
         </Row>
         <Text className="m-0 mt-3 text-sm leading-7 text-muted-foreground">
-          Paid invoices: <strong>{formatCount(invoiceSummary.paidInvoiceCount)}</strong> · Void
-          invoices: <strong>{formatCount(invoiceSummary.voidInvoiceCount)}</strong> · Amount
-          collected:{" "}
+          Paid invoices: <strong>{formatCount(invoiceSummary.paidInvoiceCount)}</strong> · Amount collected:{" "}
           <strong>{formatCurrency(invoiceSummary.totalPaidAmount, currency, locale)}</strong>
         </Text>
       </Section>

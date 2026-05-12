@@ -89,7 +89,6 @@ export class DailyDigestAggregationService {
       props.orderSummary.totalOrders === 0 &&
       props.invoiceSummary.pendingInvoiceCount === 0 &&
       props.invoiceSummary.paidInvoiceCount === 0 &&
-      props.invoiceSummary.voidInvoiceCount === 0 &&
       fulfillmentDay.totalEvents === 0
 
     return {
@@ -147,8 +146,7 @@ function totalOrders(counts: DailyDigestOrderStatusCounts): number {
     counts.pending +
     counts.inProgress +
     counts.partialReleased +
-    counts.completed +
-    counts.canceled
+    counts.completed
   )
 }
 
@@ -183,10 +181,6 @@ function buildHighlights(
     highlights.push(
       `Payments recorded today: ${activity.paymentsRecorded} totaling ${totalLabel}`,
     )
-  }
-
-  if (activity.invoicesVoided > 0) {
-    highlights.push(`Invoices voided today: ${activity.invoicesVoided}`)
   }
 
   if (invoiceSnapshot.pendingCount > 0) {
