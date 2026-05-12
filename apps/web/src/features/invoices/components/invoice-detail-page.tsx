@@ -56,7 +56,6 @@ import {
   useArchiveInvoiceMutation,
   useDeleteInvoicePaymentMutation,
   useInvoiceQuery,
-  useInvoiceShareLinkMutation,
   useRecordInvoicePaymentMutation,
   useUpdateInvoicePaymentMutation,
   useVoidInvoiceMutation,
@@ -86,7 +85,6 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const deleteInvoicePaymentMutation = useDeleteInvoicePaymentMutation()
   const voidInvoiceMutation = useVoidInvoiceMutation()
   const archiveInvoiceMutation = useArchiveInvoiceMutation()
-  const shareLinkMutation = useInvoiceShareLinkMutation()
   const [shareLinkState, setShareLinkState] = useState<{
     invoiceId: string
     shareLink: InvoiceShareLink
@@ -176,7 +174,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
     setIsPaymentDialogOpen(true)
   }
 
-  async function resolveShareLink(): Promise<InvoiceShareLink> {
+  function resolveShareLink(): InvoiceShareLink {
     if (!invoice) {
       throw new Error("Invoice data is not available yet.")
     }
@@ -185,13 +183,16 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
       return shareLink
     }
 
-    const nextShareLink = await shareLinkMutation.mutateAsync(invoice.id)
+    const nextShareLink = {
+      url: `${window.location.origin}/i/${encodeURIComponent(invoice.invoice_number)}`,
+      filename: `${invoice.invoice_number}.pdf`,
+    }
     setShareLinkState({ invoiceId: invoice.id, shareLink: nextShareLink })
     return nextShareLink
   }
 
   async function handleCopyShareLink() {
-    if (!invoice || shareLinkMutation.isPending) {
+    if (!invoice) {
       return
     }
 
@@ -201,7 +202,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
     let resolvedShareLink: InvoiceShareLink | null = null
 
     try {
-      const nextShareLink = await resolveShareLink()
+      const nextShareLink = resolveShareLink()
       resolvedShareLink = nextShareLink
 
       if (!navigator.clipboard?.writeText) {
@@ -225,7 +226,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   }
 
   async function handleViewPdf() {
-    if (!invoice || shareLinkMutation.isPending) {
+    if (!invoice) {
       return
     }
 
@@ -242,7 +243,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
     child.opener = null
 
     try {
-      const nextShareLink = await resolveShareLink()
+      const nextShareLink = resolveShareLink()
       child.location.href = nextShareLink.url
       setShareMessage(`Opened ${nextShareLink.filename}.`)
     } catch (error) {
@@ -365,21 +366,19 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={shareLinkMutation.isPending}
                 size="sm"
                 onClick={() => {
                   void handleCopyShareLink()
                 }}
               >
                 <CopyIcon className="size-4" />
-                {shareLinkMutation.isPending ? "Copying..." : "Link"}
+                Link
               </Button>
             ) : null}
             {invoice ? (
               <Button
                 type="button"
                 variant="outline"
-                disabled={shareLinkMutation.isPending}
                 size="sm"
                 onClick={() => {
                   void handleViewPdf()
@@ -387,6 +386,32 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
               >
                 <EyeIcon className="size-4" />
                 PDF
+              </Button>
+            ) : null}
+            {canVoidInvoice ? (
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={voidInvoiceMutation.isPending}
+                size="sm"
+                onClick={() => {
+                  setIsVoidDialogOpen(true)
+                }}
+              >
+                {voidInvoiceMutation.isPending ? "Voiding..." : "Void invoice"}
+              </Button>
+            ) : null}
+            {canArchiveInvoice ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={archiveInvoiceMutation.isPending}
+                size="sm"
+                onClick={() => {
+                  setIsArchiveDialogOpen(true)
+                }}
+              >
+                {archiveInvoiceMutation.isPending ? "Archiving..." : "Archive invoice"}
               </Button>
             ) : null}
           </div>

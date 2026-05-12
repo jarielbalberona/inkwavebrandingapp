@@ -3,6 +3,10 @@ import assert from "node:assert/strict"
 
 import { renderInvoicePdf } from "./render-invoice-pdf.js"
 
+function countPdfPages(pdf: Buffer) {
+  return pdf.toString("latin1").match(/\/Type\s*\/Page\b/g)?.length ?? 0
+}
+
 test("renderInvoicePdf returns a PDF buffer for invoice data", async () => {
   const pdf = await renderInvoicePdf({
     brand_name: "Ink Wave Branding App",
@@ -70,6 +74,7 @@ test("renderInvoicePdf returns a PDF buffer for invoice data", async () => {
   assert.ok(Buffer.isBuffer(pdf))
   assert.ok(pdf.byteLength > 0)
   assert.equal(pdf.subarray(0, 4).toString("utf8"), "%PDF")
+  assert.equal(countPdfPages(pdf), 1)
 })
 
 test("renderInvoicePdf supports custom_charge invoice lines", async () => {
@@ -129,4 +134,60 @@ test("renderInvoicePdf supports custom_charge invoice lines", async () => {
   assert.ok(Buffer.isBuffer(pdf))
   assert.ok(pdf.byteLength > 0)
   assert.equal(pdf.subarray(0, 4).toString("utf8"), "%PDF")
+  assert.equal(countPdfPages(pdf), 1)
+})
+
+test("renderInvoicePdf does not create a trailing header-only page for compact invoices", async () => {
+  const pdf = await renderInvoicePdf({
+    brand_name: "Ink Wave Branding App",
+    document_title: "Invoice",
+    invoice_number: "INV-20260512-COMPACT",
+    order_reference: "ORD-003",
+    generated_at: "May 12, 2026",
+    status: {
+      label: "Pending",
+      tone: "warning",
+    },
+    from: {
+      label: "From",
+      name: "Ink Wave Branding App",
+      lines: ["Cup printing operations"],
+    },
+    to: {
+      label: "To",
+      name: "Ink Wave Cafe",
+      lines: ["Jane Doe", "09170000000", "jane@example.com", "Manila"],
+    },
+    left_meta: [
+      { label: "Invoice number", value: "INV-20260512-COMPACT" },
+      { label: "Generated", value: "May 12, 2026" },
+      { label: "Invoice status", value: "Pending" },
+    ],
+    right_meta: [
+      { label: "Order reference", value: "ORD-003" },
+      { label: "Customer code", value: "CUST-001" },
+      { label: "Line items", value: "8" },
+    ],
+    notes: "Deliver before Friday.",
+    line_items: Array.from({ length: 8 }, (_, index) => ({
+      item: `Invoice item ${index + 1}`,
+      notes: index % 2 === 0 ? null : "Logo print details",
+      quantity: 100,
+      unit_price: "15.00",
+      total: "1500.00",
+    })),
+    subtotal: "12000.00",
+    discount: "0.00",
+    total: "12000.00",
+    paid_amount: "0.00",
+    remaining_balance: "12000.00",
+    payment_instructions: [],
+    support_lines: [],
+    footer_note: null,
+  })
+
+  assert.ok(Buffer.isBuffer(pdf))
+  assert.ok(pdf.byteLength > 0)
+  assert.equal(pdf.subarray(0, 4).toString("utf8"), "%PDF")
+  assert.equal(countPdfPages(pdf), 1)
 })

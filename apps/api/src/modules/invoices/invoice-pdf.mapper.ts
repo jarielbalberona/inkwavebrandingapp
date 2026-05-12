@@ -104,7 +104,7 @@ function toInvoicePdfPaymentInstructions(
       return [
         "Send payment to:",
         "Aiko Kitane / InkWaveBranding Digital Printing Services",
-        "Bank: BDO",
+        "Bank: BDO Unibank",
         "Account Number: 006670290348",
       ]
   }

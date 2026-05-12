@@ -12,6 +12,7 @@ export const routeDefinitions = [
   { access: "public", method: "GET", path: "/health" },
   { access: "public", method: "POST", path: "/auth/login" },
   { access: "public", method: "POST", path: "/auth/logout" },
+  { access: "public", method: "GET", path: "/public/invoices/:invoiceNumber/pdf" },
   { access: "protected", method: "GET", path: "/auth/me" },
   { access: "protected", method: "GET", path: "/customers" },
   { access: "protected", method: "POST", path: "/customers" },

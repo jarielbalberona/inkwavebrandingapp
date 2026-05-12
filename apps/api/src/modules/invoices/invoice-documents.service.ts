@@ -13,6 +13,14 @@ import { toInvoicePdfData } from "./invoice-pdf.mapper.js"
 import { InvoicesRepository } from "./invoices.repository.js"
 import { toInvoiceDto } from "./invoices.types.js"
 
+const publicInvoiceViewer: SafeUser = {
+  id: "00000000-0000-0000-0000-000000000000",
+  email: "public-invoice-viewer@inkwavebrand.ing",
+  displayName: "Public invoice viewer",
+  role: "admin",
+  permissions: ["invoices.view"],
+}
+
 export class InvoiceShareLinkUnavailableError extends Error {
   readonly statusCode = 409
 
@@ -46,6 +54,24 @@ export class InvoiceDocumentsService {
       throw new InvoiceNotFoundError()
     }
 
+    return this.buildPdfDocument(invoice, user)
+  }
+
+  async getPublicPdfDocumentByInvoiceNumber(invoiceNumber: string) {
+    const normalizedInvoiceNumber = normalizePublicInvoiceNumber(invoiceNumber)
+    const invoice = await this.invoicesRepository.findByInvoiceNumberWithRelations(normalizedInvoiceNumber)
+
+    if (!invoice || invoice.archivedAt) {
+      throw new InvoiceNotFoundError()
+    }
+
+    return this.buildPdfDocument(invoice, publicInvoiceViewer)
+  }
+
+  private async buildPdfDocument(
+    invoice: NonNullable<Awaited<ReturnType<InvoicesRepository["findByIdWithRelations"]>>>,
+    user: SafeUser,
+  ) {
     const invoiceDto = toInvoiceDto(invoice, user)
     const filename = `${invoiceDto.invoice_number}.pdf`
     const desiredVisibility = this.getDesiredVisibility()
@@ -81,7 +107,7 @@ export class InvoiceDocumentsService {
       } catch (error) {
         logError({
           event: "invoice_document_storage_read_failed",
-          invoiceId,
+          invoiceId: invoice.id,
           objectKey: currentAsset.objectKey,
           ...serializeError(error),
         })
@@ -120,7 +146,7 @@ export class InvoiceDocumentsService {
         } catch (error) {
           logError({
             event: "invoice_document_storage_cleanup_failed",
-            invoiceId,
+            invoiceId: invoice.id,
             objectKey: previousObjectKey,
             ...serializeError(error),
           })
@@ -200,4 +226,14 @@ export class InvoiceDocumentsService {
   private getDesiredVisibility() {
     return this.storageConfig.r2?.usePublicCdn ? "public" : "private"
   }
+}
+
+function normalizePublicInvoiceNumber(invoiceNumber: string) {
+  const normalized = decodeURIComponent(invoiceNumber).trim().toUpperCase()
+
+  if (!/^INV-\d{8}-[A-Z0-9]{8,}$/.test(normalized)) {
+    throw new InvoiceNotFoundError()
+  }
+
+  return normalized
 }

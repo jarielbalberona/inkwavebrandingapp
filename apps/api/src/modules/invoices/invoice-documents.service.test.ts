@@ -48,6 +48,56 @@ test("InvoiceDocumentsService renders inline PDF when storage is disabled", asyn
   assert.equal(assetCreated, false)
 })
 
+test("InvoiceDocumentsService renders a public invoice PDF by invoice number", async () => {
+  const service = new InvoiceDocumentsService(
+    {
+      findByInvoiceNumberWithRelations: async (invoiceNumber: string) => {
+        assert.equal(invoiceNumber, "INV-20260424-TEST0001")
+        return buildInvoiceRecord()
+      },
+    } as never,
+    {} as never,
+    {
+      provider: "none",
+      maxFileBytes: 5 * 1024 * 1024,
+      maxRequestBytes: 50 * 1024 * 1024,
+      r2: null,
+    },
+    null,
+  )
+
+  const document = await service.getPublicPdfDocumentByInvoiceNumber("inv-20260424-test0001")
+
+  assert.equal(document.contentType, "application/pdf")
+  assert.equal(document.filename, "INV-20260424-TEST0001.pdf")
+  assert.ok(document.body.byteLength > 0)
+  assert.equal(document.body.subarray(0, 4).toString("utf8"), "%PDF")
+})
+
+test("InvoiceDocumentsService rejects archived invoices from the public PDF route", async () => {
+  const service = new InvoiceDocumentsService(
+    {
+      findByInvoiceNumberWithRelations: async () =>
+        buildInvoiceRecord({
+          archivedAt: new Date("2026-04-24T11:00:00.000Z"),
+        }),
+    } as never,
+    {} as never,
+    {
+      provider: "none",
+      maxFileBytes: 5 * 1024 * 1024,
+      maxRequestBytes: 50 * 1024 * 1024,
+      r2: null,
+    },
+    null,
+  )
+
+  await assert.rejects(
+    () => service.getPublicPdfDocumentByInvoiceNumber("INV-20260424-TEST0001"),
+    /Invoice not found/,
+  )
+})
+
 test("InvoiceDocumentsService rejects share links when public CDN storage is unavailable", async () => {
   const service = new InvoiceDocumentsService(
     {

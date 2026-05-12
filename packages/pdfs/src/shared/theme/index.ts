@@ -54,22 +54,22 @@ export const sharedStyles = StyleSheet.create({
     fontFamily: invoiceTokens.fonts.regular,
     fontSize: invoiceTokens.type.base,
     lineHeight: 1.45,
-    paddingTop: 80,
-    paddingBottom: 48,
+    paddingTop: 72,
+    paddingBottom: 44,
     paddingHorizontal: 32,
   },
   content: {
-    marginTop: 16,
+    marginTop: 10,
     display: "flex",
     flexDirection: "column",
-    gap: 12,
+    gap: 8,
   },
   fixedHeader: {
     position: "absolute",
     top: 0,
     left: 32,
     right: 32,
-    paddingTop: 24,
+    paddingTop: 20,
     paddingBottom: 8,
     display: "flex",
     flexDirection: "row",
@@ -80,7 +80,7 @@ export const sharedStyles = StyleSheet.create({
   },
   fixedFooter: {
     position: "absolute",
-    bottom: 24,
+    bottom: 20,
     left: 32,
     right: 32,
     paddingTop: 8,
@@ -154,7 +154,7 @@ export const sharedStyles = StyleSheet.create({
   section: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 6,
   },
   sectionTitle: {
     color: invoiceTokens.colors.textPrimary,
@@ -186,7 +186,7 @@ export const sharedStyles = StyleSheet.create({
   tableRow: {
     display: "flex",
     flexDirection: "row",
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: invoiceTokens.colors.borderDefault,
   },
@@ -208,7 +208,7 @@ export const sharedStyles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   footerBlock: {
     display: "flex",

@@ -16,6 +16,12 @@ import {
 import type { InvoicePdfData } from "../shared/types/index.js"
 
 export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
+  const paymentInstructions = invoice.payment_instructions.filter((line) => line.trim())
+  const supportLines = invoice.support_lines.filter((line) => line.trim())
+  const footerNote = invoice.footer_note?.trim()
+  const hasPaymentAndSupportContent =
+    paymentInstructions.length > 0 || supportLines.length > 0 || Boolean(footerNote)
+
   return (
     <Document title={invoice.invoice_number}>
       <PdfPageShell
@@ -128,27 +134,33 @@ export function InvoiceDocument({ invoice }: { invoice: InvoicePdfData }) {
           />
         </PdfSection>
 
-        <PdfSection title="Payment and support">
-          <View style={sharedStyles.footerBlock}>
-            {invoice.payment_instructions.map((line) => (
-              <Text key={line} style={sharedStyles.body}>
-                {line}
-              </Text>
-            ))}
-          </View>
+        {hasPaymentAndSupportContent ? (
+          <PdfSection title="Payment and support">
+            {paymentInstructions.length > 0 ? (
+              <View style={sharedStyles.footerBlock}>
+                {paymentInstructions.map((line) => (
+                  <Text key={line} style={sharedStyles.body}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
 
-          <View style={sharedStyles.footerBlock}>
-            {invoice.support_lines.map((line) => (
-              <Text key={line} style={sharedStyles.muted}>
-                {line}
-              </Text>
-            ))}
-          </View>
+            {supportLines.length > 0 ? (
+              <View style={sharedStyles.footerBlock}>
+                {supportLines.map((line) => (
+                  <Text key={line} style={sharedStyles.muted}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
 
-          {invoice.footer_note ? (
-            <Text style={sharedStyles.muted}>{invoice.footer_note}</Text>
-          ) : null}
-        </PdfSection>
+            {footerNote ? (
+              <Text style={sharedStyles.muted}>{footerNote}</Text>
+            ) : null}
+          </PdfSection>
+        ) : null}
       </PdfPageShell>
     </Document>
   )

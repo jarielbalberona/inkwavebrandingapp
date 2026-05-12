@@ -149,6 +149,29 @@ export async function handleInvoicesRoute(
 
   const invoicePdfMatch = path.match(/^\/invoices\/([^/]+)\/pdf$/)
   const invoiceShareLinkMatch = path.match(/^\/invoices\/([^/]+)\/share-link$/)
+  const publicInvoicePdfMatch = path.match(/^\/public\/invoices\/([^/]+)\/pdf$/)
+
+  if (publicInvoicePdfMatch && request.method === "GET") {
+    try {
+      const db = getDatabaseClient()
+      const pdfDocument = await InvoiceDocumentsService.fromEnv(
+        new InvoicesRepository(db),
+        new AssetsRepository(db),
+        context.env,
+      ).getPublicPdfDocumentByInvoiceNumber(publicInvoicePdfMatch[1] ?? "")
+
+      response.writeHead(200, {
+        "Content-Type": pdfDocument.contentType,
+        "Content-Length": pdfDocument.contentLength,
+        "Content-Disposition": `inline; filename="${pdfDocument.filename}"`,
+        "Cache-Control": "no-store",
+      })
+      response.end(pdfDocument.body)
+    } catch (error) {
+      handleInvoicesError(response, error)
+    }
+    return true
+  }
 
   if (invoicePdfMatch && request.method === "GET") {
     await withAuthenticatedUser(request, response, context, async (_, user) => {

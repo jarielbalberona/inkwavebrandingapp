@@ -324,6 +324,32 @@ export async function fetchInvoicePdfBlob(invoiceId: string): Promise<Blob> {
   throw new Error(message)
 }
 
+export async function fetchPublicInvoicePdfBlob(invoiceNumber: string): Promise<Blob> {
+  const response = await api.client.get<Blob>(
+    `/public/invoices/${encodeURIComponent(invoiceNumber)}/pdf`,
+    {
+      responseType: "blob",
+      validateStatus: () => true,
+    },
+  )
+
+  if (response.status === 200) {
+    return response.data
+  }
+
+  const text = await (response.data as Blob).text()
+  let message = "Unable to load this invoice PDF."
+  try {
+    const data = JSON.parse(text) as { error?: string }
+    if (data.error) {
+      message = data.error
+    }
+  } catch {
+    // leave generic message
+  }
+  throw new Error(message)
+}
+
 /**
  * Opens the PDF in a new tab using a blob URL so the request uses the authenticated API client.
  */

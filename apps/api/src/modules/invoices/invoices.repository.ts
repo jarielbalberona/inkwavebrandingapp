@@ -164,6 +164,26 @@ export class InvoicesRepository {
     })
   }
 
+  async findByInvoiceNumberWithRelations(invoiceNumber: string) {
+    return this.db.query.invoices.findFirst({
+      where: ilike(invoices.invoiceNumber, invoiceNumber),
+      with: {
+        documentAsset: true,
+        items: {
+          with: {
+            orderItem: true,
+          },
+        },
+        payments: {
+          where: (p, { isNull }) => isNull(p.archivedAt),
+          with: {
+            createdByUser: true,
+          },
+        },
+      },
+    })
+  }
+
   async findByOrderId(orderId: string) {
     return this.db.query.invoices.findFirst({
       where: eq(invoices.orderId, orderId),
