@@ -2,7 +2,11 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { InvoicePaymentLockError } from "../invoices/invoices.service.js"
-import { OrderArchiveStatusError, OrdersService } from "./orders.service.js"
+import {
+  getPriorityForNewOrder,
+  OrderArchiveStatusError,
+  OrdersService,
+} from "./orders.service.js"
 
 function createOrdersService(overrides: {
   listWithRelations: () => Promise<unknown>
@@ -30,6 +34,12 @@ const adminUser = {
   role: "admin" as const,
   permissions: [],
 }
+
+test("getPriorityForNewOrder appends after the current lowest-priority order", () => {
+  assert.equal(getPriorityForNewOrder(null), 0)
+  assert.equal(getPriorityForNewOrder(0), 1)
+  assert.equal(getPriorityForNewOrder(12), 13)
+})
 
 test("OrdersService.list returns an empty list when relation loading fails against an empty orders table", async () => {
   const service = createOrdersService({

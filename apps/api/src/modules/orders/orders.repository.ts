@@ -148,6 +148,14 @@ export class OrdersRepository {
     return result[0]?.value ?? null
   }
 
+  async getMaximumPriority(): Promise<number | null> {
+    const result = await this.db
+      .select({ value: sql<number | null>`max(${orders.priority})` })
+      .from(orders)
+
+    return result[0]?.value ?? null
+  }
+
   async findOrderItemWithOrder(id: string) {
     return this.db.query.orderItems.findFirst({
       where: eq(orderItems.id, id),

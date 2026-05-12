@@ -254,6 +254,12 @@ export class OrderLineItemProgressLockedError extends Error {
   }
 }
 
+export function getPriorityForNewOrder(
+  currentMaximumPriority: number | null
+): number {
+  return (currentMaximumPriority ?? -1) + 1
+}
+
 const cupProgressStages = [
   "printed",
   "qa_passed",
@@ -841,7 +847,9 @@ export class OrdersService {
           order: {
             orderNumber: createOrderNumber(),
             customerId: parsedInput.customer_id,
-            priority: ((await ordersRepository.getMinimumPriority()) ?? 0) - 1,
+            priority: getPriorityForNewOrder(
+              await ordersRepository.getMaximumPriority()
+            ),
             status: "pending",
             notes: parsedInput.notes,
             internalNotes: parsedInput.internal_notes,
