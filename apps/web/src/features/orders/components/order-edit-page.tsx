@@ -828,11 +828,11 @@ function OrderEditLineItemFields({
                     <ComboboxContent>
                       <ComboboxEmpty>No matching items found.</ComboboxEmpty>
                       <ComboboxList>
-                        {availableItems.map((item) => (
+                        {(item: SelectableOrderItem) => (
                           <ComboboxItem key={item.id} value={item}>
                             {formatSelectableOrderItemOption(item, itemType)}
                           </ComboboxItem>
-                        ))}
+                        )}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>

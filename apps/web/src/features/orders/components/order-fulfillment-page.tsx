@@ -389,11 +389,11 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                     <ComboboxContent>
                       <ComboboxEmpty>No matching line items found.</ComboboxEmpty>
                       <ComboboxList>
-                        {fulfillmentRows.map((row) => (
+                        {(row: FulfillmentRow) => (
                           <ComboboxItem key={row.key} value={row}>
                             {formatFulfillmentRowLabel(row)}
                           </ComboboxItem>
-                        ))}
+                        )}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>

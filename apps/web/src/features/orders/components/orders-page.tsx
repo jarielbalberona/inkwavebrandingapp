@@ -506,7 +506,7 @@ function OrdersCustomerFilter({
             {customersQuery.isLoading ? "Searching customers..." : "No customers found."}
           </ComboboxEmpty>
           <ComboboxList>
-            {customers.map((customer) => (
+            {(customer: Customer) => (
               <ComboboxItem key={customer.id} value={customer}>
                 <div className="flex w-full items-center justify-between gap-3">
                   <span className="font-medium">{customerFilterLabel(customer)}</span>
@@ -515,7 +515,7 @@ function OrdersCustomerFilter({
                   </span>
                 </div>
               </ComboboxItem>
-            ))}
+            )}
           </ComboboxList>
         </ComboboxContent>
       </Combobox>

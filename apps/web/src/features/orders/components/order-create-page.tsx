@@ -327,13 +327,13 @@ function OrderCustomerCombobox({
             No active customers found. Create or reactivate a customer before
             creating an order.
           </ComboboxEmpty>
-          <ComboboxList>
-            {customersQuery.isLoading ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                Searching customers…
-              </div>
-            ) : customers.length === 0 ? null : (
-              (customer: Customer) => (
+          {customersQuery.isLoading ? (
+            <div className="px-3 py-2 text-sm text-muted-foreground">
+              Searching customers…
+            </div>
+          ) : (
+            <ComboboxList>
+              {(customer: Customer) => (
                 <ComboboxItem
                   key={customer.id}
                   value={customer}
@@ -355,9 +355,9 @@ function OrderCustomerCombobox({
                     </span>
                   </div>
                 </ComboboxItem>
-              )
-            )}
-          </ComboboxList>
+              )}
+            </ComboboxList>
+          )}
         </ComboboxContent>
       </Combobox>
     </div>
@@ -689,7 +689,7 @@ function OrderCreateLineItemFields({
                     <ComboboxContent>
                       <ComboboxEmpty>No matching items found.</ComboboxEmpty>
                       <ComboboxList>
-                        {availableItems.map((item) => (
+                        {(item: SelectableOrderItem) => (
                           <ComboboxItem key={item.id} value={item}>
                             {formatSelectableOrderItemOption(
                               item,
@@ -697,7 +697,7 @@ function OrderCreateLineItemFields({
                               availableQuantityByTrackedItemKey
                             )}
                           </ComboboxItem>
-                        ))}
+                        )}
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>

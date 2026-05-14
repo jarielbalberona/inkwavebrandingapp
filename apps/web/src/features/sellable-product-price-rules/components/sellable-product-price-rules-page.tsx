@@ -511,11 +511,11 @@ function BundleCombobox({
       <ComboboxContent>
         <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
         <ComboboxList>
-          {options.map((option) => (
+          {(option: BundleComboboxOption) => (
             <ComboboxItem key={option.id} value={option}>
               {option.label}
             </ComboboxItem>
-          ))}
+          )}
         </ComboboxList>
       </ComboboxContent>
     </Combobox>

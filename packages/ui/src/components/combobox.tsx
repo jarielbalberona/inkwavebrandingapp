@@ -88,6 +88,7 @@ function ComboboxInput({
 
 function ComboboxContent({
   className,
+  container,
   side = "bottom",
   sideOffset = 6,
   align = "start",
@@ -95,12 +96,18 @@ function ComboboxContent({
   anchor,
   ...props
 }: ComboboxPrimitive.Popup.Props &
+  Pick<ComboboxPrimitive.Portal.Props, "container"> &
   Pick<
     ComboboxPrimitive.Positioner.Props,
     "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
   >) {
+  const dialogContainer =
+    typeof document === "undefined"
+      ? null
+      : document.activeElement?.closest<HTMLElement>("[data-slot=dialog-content]") ?? null
+
   return (
-    <ComboboxPrimitive.Portal>
+    <ComboboxPrimitive.Portal container={container ?? dialogContainer ?? undefined}>
       <ComboboxPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}
@@ -112,7 +119,7 @@ function ComboboxContent({
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"
           data-chips={!!anchor}
-          className={cn("group/combobox-content relative max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] origin-(--transform-origin) overflow-hidden rounded-none bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[chips=true]:min-w-(--anchor-width) data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 *:data-[slot=input-group]:m-1.5 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-8 *:data-[slot=input-group]:border-transparent *:data-[slot=input-group]:bg-transparent *:data-[slot=input-group]:px-2.5 *:data-[slot=input-group]:focus-within:border-transparent data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+          className={cn("group/combobox-content relative max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] origin-(--transform-origin) overflow-hidden rounded-none bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[chips=true]:min-w-(--anchor-width) data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 *:data-[slot=input-group]:m-1.5 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-8 *:data-[slot=input-group]:border-transparent *:data-[slot=input-group]:bg-transparent *:data-[slot=input-group]:px-2.5 *:data-[slot=input-group]:focus-within:border-transparent data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className)}
           {...props}
         />
       </ComboboxPrimitive.Positioner>
@@ -125,7 +132,7 @@ function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
     <ComboboxPrimitive.List
       data-slot="combobox-list"
       className={cn(
-        "no-scrollbar max-h-[min(calc(--spacing(72)---spacing(9)),calc(var(--available-height)---spacing(9)))] scroll-py-1.5 overflow-y-auto overscroll-contain p-1.5 data-empty:p-0",
+        "max-h-[min(calc(var(--spacing)*63),calc(var(--available-height)-calc(var(--spacing)*9)))] scroll-py-1.5 overflow-y-auto overscroll-contain p-1.5 data-empty:p-0",
         className
       )}
       {...props}

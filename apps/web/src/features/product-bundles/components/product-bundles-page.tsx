@@ -575,11 +575,11 @@ function CatalogCombobox<T extends { id: string }>({
       <ComboboxContent>
         <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
         <ComboboxList>
-          {options.map((option) => (
+          {(option: CatalogComboboxOption<T>) => (
             <ComboboxItem key={option.id} value={option}>
               {option.label}
             </ComboboxItem>
-          ))}
+          )}
         </ComboboxList>
       </ComboboxContent>
     </Combobox>
