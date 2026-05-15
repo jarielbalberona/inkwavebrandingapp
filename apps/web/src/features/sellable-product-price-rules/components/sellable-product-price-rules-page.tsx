@@ -219,7 +219,7 @@ export function SellableProductPriceRulesPage() {
             </Alert>
           ) : null}
 
-          <div className="grid gap-2 sm:max-w-sm">
+          <div className="grid gap-2">
             <Label htmlFor="pricing-bundle-filter">Search Bundle</Label>
             <Input
               id="pricing-bundle-filter"
@@ -285,7 +285,12 @@ export function SellableProductPriceRulesPage() {
           }
         }}
       >
-        <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">
+        <DialogContent
+          className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{selectedRule ? "Edit Pricing Rule" : "Create Pricing Rule"}</DialogTitle>
             <DialogDescription>Define the default unit price for a bundle quantity tier.</DialogDescription>
@@ -306,14 +311,16 @@ export function SellableProductPriceRulesPage() {
                   <FormItem>
                     <FormLabel>Bundle</FormLabel>
                     <FormControl>
-                      <BundleCombobox
+                      <PricingBundleCombobox
                         value={field.value}
                         onValueChange={field.onChange}
-                        bundles={productBundlesQuery.data ?? []}
+                        items={productBundlesQuery.data ?? []}
+                        noneLabel="No bundle"
                         placeholder={
                           productBundlesQuery.isLoading ? "Loading bundles..." : "Search Bundle"
                         }
                         emptyLabel="No bundles found."
+                        itemToLabel={(bundle) => bundle.name}
                       />
                     </FormControl>
                     <FormMessage />
@@ -445,56 +452,45 @@ function toFormValues(rule: SellableProductPriceRule): PricingRuleFormValues {
   }
 }
 
-type BundleComboboxOption = {
+const noneValue = "__none__"
+
+type PricingBundleComboboxOption<T extends { id: string }> = {
   id: string
   label: string
-  bundle: ProductBundle | null
+  item: T | null
 }
 
-const noBundleOption: BundleComboboxOption = {
-  id: "",
-  label: "No bundle",
-  bundle: null,
-}
-
-function BundleCombobox({
-  inputId,
+function PricingBundleCombobox<T extends { id: string }>({
   value,
   onValueChange,
-  bundles,
-  includeAllOption = false,
+  items,
+  noneLabel,
   placeholder,
   emptyLabel,
+  itemToLabel,
 }: {
-  inputId?: string
   value: string
   onValueChange: (value: string) => void
-  bundles: ProductBundle[]
-  includeAllOption?: boolean
+  items: T[]
+  noneLabel: string
   placeholder: string
   emptyLabel: string
+  itemToLabel: (item: T) => string
 }) {
-  const options = useMemo<BundleComboboxOption[]>(
+  const options = useMemo(
     () => [
-      ...(includeAllOption ? [{ id: "all", label: "All bundles", bundle: null }] : []),
-      ...(!includeAllOption ? [noBundleOption] : []),
-      ...bundles.map((bundle) => ({
-        id: bundle.id,
-        label: bundle.name,
-        bundle,
-      })),
+      { id: noneValue, label: noneLabel, item: null },
+      ...items.map((item) => ({ id: item.id, label: itemToLabel(item), item })),
     ],
-    [bundles, includeAllOption],
+    [itemToLabel, items, noneLabel],
   )
-  const selectedOption =
-    options.find((option) => option.id === value) ??
-    (includeAllOption ? null : noBundleOption)
+  const selectedOption = options.find((option) => option.id === value) ?? options[0]
 
   return (
     <Combobox
       value={selectedOption}
-      onValueChange={(option: BundleComboboxOption | null) => {
-        onValueChange(option?.id ?? (includeAllOption ? "all" : ""))
+      onValueChange={(option: PricingBundleComboboxOption<T> | null) => {
+        onValueChange(!option || option.id === noneValue ? "" : option.id)
       }}
       items={options}
       itemToStringLabel={(option) => option?.label ?? ""}
@@ -502,7 +498,6 @@ function BundleCombobox({
       isItemEqualToValue={(option, selected) => option?.id === selected?.id}
     >
       <ComboboxInput
-        id={inputId}
         placeholder={placeholder}
         showClear
         className="w-full min-w-0"
@@ -510,7 +505,7 @@ function BundleCombobox({
       <ComboboxContent>
         <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
         <ComboboxList>
-          {(option: BundleComboboxOption) => (
+          {(option: PricingBundleComboboxOption<T>) => (
             <ComboboxItem key={option.id} value={option}>
               {option.label}
             </ComboboxItem>
