@@ -71,6 +71,7 @@ type ComboboxContextValue = {
   selectedLabel: string
   selectItem: (item: unknown, event?: Event) => void
   setHighlightedIndex: (index: number) => void
+  setInputId: (id: string) => void
   setInputValue: (value: string, event?: Event) => void
   setOpen: (open: boolean, event?: Event, reason?: string) => void
   valueString: string
@@ -116,6 +117,7 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
   const rootRef = React.useRef<HTMLDivElement | null>(null)
   const popupRef = React.useRef<HTMLDivElement | null>(null)
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const [resolvedInputId, setResolvedInputId] = React.useState(inputId)
   const [uncontrolledInputValue, setUncontrolledInputValue] = React.useState(
     typeof defaultInputValue === "string" ? defaultInputValue : ""
   )
@@ -316,7 +318,7 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
       getItemLabel,
       getItemValue,
       highlightedIndex,
-      inputId,
+      inputId: resolvedInputId,
       inputValue: currentInputValue,
       isSelected,
       listId,
@@ -328,6 +330,7 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
       selectedLabel: !multiple && value != null ? getItemLabel(value) : "",
       selectItem,
       setHighlightedIndex,
+      setInputId: setResolvedInputId,
       setInputValue: setInput,
       setOpen,
       valueString: !multiple && value != null ? getItemValue(value) : "",
@@ -339,7 +342,6 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
       getItemLabel,
       getItemValue,
       highlightedIndex,
-      inputId,
       isOpen,
       isSelected,
       listId,
@@ -347,6 +349,7 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
       readOnly,
       required,
       resetPlaceholderSelectionInput,
+      resolvedInputId,
       selectItem,
       setInput,
       setOpen,
@@ -461,6 +464,11 @@ function ComboboxInput({
 }) {
   const context = useComboboxContext("ComboboxInput")
   const isDisabled = disabled || context.disabled
+  const inputId = props.id ?? context.inputId
+
+  React.useEffect(() => {
+    context.setInputId(inputId)
+  }, [context.setInputId, inputId])
 
   return (
     <InputGroup className={cn("w-auto", className)}>
@@ -476,7 +484,7 @@ function ComboboxInput({
         aria-required={context.required || undefined}
         data-slot="combobox-input"
         disabled={isDisabled}
-        id={props.id ?? context.inputId}
+        id={inputId}
         role="combobox"
         value={context.inputValue}
         onBlur={onBlur}

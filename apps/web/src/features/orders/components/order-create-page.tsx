@@ -135,6 +135,7 @@ const orderCreateSchema = z.object({
 
 type OrderCreateValues = z.infer<typeof orderCreateSchema>
 type SelectableOrderItem = ProductBundle | Cup | Lid | NonStockItem
+const noneValue = "__none__"
 
 const emptyLineItem: OrderCreateValues["line_items"][number] = {
   item_type: "product_bundle",
@@ -192,6 +193,18 @@ function formatCustomerComboboxLabel(customer: Customer): string {
   return `${customer.business_name} (${customer.contact_person ? `${customer.contact_person}` : ""} ${customer.contact_number ? ` · ${customer.contact_number}` : ""})`
 }
 
+type CustomerComboboxOption = {
+  id: string
+  label: string
+  item: Customer | null
+}
+
+const noCustomerOption: CustomerComboboxOption = {
+  id: noneValue,
+  label: "No customer",
+  item: null,
+}
+
 function OrderCustomerCombobox({
   value,
   onChange,
@@ -216,6 +229,36 @@ function OrderCustomerCombobox({
     () => customersQuery.data ?? [],
     [customersQuery.data]
   )
+  const customerOptions = useMemo<CustomerComboboxOption[]>(
+    () => [
+      noCustomerOption,
+      ...customers.map((customer) => ({
+        id: customer.id,
+        label: formatCustomerComboboxLabel(customer),
+        item: customer,
+      })),
+    ],
+    [customers]
+  )
+  const visibleCustomerOptions = useMemo(() => {
+    const normalizedSearch = (
+      inputValue === noCustomerOption.label ? "" : inputValue
+    )
+      .trim()
+      .toLowerCase()
+
+    if (!normalizedSearch) {
+      return customerOptions
+    }
+
+    return customerOptions.filter((option) => {
+      if (option.id === noneValue) {
+        return false
+      }
+
+      return option.label.toLowerCase().includes(normalizedSearch)
+    })
+  }, [customerOptions, inputValue])
   const valueRef = useRef(value)
   /** After open, ignore one input sync that repeats the selected label so list search stays unfiltered. */
   const skipListSearchSyncRef = useRef(false)
@@ -224,11 +267,25 @@ function OrderCustomerCombobox({
     valueRef.current = value
   }, [value])
 
-  const selectedCustomer =
+  const selectedCustomerOption =
     value === ""
-      ? null
-      : (customers.find((c) => c.id === value) ??
-        (lastPicked?.id === value ? lastPicked : null))
+      ? noCustomerOption
+      : (customerOptions.find((option) => option.id === value) ??
+        (lastPicked?.id === value
+          ? {
+              id: lastPicked.id,
+              label: formatCustomerComboboxLabel(lastPicked),
+              item: lastPicked,
+            }
+          : noCustomerOption))
+
+  useEffect(() => {
+    if (open) {
+      return
+    }
+
+    setInputValue(selectedCustomerOption.label)
+  }, [open, selectedCustomerOption.label])
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen)
@@ -238,28 +295,27 @@ function OrderCustomerCombobox({
     }
   }
 
-  function handleCustomerChange(next: Customer | null) {
-    if (!next) {
+  function handleCustomerChange(next: CustomerComboboxOption | null) {
+    if (!next || next.id === noneValue || !next.item) {
       valueRef.current = ""
       setLastPicked(null)
       onChange("")
-      setInputValue("")
+      setInputValue(noCustomerOption.label)
       return
     }
-    valueRef.current = next.id
-    setLastPicked(next)
-    onChange(next.id)
-    setInputValue(formatCustomerComboboxLabel(next))
+
+    valueRef.current = next.item.id
+    setLastPicked(next.item)
+    onChange(next.item.id)
+    setInputValue(next.label)
   }
 
   function handleInputValueChange(next: string) {
     setInputValue(next)
     if (open) {
       if (skipListSearchSyncRef.current) {
-        const committed = selectedCustomer
-        const committedLabel = committed
-          ? formatCustomerComboboxLabel(committed)
-          : ""
+        const committedLabel =
+          selectedCustomerOption.id !== noneValue ? selectedCustomerOption.label : ""
         if (committedLabel !== "" && next === committedLabel) {
           skipListSearchSyncRef.current = false
           return
@@ -272,9 +328,8 @@ function OrderCustomerCombobox({
     if (!committedId) {
       return
     }
-    const expectedLabel = selectedCustomer
-      ? formatCustomerComboboxLabel(selectedCustomer)
-      : null
+    const expectedLabel =
+      selectedCustomerOption.id !== noneValue ? selectedCustomerOption.label : null
     // `selectedCustomer` / expectedLabel can still be the *previous* row for one tick after a new
     // item is chosen; `next` may already be the new row's label. Don't clear if `next` is any
     // customer's canonical label (typical list selection).
@@ -301,14 +356,15 @@ function OrderCustomerCombobox({
       <Combobox
         open={open}
         onOpenChange={handleOpenChange}
-        value={selectedCustomer}
+        value={selectedCustomerOption}
         onValueChange={handleCustomerChange}
         inputValue={inputValue}
         onInputValueChange={handleInputValueChange}
-        items={customers}
+        items={customerOptions}
+        filteredItems={visibleCustomerOptions}
         filter={null}
-        itemToStringLabel={(customer) => formatCustomerComboboxLabel(customer)}
-        itemToStringValue={(customer) => customer.id}
+        itemToStringLabel={(option) => option?.label ?? ""}
+        itemToStringValue={(option) => option?.id ?? ""}
         isItemEqualToValue={(a, b) => a.id === b.id}
       >
         <ComboboxInput
@@ -333,27 +389,31 @@ function OrderCustomerCombobox({
             </div>
           ) : (
             <ComboboxList>
-              {(customer: Customer) => (
+              {(option: CustomerComboboxOption) => (
                 <ComboboxItem
-                  key={customer.id}
-                  value={customer}
-                  disabled={!customer.is_active}
+                  key={option.id}
+                  value={option}
+                  disabled={option.item ? !option.item.is_active : false}
                 >
-                  <div className="flex items-center gap-2 align-middle">
-                    <span className="font-medium">
-                      {customer.business_name}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      (
-                      {customer.contact_person
-                        ? `${customer.contact_person}`
-                        : ""}{" "}
-                      {customer.contact_number
-                        ? ` · ${customer.contact_number}`
-                        : ""}
-                      )
-                    </span>
-                  </div>
+                  {option.item ? (
+                    <div className="flex items-center gap-2 align-middle">
+                      <span className="font-medium">
+                        {option.item.business_name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        (
+                        {option.item.contact_person
+                          ? `${option.item.contact_person}`
+                          : ""}{" "}
+                        {option.item.contact_number
+                          ? ` · ${option.item.contact_number}`
+                          : ""}
+                        )
+                      </span>
+                    </div>
+                  ) : (
+                    option.label
+                  )}
                 </ComboboxItem>
               )}
             </ComboboxList>
@@ -362,17 +422,6 @@ function OrderCustomerCombobox({
       </Combobox>
     </div>
   )
-}
-
-function resolveSelectableItem(
-  raw: string | undefined,
-  items: readonly SelectableOrderItem[]
-): SelectableOrderItem | null {
-  if (!raw) {
-    return null
-  }
-
-  return items.find((item) => item.id === raw) ?? null
 }
 
 function formatSelectableOrderItemOption(
@@ -399,6 +448,97 @@ function formatSelectableOrderItemOption(
   }
 
   return formatNonStockItemOption(item as NonStockItem)
+}
+
+type OrderItemComboboxOption = {
+  id: string
+  label: string
+  item: SelectableOrderItem | null
+}
+
+function getEmptyOrderItemLabel(
+  itemType: OrderCreateValues["line_items"][number]["item_type"]
+): string {
+  if (itemType === "product_bundle") {
+    return "No product bundle"
+  }
+
+  if (itemType === "cup") {
+    return "No cup"
+  }
+
+  if (itemType === "lid") {
+    return "No lid"
+  }
+
+  return "No general item"
+}
+
+function OrderItemCombobox({
+  value,
+  onValueChange,
+  items,
+  itemType,
+  availableQuantityByTrackedItemKey,
+  placeholder,
+}: {
+  value: string | undefined
+  onValueChange: (value: string | undefined) => void
+  items: readonly SelectableOrderItem[]
+  itemType: OrderCreateValues["line_items"][number]["item_type"]
+  availableQuantityByTrackedItemKey: Map<string, number>
+  placeholder: string
+}) {
+  const options = useMemo<OrderItemComboboxOption[]>(
+    () => [
+      {
+        id: noneValue,
+        label: getEmptyOrderItemLabel(itemType),
+        item: null,
+      },
+      ...items.map((item) => ({
+        id: item.id,
+        label: formatSelectableOrderItemOption(
+          item,
+          itemType,
+          availableQuantityByTrackedItemKey
+        ),
+        item,
+      })),
+    ],
+    [availableQuantityByTrackedItemKey, itemType, items]
+  )
+  const selectedOption =
+    options.find((option) => option.id === value) ?? options[0]
+
+  return (
+    <Combobox
+      value={selectedOption}
+      onValueChange={(option: OrderItemComboboxOption | null) => {
+        onValueChange(!option || option.id === noneValue ? undefined : option.id)
+      }}
+      items={options}
+      itemToStringLabel={(option) => option?.label ?? ""}
+      itemToStringValue={(option) => option?.id ?? ""}
+      isItemEqualToValue={(option, selected) => option?.id === selected?.id}
+    >
+      <ComboboxInput
+        placeholder={placeholder}
+        showClear
+        className="w-full min-w-0"
+      />
+      <ComboboxContent>
+        <ComboboxEmpty>No matching items found.</ComboboxEmpty>
+        <ComboboxList>
+          {(option: OrderItemComboboxOption) => (
+            <ComboboxItem key={option.id} value={option}>
+              {option.label}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
 }
 
 function OrderCreateLineItemFields({
@@ -643,64 +783,31 @@ function OrderCreateLineItemFields({
                         : "General Item"}
                 </FormLabel>
                 <FormControl>
-                  <Combobox<SelectableOrderItem>
+                  <OrderItemCombobox
                     key={`${fieldId}-${itemType}`}
-                    value={resolveSelectableItem(
-                      itemIdField.value,
-                      availableItems
-                    )}
-                    onValueChange={(item: SelectableOrderItem | null) => {
-                      itemIdField.onChange(item?.id)
-                    }}
+                    value={itemIdField.value}
+                    onValueChange={itemIdField.onChange}
                     items={availableItems}
-                    itemToStringLabel={(item) =>
-                      item
-                        ? formatSelectableOrderItemOption(
-                            item,
-                            itemType,
-                            availableQuantityByTrackedItemKey
-                          )
-                        : ""
+                    itemType={itemType}
+                    availableQuantityByTrackedItemKey={
+                      availableQuantityByTrackedItemKey
                     }
-                    itemToStringValue={(item) => item?.id ?? ""}
-                    isItemEqualToValue={(item, selected) =>
-                      item?.id === selected?.id
+                    placeholder={
+                      itemType === "product_bundle"
+                        ? "Search product bundles"
+                        : itemType === "cup"
+                          ? cupsLoading
+                            ? "Loading cups..."
+                            : "Search cups"
+                          : itemType === "lid"
+                            ? lidsLoading
+                              ? "Loading lids..."
+                              : "Search lids"
+                            : nonStockItemsLoading
+                              ? "Loading general items..."
+                              : "Search general items"
                     }
-                  >
-                    <ComboboxInput
-                      placeholder={
-                        itemType === "product_bundle"
-                          ? "Search product bundles"
-                          : itemType === "cup"
-                            ? cupsLoading
-                              ? "Loading cups..."
-                              : "Search cups"
-                            : itemType === "lid"
-                              ? lidsLoading
-                                ? "Loading lids..."
-                                : "Search lids"
-                              : nonStockItemsLoading
-                                ? "Loading general items..."
-                                : "Search general items"
-                      }
-                      showClear
-                      className="w-full min-w-0"
-                    />
-                    <ComboboxContent>
-                      <ComboboxEmpty>No matching items found.</ComboboxEmpty>
-                      <ComboboxList>
-                        {(item: SelectableOrderItem) => (
-                          <ComboboxItem key={item.id} value={item}>
-                            {formatSelectableOrderItemOption(
-                              item,
-                              itemType,
-                              availableQuantityByTrackedItemKey
-                            )}
-                          </ComboboxItem>
-                        )}
-                      </ComboboxList>
-                    </ComboboxContent>
-                  </Combobox>
+                  />
                 </FormControl>
               </FormItem>
             )}
