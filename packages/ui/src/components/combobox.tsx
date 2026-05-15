@@ -68,6 +68,7 @@ type ComboboxContextValue = {
   readOnly: boolean
   required: boolean
   resetPlaceholderSelectionInput: (event?: Event) => void
+  selectedLabel: string
   selectItem: (item: unknown, event?: Event) => void
   setHighlightedIndex: (index: number) => void
   setInputValue: (value: string, event?: Event) => void
@@ -229,14 +230,17 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
     }
 
     const itemValue = getItemValue(value)
+    const objectValue =
+      typeof value === "object" && value !== null
+        ? (value as Record<string, unknown>)
+        : null
 
     return (
       itemValue === "" ||
       itemValue === "__none__" ||
-      (typeof value === "object" &&
-        value !== null &&
-        "item" in value &&
-        (value as { item?: unknown }).item == null)
+      (objectValue !== null &&
+        (("item" in objectValue && objectValue.item == null) ||
+          ("bundle" in objectValue && objectValue.bundle == null)))
     )
   }, [getItemValue, multiple, value])
 
@@ -321,6 +325,7 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
       readOnly,
       required,
       resetPlaceholderSelectionInput,
+      selectedLabel: !multiple && value != null ? getItemLabel(value) : "",
       selectItem,
       setHighlightedIndex,
       setInputValue: setInput,
@@ -488,6 +493,12 @@ function ComboboxInput({
         onFocus={(event) => {
           onFocus?.(event)
           context.resetPlaceholderSelectionInput(event.nativeEvent)
+          if (
+            context.inputValue !== "" &&
+            context.inputValue === context.selectedLabel
+          ) {
+            event.currentTarget.select()
+          }
           context.setOpen(true, event.nativeEvent, "input-focus")
         }}
         onKeyDown={(event) => {
