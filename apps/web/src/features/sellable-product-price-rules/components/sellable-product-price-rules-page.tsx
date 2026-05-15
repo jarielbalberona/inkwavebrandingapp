@@ -131,9 +131,9 @@ export function SellableProductPriceRulesPage() {
     form.reset(
       selectedRule
         ? toFormValues(selectedRule)
-        : getEmptyFormValues(productBundlesQuery.data ?? [], bundleFilter),
+        : emptyFormValues,
     )
-  }, [bundleFilter, dialogOpen, form, productBundlesQuery.data, selectedRule])
+  }, [dialogOpen, form, selectedRule])
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -173,7 +173,7 @@ export function SellableProductPriceRulesPage() {
 
       setDialogOpen(false)
       setSelectedRuleId(null)
-      form.reset(getEmptyFormValues(productBundlesQuery.data ?? [], bundleFilter))
+      form.reset(emptyFormValues)
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to save pricing rule.")
     }
@@ -215,14 +215,14 @@ export function SellableProductPriceRulesPage() {
           ) : null}
 
           <div className="grid gap-2 sm:max-w-sm">
-            <Label htmlFor="pricing-bundle-filter">Bundle</Label>
+            <Label htmlFor="pricing-bundle-filter">Search Bundle</Label>
             <BundleCombobox
               inputId="pricing-bundle-filter"
               value={bundleFilter}
               onValueChange={setBundleFilter}
               bundles={productBundlesQuery.data ?? []}
               includeAllOption
-              placeholder={productBundlesQuery.isLoading ? "Loading bundles..." : "Search bundles"}
+              placeholder={productBundlesQuery.isLoading ? "Loading bundles..." : "Search Bundle"}
               emptyLabel="No bundles found."
             />
           </div>
@@ -279,7 +279,7 @@ export function SellableProductPriceRulesPage() {
           if (!open) {
             setSelectedRuleId(null)
             setSubmitError(null)
-            form.reset(getEmptyFormValues(productBundlesQuery.data ?? [], bundleFilter))
+            form.reset(emptyFormValues)
           }
         }}
       >
@@ -309,7 +309,7 @@ export function SellableProductPriceRulesPage() {
                         onValueChange={field.onChange}
                         bundles={productBundlesQuery.data ?? []}
                         placeholder={
-                          productBundlesQuery.isLoading ? "Loading bundles..." : "Search bundles"
+                          productBundlesQuery.isLoading ? "Loading bundles..." : "Search Bundle"
                         }
                         emptyLabel="No bundles found."
                       />
@@ -430,18 +430,6 @@ export function SellableProductPriceRulesPage() {
       </Dialog>
     </div>
   )
-}
-
-function getEmptyFormValues(
-  bundles: ProductBundle[],
-  selectedBundleId?: string,
-): PricingRuleFormValues {
-  const selectedBundle = bundles.find((bundle) => bundle.id === selectedBundleId)
-
-  return {
-    ...emptyFormValues,
-    product_bundle_id: selectedBundle?.id ?? bundles[0]?.id ?? "",
-  }
 }
 
 function toFormValues(rule: SellableProductPriceRule): PricingRuleFormValues {
