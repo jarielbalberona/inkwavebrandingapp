@@ -98,7 +98,7 @@ export function SellableProductPriceRulesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [bundleFilter, setBundleFilter] = useState("all")
+  const [bundleSearch, setBundleSearch] = useState("")
   const canViewPricingRules = hasPermission(
     currentUser.data,
     appPermissions.sellableProductPriceRulesView,
@@ -112,8 +112,13 @@ export function SellableProductPriceRulesPage() {
     [pricingRulesQuery.data, selectedRuleId],
   )
   const visibleRules = useMemo(
-    () => filterAndSortPricingRules(pricingRulesQuery.data ?? [], bundleFilter),
-    [bundleFilter, pricingRulesQuery.data],
+    () =>
+      filterAndSortPricingRules(
+        pricingRulesQuery.data ?? [],
+        bundleSearch,
+        productBundlesQuery.data ?? [],
+      ),
+    [bundleSearch, pricingRulesQuery.data, productBundlesQuery.data],
   )
 
   const form = useForm<PricingRuleFormValues>({
@@ -216,14 +221,11 @@ export function SellableProductPriceRulesPage() {
 
           <div className="grid gap-2 sm:max-w-sm">
             <Label htmlFor="pricing-bundle-filter">Search Bundle</Label>
-            <BundleCombobox
-              inputId="pricing-bundle-filter"
-              value={bundleFilter}
-              onValueChange={setBundleFilter}
-              bundles={productBundlesQuery.data ?? []}
-              includeAllOption
-              placeholder={productBundlesQuery.isLoading ? "Loading bundles..." : "Search Bundle"}
-              emptyLabel="No bundles found."
+            <Input
+              id="pricing-bundle-filter"
+              placeholder="Search Bundle"
+              value={bundleSearch}
+              onChange={(event) => setBundleSearch(event.target.value)}
             />
           </div>
 
@@ -449,6 +451,12 @@ type BundleComboboxOption = {
   bundle: ProductBundle | null
 }
 
+const noBundleOption: BundleComboboxOption = {
+  id: "",
+  label: "No bundle",
+  bundle: null,
+}
+
 function BundleCombobox({
   inputId,
   value,
@@ -469,6 +477,7 @@ function BundleCombobox({
   const options = useMemo<BundleComboboxOption[]>(
     () => [
       ...(includeAllOption ? [{ id: "all", label: "All bundles", bundle: null }] : []),
+      ...(!includeAllOption ? [noBundleOption] : []),
       ...bundles.map((bundle) => ({
         id: bundle.id,
         label: bundle.name,
@@ -477,7 +486,9 @@ function BundleCombobox({
     ],
     [bundles, includeAllOption],
   )
-  const selectedOption = options.find((option) => option.id === value) ?? null
+  const selectedOption =
+    options.find((option) => option.id === value) ??
+    (includeAllOption ? null : noBundleOption)
 
   return (
     <Combobox
@@ -512,10 +523,25 @@ function BundleCombobox({
 
 function filterAndSortPricingRules(
   rules: SellableProductPriceRule[],
-  bundleFilter: string,
+  search: string,
+  bundles: ProductBundle[],
 ): SellableProductPriceRule[] {
+  const normalizedSearch = search.trim().toLowerCase()
+
   return [...rules]
-    .filter((rule) => bundleFilter === "all" || rule.product_bundle_id === bundleFilter)
+    .filter((rule) => {
+      if (!normalizedSearch) {
+        return true
+      }
+
+      const bundleName =
+        bundles.find((bundle) => bundle.id === rule.product_bundle_id)?.name ?? ""
+
+      return (
+        bundleName.toLowerCase().includes(normalizedSearch) ||
+        rule.product_bundle_id.toLowerCase().includes(normalizedSearch)
+      )
+    })
     .sort((left, right) => {
       const bundleSort = left.product_bundle_id.localeCompare(right.product_bundle_id)
       return bundleSort === 0 ? left.min_qty - right.min_qty : bundleSort
