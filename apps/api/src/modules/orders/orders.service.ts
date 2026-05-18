@@ -9,6 +9,7 @@ import type {
 } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission } from "../auth/authorization.js"
+import { hasPermission } from "../auth/permissions.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
@@ -211,6 +212,14 @@ export class OrderProgressClosedError extends Error {
 
   constructor() {
     super("Cannot add progress events to a canceled order")
+  }
+}
+
+export class OrderPaymentRequiredForProgressError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super("Payment must be recorded before production can start")
   }
 }
 
@@ -763,6 +772,7 @@ export class OrdersService {
     const orders = await this.listOrdersWithEmptyStateFallback({
       status: parsedQuery.status,
       includeArchived: parsedQuery.include_archived,
+      requirePaymentStarted: shouldRestrictOrdersToPaidProductionQueue(user),
     })
 
     return orders.map((order) => toOrderDto(order, user))
@@ -771,6 +781,7 @@ export class OrdersService {
   private async listOrdersWithEmptyStateFallback(query: {
     status?: OrderStatus
     includeArchived?: boolean
+    requirePaymentStarted?: boolean
   }) {
     try {
       return await this.ordersRepository.listWithRelations(query)
@@ -973,6 +984,13 @@ export class OrdersService {
 
         if (orderItem.order.status === "canceled") {
           throw new OrderProgressClosedError()
+        }
+
+        if (
+          shouldRestrictOrdersToPaidProductionQueue(user) &&
+          !(await ordersRepository.hasStartedPaymentForOrder(orderItem.orderId))
+        ) {
+          throw new OrderPaymentRequiredForProgressError()
         }
 
         const componentItemType = resolveProgressComponentItemType(
@@ -2651,6 +2669,14 @@ function deriveOrderStatus(
 
 function hasFulfillmentProgress(items: OrderItemWithProgressEvents[]): boolean {
   return items.some((item) => item.progressEvents.length > 0)
+}
+
+function shouldRestrictOrdersToPaidProductionQueue(user: SafeUser): boolean {
+  return (
+    user.role === "staff" &&
+    hasPermission(user, "orders.fulfillment.record") &&
+    !hasPermission(user, "orders.manage")
+  )
 }
 
 function hasRecordedInvoicePayment(paidAmount: string): boolean {

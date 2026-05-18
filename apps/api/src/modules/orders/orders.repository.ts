@@ -5,6 +5,7 @@ import {
   orderItems,
   orderLineItemProgressEvents,
   orders,
+  invoices,
   type NewOrderLineItemProgressEvent,
   type NewOrder,
   type NewOrderItem,
@@ -106,12 +107,25 @@ export class OrdersRepository {
   }
 
   async listWithRelations(
-    options: { status?: Order["status"]; includeArchived?: boolean } = {}
+    options: {
+      status?: Order["status"]
+      includeArchived?: boolean
+      requirePaymentStarted?: boolean
+    } = {}
   ) {
     return this.db.query.orders.findMany({
       where: and(
         options.status ? eq(orders.status, options.status) : undefined,
-        options.includeArchived ? undefined : isNull(orders.archivedAt)
+        options.includeArchived ? undefined : isNull(orders.archivedAt),
+        options.requirePaymentStarted
+          ? sql`exists (
+              select 1
+              from ${invoices}
+              where ${invoices.orderId} = ${orders.id}
+                and ${invoices.status} <> 'void'
+                and ${invoices.paidAmount} > 0
+            )`
+          : undefined
       ),
       with: {
         customer: true,
@@ -132,6 +146,22 @@ export class OrdersRepository {
       orderBy: [asc(orders.priority), desc(orders.createdAt)],
       limit: 200,
     })
+  }
+
+  async hasStartedPaymentForOrder(orderId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.orderId, orderId),
+          sql`${invoices.status} <> 'void'`,
+          sql`${invoices.paidAmount} > 0`
+        )
+      )
+      .limit(1)
+
+    return rows.length > 0
   }
 
   async hasAnyOrders(): Promise<boolean> {

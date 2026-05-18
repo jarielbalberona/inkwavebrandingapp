@@ -51,6 +51,7 @@ import {
   OrderCustomerInactiveError,
   OrderCustomerNotFoundError,
   OrderLineItemNotFoundError,
+  OrderPaymentRequiredForProgressError,
   OrderLineItemProgressLockedError,
   OrderNotFoundError,
   OrderPrintedQuantityNotReservedError,
@@ -335,6 +336,7 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof OrderCustomerReassignmentProgressError ||
     error instanceof OrderPrintedQuantityNotReservedError ||
     error instanceof OrderPrintedQuantityInsufficientStockError ||
+    error instanceof OrderPaymentRequiredForProgressError ||
     error instanceof OrderProgressClosedError ||
     error instanceof OrderProgressValidationError ||
     error instanceof InvoicePaidLockError ||

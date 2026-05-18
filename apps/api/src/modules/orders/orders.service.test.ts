@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
+import type { SafeUser } from "../auth/auth.schemas.js"
 import { InvoicePaymentLockError } from "../invoices/invoices.service.js"
 import {
   getPriorityForNewOrder,
@@ -9,7 +10,7 @@ import {
 } from "./orders.service.js"
 
 function createOrdersService(overrides: {
-  listWithRelations: () => Promise<unknown>
+  listWithRelations: (query?: unknown) => Promise<unknown>
   hasAnyOrders: () => Promise<boolean>
 }) {
   return new OrdersService(
@@ -33,6 +34,14 @@ const adminUser = {
   displayName: "Admin",
   role: "admin" as const,
   permissions: [],
+}
+
+const productionStaffUser: SafeUser = {
+  id: "22222222-2222-2222-2222-222222222222",
+  email: "production@example.com",
+  displayName: "Production",
+  role: "staff" as const,
+  permissions: ["orders.view", "orders.fulfillment.record"],
 }
 
 test("getPriorityForNewOrder appends after the current lowest-priority order", () => {
@@ -67,6 +76,99 @@ test("OrdersService.list still fails when relation loading breaks and orders alr
   })
 
   await assert.rejects(() => service.list({}, adminUser), /Failed query/)
+})
+
+test("OrdersService.list restricts production staff to orders with started payment", async () => {
+  let listQuery: unknown
+  const service = createOrdersService({
+    listWithRelations: async (query) => {
+      listQuery = query
+      return []
+    },
+    hasAnyOrders: async () => true,
+  })
+
+  const orders = await service.list({}, productionStaffUser)
+
+  assert.deepEqual(orders, [])
+  assert.deepEqual(listQuery, {
+    status: undefined,
+    includeArchived: false,
+    requirePaymentStarted: true,
+  })
+})
+
+test("OrdersService.list does not restrict admins to the paid production queue", async () => {
+  let listQuery: unknown
+  const service = createOrdersService({
+    listWithRelations: async (query) => {
+      listQuery = query
+      return []
+    },
+    hasAnyOrders: async () => true,
+  })
+
+  await service.list({}, adminUser)
+
+  assert.deepEqual(listQuery, {
+    status: undefined,
+    includeArchived: false,
+    requirePaymentStarted: false,
+  })
+})
+
+test("OrdersService.createProgressEvent rejects production staff before any payment is recorded", async () => {
+  let checkedPaymentForOrderId: string | null = null
+  const ordersRepository = {
+    transaction: async (handler: (context: { db: unknown; ordersRepository: unknown }) => Promise<unknown>) =>
+      handler({ db: {}, ordersRepository }),
+    findOrderItemWithOrder: async () => ({
+      id: "33333333-3333-3333-3333-333333333333",
+      orderId: "order-1",
+      itemType: "cup",
+      cupId: "44444444-4444-4444-4444-444444444444",
+      lidId: null,
+      productBundleId: null,
+      quantity: 10,
+      order: {
+        id: "order-1",
+        status: "pending",
+      },
+      cup: null,
+      lid: null,
+      nonStockItem: null,
+      productBundle: null,
+    }),
+    hasStartedPaymentForOrder: async (orderId: string) => {
+      checkedPaymentForOrderId = orderId
+      return false
+    },
+  }
+  const service = new OrdersService(
+    ordersRepository as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    (() => ({})) as never,
+  )
+
+  await assert.rejects(
+    () =>
+      service.createProgressEvent(
+        "33333333-3333-3333-3333-333333333333",
+        {
+          stage: "printed",
+          quantity: 1,
+          event_date: new Date("2026-05-18T00:00:00.000Z"),
+        },
+        productionStaffUser,
+      ),
+    /Payment must be recorded before production can start/
+  )
+  assert.equal(checkedPaymentForOrderId, "order-1")
 })
 
 test("OrdersService.cancel voids an unpaid pending linked invoice", async () => {
