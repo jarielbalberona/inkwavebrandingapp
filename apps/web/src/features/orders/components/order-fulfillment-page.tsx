@@ -144,6 +144,12 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
   const [progressEventDate, setProgressEventDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   )
+  const [releaseMethod, setReleaseMethod] = useState<
+    "" | "delivery" | "office_pickup"
+  >("")
+  const [stagingLocation, setStagingLocation] = useState("")
+  const [releasedTo, setReleasedTo] = useState("")
+  const [scheduledReleaseDate, setScheduledReleaseDate] = useState("")
   const [progressError, setProgressError] = useState<string | null>(null)
   const [progressSuccess, setProgressSuccess] = useState<string | null>(null)
 
@@ -186,6 +192,9 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
   const effectiveProgressStage = availableProgressStages.includes(progressStage)
     ? progressStage
     : defaultProgressStage
+  const acceptsReleaseDetails =
+    effectiveProgressStage === "ready_for_release" ||
+    effectiveProgressStage === "released"
 
   useEffect(() => {
     if (!activeFulfillmentKey) {
@@ -198,6 +207,17 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
       allowed.includes(current) ? current : (allowed[0] ?? "packed")
     )
   }, [activeFulfillmentKey, fulfillmentRows])
+
+  useEffect(() => {
+    if (acceptsReleaseDetails) {
+      return
+    }
+
+    setReleaseMethod("")
+    setStagingLocation("")
+    setReleasedTo("")
+    setScheduledReleaseDate("")
+  }, [acceptsReleaseDetails])
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -251,6 +271,16 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
       return
     }
 
+    if (effectiveProgressStage === "released" && !releaseMethod) {
+      setProgressError("Select delivery or office pickup before releasing.")
+      return
+    }
+
+    if (releaseMethod === "office_pickup" && !stagingLocation.trim()) {
+      setProgressError("Enter the office pickup staging location.")
+      return
+    }
+
     const totals = progressEventsQuery.data?.totals
 
     if (totals) {
@@ -289,6 +319,18 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
               ? (selectedRow.bundlePart ?? undefined)
               : undefined,
           quantity,
+          release_method: acceptsReleaseDetails
+            ? releaseMethod || undefined
+            : undefined,
+          staging_location: acceptsReleaseDetails
+            ? stagingLocation.trim() || undefined
+            : undefined,
+          released_to: acceptsReleaseDetails
+            ? releasedTo.trim() || undefined
+            : undefined,
+          scheduled_release_date: acceptsReleaseDetails
+            ? scheduledReleaseDate || undefined
+            : undefined,
           note: progressNote.trim() || undefined,
           event_date: progressEventDate,
         },
@@ -296,6 +338,7 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
 
       setProgressQuantity("1")
       setProgressNote("")
+      setReleasedTo("")
       setProgressSuccess(
         `Recorded ${formatStatus(result.event.stage)} x ${result.event.quantity}.`
       )
@@ -523,6 +566,92 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                         />
                       </div>
 
+                      {acceptsReleaseDetails ? (
+                        <div className="grid gap-3 border p-3">
+                          <div className="grid gap-2">
+                            <Label>Handoff</Label>
+                            <Select
+                              value={releaseMethod || "none"}
+                              onValueChange={(value) => {
+                                const nextValue =
+                                  value === "none"
+                                    ? ""
+                                    : (value as "delivery" | "office_pickup")
+                                setReleaseMethod(nextValue)
+                                if (nextValue !== "office_pickup") {
+                                  setStagingLocation("")
+                                } else if (!stagingLocation) {
+                                  setStagingLocation("Office")
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">
+                                  {effectiveProgressStage === "released"
+                                    ? "Select handoff"
+                                    : "Not set yet"}
+                                </SelectItem>
+                                <SelectItem value="delivery">
+                                  Delivery
+                                </SelectItem>
+                                <SelectItem value="office_pickup">
+                                  Office pickup
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {releaseMethod === "office_pickup" ? (
+                            <div className="grid gap-2">
+                              <Label htmlFor="staging-location">
+                                Staging location
+                              </Label>
+                              <Input
+                                id="staging-location"
+                                value={stagingLocation}
+                                placeholder="Office"
+                                onChange={(event) =>
+                                  setStagingLocation(event.target.value)
+                                }
+                              />
+                            </div>
+                          ) : null}
+
+                          {effectiveProgressStage === "ready_for_release" ? (
+                            <div className="grid gap-2">
+                              <Label htmlFor="scheduled-release-date">
+                                Scheduled handoff date
+                              </Label>
+                              <Input
+                                id="scheduled-release-date"
+                                type="date"
+                                value={scheduledReleaseDate}
+                                onChange={(event) =>
+                                  setScheduledReleaseDate(event.target.value)
+                                }
+                              />
+                            </div>
+                          ) : null}
+
+                          {effectiveProgressStage === "released" ? (
+                            <div className="grid gap-2">
+                              <Label htmlFor="released-to">Released to</Label>
+                              <Input
+                                id="released-to"
+                                value={releasedTo}
+                                placeholder="Client, courier, or receiver"
+                                onChange={(event) =>
+                                  setReleasedTo(event.target.value)
+                                }
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+
                       <div className="grid gap-2">
                         <Label htmlFor="progress-note">Note</Label>
                         <Textarea
@@ -611,6 +740,33 @@ function totalQuantity(order: Order): number {
 
 function formatStatus(status: string): string {
   return status.replaceAll("_", " ")
+}
+
+function formatReleaseMethod(
+  method: ProgressEvent["release_method"]
+): string | null {
+  if (method === "delivery") {
+    return "Delivery"
+  }
+
+  if (method === "office_pickup") {
+    return "Office pickup"
+  }
+
+  return null
+}
+
+function formatHandoffDetails(event: ProgressEvent): string {
+  const details = [
+    formatReleaseMethod(event.release_method),
+    event.staging_location ? `at ${event.staging_location}` : null,
+    event.scheduled_release_date
+      ? `scheduled ${new Date(event.scheduled_release_date).toLocaleDateString()}`
+      : null,
+    event.released_to ? `to ${event.released_to}` : null,
+  ].filter(Boolean)
+
+  return details.length > 0 ? details.join(" · ") : "—"
 }
 
 function formatOrderItemLabel(item: Order["items"][number]): string {
@@ -838,6 +994,7 @@ function ProgressHistory({ events }: { events: ProgressEvent[] }) {
                 <TableHead>Date</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Quantity</TableHead>
+                <TableHead>Handoff</TableHead>
                 <TableHead>Note</TableHead>
                 <TableHead>Recorded by</TableHead>
                 <TableHead>Created</TableHead>
@@ -855,6 +1012,7 @@ function ProgressHistory({ events }: { events: ProgressEvent[] }) {
                     </Badge>
                   </TableCell>
                   <TableCell>{event.quantity.toLocaleString()}</TableCell>
+                  <TableCell>{formatHandoffDetails(event)}</TableCell>
                   <TableCell>{event.note ?? "—"}</TableCell>
                   <TableCell>
                     {event.created_by?.display_name ?? "System"}

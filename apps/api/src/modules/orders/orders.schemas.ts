@@ -105,6 +105,7 @@ export const orderStatusSchema = z.enum([
   "quote",
   "pending",
   "in_progress",
+  "ready_for_release",
   "partial_released",
   "completed",
   "canceled",
@@ -126,13 +127,57 @@ export const createOrderSchema = z.object({
   line_items: z.array(createOrderLineItemSchema).min(1),
 })
 
-export const createOrderLineItemProgressEventSchema = z.object({
-  stage: orderLineItemProgressStageSchema,
-  component_item_type: z.enum(["cup", "lid"]).optional(),
-  quantity: z.number().int().positive(),
-  note: optionalText(500),
-  event_date: z.coerce.date(),
-})
+export const releaseMethodSchema = z.enum(["delivery", "office_pickup"])
+
+export const createOrderLineItemProgressEventSchema = z
+  .object({
+    stage: orderLineItemProgressStageSchema,
+    component_item_type: z.enum(["cup", "lid"]).optional(),
+    quantity: z.number().int().positive(),
+    release_method: releaseMethodSchema.optional(),
+    staging_location: optionalText(160),
+    released_to: optionalText(160),
+    scheduled_release_date: z.coerce.date().optional(),
+    note: optionalText(500),
+    event_date: z.coerce.date(),
+  })
+  .superRefine((input, context) => {
+    const acceptsReleaseDetails =
+      input.stage === "ready_for_release" || input.stage === "released"
+    const hasReleaseDetails =
+      input.release_method !== undefined ||
+      input.staging_location !== undefined ||
+      input.released_to !== undefined ||
+      input.scheduled_release_date !== undefined
+
+    if (!acceptsReleaseDetails && hasReleaseDetails) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["release_method"],
+        message:
+          "Release handoff details are only allowed for ready_for_release or released events.",
+      })
+    }
+
+    if (input.stage === "released" && !input.release_method) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["release_method"],
+        message: "Release method is required when recording released events.",
+      })
+    }
+
+    if (
+      input.release_method === "office_pickup" &&
+      !input.staging_location
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["staging_location"],
+        message: "Staging location is required for office pickup.",
+      })
+    }
+  })
 
 export const progressEventsQuerySchema = z.object({
   component_item_type: z.enum(["cup", "lid"]).optional(),

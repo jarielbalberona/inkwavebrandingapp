@@ -354,7 +354,7 @@ function formatLinkedOrderLabel(order: {
   order_number: string
 }): string {
   return order.client_name
-    ? `${order.client_name} + ${order.order_number}`
+    ? `${order.client_name} - ${order.order_number}`
     : order.order_number
 }
 

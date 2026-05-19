@@ -227,6 +227,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
   const statusLocked =
     order?.status === "canceled" ||
     order?.status === "completed" ||
+    order?.status === "ready_for_release" ||
     order?.status === "partial_released"
   const nonAdminCustomChargeLock =
     !canManageCustomCharges &&

@@ -627,7 +627,11 @@ function statusVariant(
     return "destructive"
   }
 
-  if (status === "completed" || status === "partial_released") {
+  if (
+    status === "completed" ||
+    status === "ready_for_release" ||
+    status === "partial_released"
+  ) {
     return "default"
   }
 

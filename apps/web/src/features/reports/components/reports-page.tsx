@@ -622,6 +622,8 @@ function formatStatus(status: OrderStatusReportItem["status"]) {
   switch (status) {
     case "in_progress":
       return "In Progress"
+    case "ready_for_release":
+      return "Ready For Release"
     case "partial_released":
       return "Partial Released"
     default:
@@ -634,6 +636,8 @@ function statusBadgeVariant(status: OrderStatusReportItem["status"]) {
     case "completed":
       return "default"
     case "partial_released":
+      return "secondary"
+    case "ready_for_release":
       return "secondary"
     case "canceled":
       return "destructive"
@@ -650,6 +654,8 @@ function statusDescription(item: OrderStatusReportItem) {
       return "Reserved, no fulfillment activity yet"
     case "in_progress":
       return "Production activity exists, nothing released yet"
+    case "ready_for_release":
+      return "Packed and ready for delivery or office pickup"
     case "partial_released":
       return "Some quantity released, not fully done"
     case "completed":

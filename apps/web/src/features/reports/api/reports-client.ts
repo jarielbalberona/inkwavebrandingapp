@@ -39,6 +39,7 @@ const orderStatusSchema = z.enum([
   "quote",
   "pending",
   "in_progress",
+  "ready_for_release",
   "partial_released",
   "completed",
   "canceled",

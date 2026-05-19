@@ -124,6 +124,10 @@ export interface OrderLineItemProgressEventDto {
   component_item_type: "cup" | "lid" | null
   stage: OrderLineItemProgressStage
   quantity: number
+  release_method: "delivery" | "office_pickup" | null
+  staging_location: string | null
+  released_to: string | null
+  scheduled_release_date: string | null
   note: string | null
   event_date: string
   created_by: {
@@ -330,6 +334,14 @@ export function toProgressEventDto(
         : null,
     stage: event.stage,
     quantity: event.quantity,
+    release_method:
+      event.releaseMethod === "delivery" ||
+      event.releaseMethod === "office_pickup"
+        ? event.releaseMethod
+        : null,
+    staging_location: event.stagingLocation ?? null,
+    released_to: event.releasedTo ?? null,
+    scheduled_release_date: event.scheduledReleaseDate?.toISOString() ?? null,
     note: event.note ?? null,
     event_date: event.eventDate.toISOString(),
     created_by: event.createdByUser

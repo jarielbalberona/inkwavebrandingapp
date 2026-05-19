@@ -7,6 +7,7 @@ export const orderStatusSchema = z.enum([
   "quote",
   "pending",
   "in_progress",
+  "ready_for_release",
   "partial_released",
   "completed",
   "canceled",
@@ -260,6 +261,10 @@ const progressEventSchema = z.object({
   component_item_type: z.enum(["cup", "lid"]).nullable(),
   stage: progressStageSchema,
   quantity: z.number().int().positive(),
+  release_method: z.enum(["delivery", "office_pickup"]).nullable(),
+  staging_location: z.string().nullable(),
+  released_to: z.string().nullable(),
+  scheduled_release_date: z.string().nullable(),
   note: z.string().nullable(),
   event_date: z.string(),
   created_by: z
@@ -376,6 +381,10 @@ export interface CreateProgressEventPayload {
   stage: ProgressStage
   component_item_type?: "cup" | "lid"
   quantity: number
+  release_method?: "delivery" | "office_pickup"
+  staging_location?: string
+  released_to?: string
+  scheduled_release_date?: string
   note?: string
   event_date: string
 }

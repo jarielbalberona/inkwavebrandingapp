@@ -32,6 +32,7 @@ export const orderReportStatuses = [
   "quote",
   "pending",
   "in_progress",
+  "ready_for_release",
   "partial_released",
   "completed",
 ] as const

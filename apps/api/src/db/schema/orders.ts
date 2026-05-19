@@ -24,6 +24,7 @@ export const orderStatusEnum = pgEnum("order_status", [
   "quote",
   "pending",
   "in_progress",
+  "ready_for_release",
   "partial_released",
   "completed",
   "canceled",
@@ -230,6 +231,12 @@ export const orderLineItemProgressEvents = pgTable(
     stage: orderLineItemProgressStageEnum("stage").notNull(),
     componentItemType: varchar("component_item_type", { length: 10 }),
     quantity: integer("quantity").notNull(),
+    releaseMethod: varchar("release_method", { length: 32 }),
+    stagingLocation: text("staging_location"),
+    releasedTo: text("released_to"),
+    scheduledReleaseDate: timestamp("scheduled_release_date", {
+      withTimezone: true,
+    }),
     note: text("note"),
     eventDate: timestamp("event_date", { withTimezone: true })
       .notNull()
@@ -253,6 +260,18 @@ export const orderLineItemProgressEvents = pgTable(
     check(
       "order_line_item_progress_events_component_item_type_valid",
       sql`${table.componentItemType} IS NULL OR ${table.componentItemType} IN ('cup', 'lid')`
+    ),
+    check(
+      "order_line_item_progress_events_release_method_valid",
+      sql`${table.releaseMethod} IS NULL OR ${table.releaseMethod} IN ('delivery', 'office_pickup')`
+    ),
+    check(
+      "order_line_item_progress_events_staging_location_not_blank",
+      sql`${table.stagingLocation} IS NULL OR length(trim(${table.stagingLocation})) > 0`
+    ),
+    check(
+      "order_line_item_progress_events_released_to_not_blank",
+      sql`${table.releasedTo} IS NULL OR length(trim(${table.releasedTo})) > 0`
     ),
     check(
       "order_line_item_progress_events_quantity_positive",

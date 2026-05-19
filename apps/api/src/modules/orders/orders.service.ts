@@ -1039,6 +1039,10 @@ export class OrdersService {
           componentItemType,
           stage: parsedInput.stage,
           quantity: parsedInput.quantity,
+          releaseMethod: parsedInput.release_method,
+          stagingLocation: parsedInput.staging_location,
+          releasedTo: parsedInput.released_to,
+          scheduledReleaseDate: parsedInput.scheduled_release_date,
           note: parsedInput.note,
           eventDate: parsedInput.event_date,
           createdByUserId: user.id,
@@ -2634,30 +2638,25 @@ function deriveOrderStatus(
   let hasAnyProgress = false
   let hasAnyReleased = false
   let allLineItemsReleased = trackedItems.length > 0
+  let allLineItemsReadyForRelease = trackedItems.length > 0
 
   for (const item of trackedItems) {
-    const totals = calculateProgressTotals(
-      item.itemType,
-      item.quantity,
-      item.progressEvents
-    )
-    const itemProgressTotal =
-      totals.total_printed +
-      totals.total_qa_passed +
-      totals.total_packed +
-      totals.total_ready_for_release +
-      totals.total_released
+    const progressSummary = summarizeOrderItemProgress(item)
 
-    if (itemProgressTotal > 0) {
+    if (progressSummary.hasAnyProgress) {
       hasAnyProgress = true
     }
 
-    if (totals.total_released > 0) {
+    if (progressSummary.hasAnyReleased) {
       hasAnyReleased = true
     }
 
-    if (totals.total_released < item.quantity) {
+    if (!progressSummary.isFullyReleased) {
       allLineItemsReleased = false
+    }
+
+    if (!progressSummary.isFullyReadyForRelease) {
+      allLineItemsReadyForRelease = false
     }
   }
 
@@ -2669,11 +2668,99 @@ function deriveOrderStatus(
     return "partial_released"
   }
 
+  if (allLineItemsReadyForRelease) {
+    return "ready_for_release"
+  }
+
   if (hasAnyProgress) {
     return "in_progress"
   }
 
   return "pending"
+}
+
+function summarizeOrderItemProgress(
+  item: OrderItemWithProgressEvents & {
+    itemType: OrderTrackedLineItemType
+  }
+): {
+  hasAnyProgress: boolean
+  hasAnyReleased: boolean
+  isFullyReleased: boolean
+  isFullyReadyForRelease: boolean
+} {
+  if (item.itemType === "product_bundle" && item.productBundle) {
+    const componentTypes: OrderProgressComponentItemType[] = []
+
+    if (item.productBundle.cupId) {
+      componentTypes.push("cup")
+    }
+
+    if (item.productBundle.lidId) {
+      componentTypes.push("lid")
+    }
+
+    if (componentTypes.length > 0) {
+      const componentSummaries = componentTypes.map((componentItemType) => {
+        const totals = calculateProgressTotals(
+          item.itemType,
+          item.quantity,
+          item.progressEvents.filter(
+            (event) => event.componentItemType === componentItemType
+          ),
+          componentItemType
+        )
+
+        return summarizeProgressTotals(item.quantity, totals)
+      })
+
+      return {
+        hasAnyProgress: componentSummaries.some(
+          (summary) => summary.hasAnyProgress
+        ),
+        hasAnyReleased: componentSummaries.some(
+          (summary) => summary.hasAnyReleased
+        ),
+        isFullyReleased: componentSummaries.every(
+          (summary) => summary.isFullyReleased
+        ),
+        isFullyReadyForRelease: componentSummaries.every(
+          (summary) => summary.isFullyReadyForRelease
+        ),
+      }
+    }
+  }
+
+  return summarizeProgressTotals(
+    item.quantity,
+    calculateProgressTotals(item.itemType, item.quantity, item.progressEvents)
+  )
+}
+
+function summarizeProgressTotals(
+  orderedQuantity: number,
+  totals: ProgressTotalsDto
+): {
+  hasAnyProgress: boolean
+  hasAnyReleased: boolean
+  isFullyReleased: boolean
+  isFullyReadyForRelease: boolean
+} {
+  const itemProgressTotal =
+    totals.total_printed +
+    totals.total_qa_passed +
+    totals.total_packed +
+    totals.total_ready_for_release +
+    totals.total_released
+
+  return {
+    hasAnyProgress: itemProgressTotal > 0,
+    hasAnyReleased: totals.total_released > 0,
+    isFullyReleased: totals.total_released >= orderedQuantity,
+    isFullyReadyForRelease:
+      totals.total_ready_for_release >= orderedQuantity ||
+      totals.total_released >= orderedQuantity,
+  }
 }
 
 function hasFulfillmentProgress(items: OrderItemWithProgressEvents[]): boolean {

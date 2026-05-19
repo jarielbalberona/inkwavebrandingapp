@@ -257,6 +257,8 @@ function statusDescription(status: DashboardSummary["orders"]["statuses"][number
       return "Reserved but no production progress yet."
     case "in_progress":
       return "Production has started but nothing is released yet."
+    case "ready_for_release":
+      return "All tracked line items are packed and ready for handoff."
     case "partial_released":
       return "Some quantity is released, but the order is still open."
     case "completed":
@@ -273,6 +275,8 @@ function statusBadgeVariant(status: DashboardSummary["orders"]["statuses"][numbe
     case "completed":
       return "default"
     case "partial_released":
+      return "outline"
+    case "ready_for_release":
       return "outline"
     case "in_progress":
       return "outline"

@@ -265,6 +265,94 @@ describe("inventory, order, and invoice integration", () => {
     })
   })
 
+  it("marks an order ready_for_release when all tracked line items are ready", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup()
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 10,
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [{ item_type: "cup", cup_id: cup.id, quantity: 4 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+    expect(createOrderResponse.body.order.status).toBe("pending")
+
+    const orderId = createOrderResponse.body.order.id as string
+    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const paymentResponse = await api
+      .post(`/invoices/${invoiceResponse.body.invoice.id}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "1.00",
+        payment_date: "2026-04-24T08:00:00.000Z",
+      })
+
+    expect(paymentResponse.status).toBe(201)
+
+    await postProgressEvent(api, adminCookie, cupLineItem.id, "printed", 4)
+    await postProgressEvent(api, adminCookie, cupLineItem.id, "qa_passed", 4)
+    await postProgressEvent(api, adminCookie, cupLineItem.id, "packed", 4)
+
+    const readyResponse = await api
+      .post(`/order-line-items/${cupLineItem.id}/progress-events`)
+      .set("Cookie", adminCookie)
+      .send({
+        stage: "ready_for_release",
+        quantity: 4,
+        release_method: "office_pickup",
+        staging_location: "Office shelf A",
+        scheduled_release_date: "2026-04-25T00:00:00.000Z",
+        event_date: "2026-04-24T09:00:00.000Z",
+      })
+
+    expect(readyResponse.status).toBe(201)
+    expect(readyResponse.body.order_status).toBe("ready_for_release")
+    expect(readyResponse.body.event).toMatchObject({
+      release_method: "office_pickup",
+      staging_location: "Office shelf A",
+      scheduled_release_date: "2026-04-25T00:00:00.000Z",
+    })
+
+    const orderAfterReadyResponse = await api
+      .get(`/orders/${orderId}`)
+      .set("Cookie", adminCookie)
+
+    expect(orderAfterReadyResponse.status).toBe(200)
+    expect(orderAfterReadyResponse.body.order.status).toBe("ready_for_release")
+
+    const releasedResponse = await api
+      .post(`/order-line-items/${cupLineItem.id}/progress-events`)
+      .set("Cookie", adminCookie)
+      .send({
+        stage: "released",
+        quantity: 4,
+        release_method: "office_pickup",
+        staging_location: "Office shelf A",
+        released_to: "Client runner",
+        event_date: "2026-04-24T10:00:00.000Z",
+      })
+
+    expect(releasedResponse.status).toBe(201)
+    expect(releasedResponse.body.order_status).toBe("completed")
+  })
+
   it("allows order creation when tracked items have no available stock and offsets the negative available balance on intake", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()
@@ -1398,6 +1486,8 @@ async function postProgressEvent(
     .send({
       stage,
       quantity,
+      release_method: stage === "released" ? "office_pickup" : undefined,
+      staging_location: stage === "released" ? "Office" : undefined,
       event_date: new Date("2026-04-24T09:00:00.000Z").toISOString(),
     })
 }

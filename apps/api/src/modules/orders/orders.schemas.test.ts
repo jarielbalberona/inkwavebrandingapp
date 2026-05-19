@@ -3,7 +3,10 @@ import assert from "node:assert/strict"
 
 import { ZodError } from "zod"
 
-import { createOrderSchema } from "./orders.schemas.js"
+import {
+  createOrderLineItemProgressEventSchema,
+  createOrderSchema,
+} from "./orders.schemas.js"
 
 const validCustomerId = "11111111-1111-1111-1111-111111111111"
 
@@ -98,5 +101,63 @@ test("createOrderSchema rejects negative custom_charge sell pricing", () => {
           issue.path.join(".") === "line_items.0.unit_sell_price" &&
           issue.message === "Must be a valid non-negative money amount",
       ),
+  )
+})
+
+test("createOrderLineItemProgressEventSchema accepts release planning details for ready_for_release", () => {
+  const parsed = createOrderLineItemProgressEventSchema.parse({
+    stage: "ready_for_release",
+    quantity: 10,
+    release_method: "office_pickup",
+    staging_location: "Office shelf A",
+    scheduled_release_date: "2026-05-20",
+    event_date: "2026-05-19",
+  })
+
+  assert.equal(parsed.release_method, "office_pickup")
+  assert.equal(parsed.staging_location, "Office shelf A")
+  assert.ok(parsed.scheduled_release_date)
+  assert.equal(
+    parsed.scheduled_release_date.toISOString(),
+    "2026-05-20T00:00:00.000Z"
+  )
+})
+
+test("createOrderLineItemProgressEventSchema requires release method for released events", () => {
+  assert.throws(
+    () =>
+      createOrderLineItemProgressEventSchema.parse({
+        stage: "released",
+        quantity: 10,
+        event_date: "2026-05-19",
+      }),
+    (error: unknown) =>
+      error instanceof ZodError &&
+      error.issues.some(
+        (issue) =>
+          issue.path.join(".") === "release_method" &&
+          issue.message ===
+            "Release method is required when recording released events."
+      )
+  )
+})
+
+test("createOrderLineItemProgressEventSchema rejects release details before ready_for_release", () => {
+  assert.throws(
+    () =>
+      createOrderLineItemProgressEventSchema.parse({
+        stage: "packed",
+        quantity: 10,
+        release_method: "delivery",
+        event_date: "2026-05-19",
+      }),
+    (error: unknown) =>
+      error instanceof ZodError &&
+      error.issues.some(
+        (issue) =>
+          issue.path.join(".") === "release_method" &&
+          issue.message ===
+            "Release handoff details are only allowed for ready_for_release or released events."
+      )
   )
 })
