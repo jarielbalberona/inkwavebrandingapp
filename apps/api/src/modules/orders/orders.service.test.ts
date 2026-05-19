@@ -98,7 +98,7 @@ test("OrdersService.list restricts production staff to orders with started payme
   })
 })
 
-test("OrdersService.list does not restrict admins to the paid production queue", async () => {
+test("OrdersService.list restricts admins to orders with started payment", async () => {
   let listQuery: unknown
   const service = createOrdersService({
     listWithRelations: async (query) => {
@@ -113,7 +113,7 @@ test("OrdersService.list does not restrict admins to the paid production queue",
   assert.deepEqual(listQuery, {
     status: undefined,
     includeArchived: false,
-    requirePaymentStarted: false,
+    requirePaymentStarted: true,
   })
 })
 
