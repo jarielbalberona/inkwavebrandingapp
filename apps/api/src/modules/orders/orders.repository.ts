@@ -113,39 +113,34 @@ export class OrdersRepository {
       requirePaymentStarted?: boolean
     } = {}
   ) {
-    return this.db.query.orders.findMany({
-      where: and(
-        options.status ? eq(orders.status, options.status) : undefined,
-        options.includeArchived ? undefined : isNull(orders.archivedAt),
-        options.requirePaymentStarted
-          ? sql`exists (
-              select 1
-              from ${invoices}
-              where ${invoices.orderId} = ${orders.id}
-                and ${invoices.status} <> 'void'
-                and ${invoices.paidAmount} > 0
-            )`
-          : undefined
-      ),
-      with: {
-        customer: true,
-        items: {
-          with: {
-            cup: true,
-            lid: true,
-            nonStockItem: true,
-            productBundle: {
-              with: {
-                cup: true,
-                lid: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: [asc(orders.priority), desc(orders.createdAt)],
-      limit: 200,
-    })
+    const rows = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          options.status ? eq(orders.status, options.status) : undefined,
+          options.includeArchived ? undefined : isNull(orders.archivedAt),
+          options.requirePaymentStarted
+            ? sql`exists (
+                select 1
+                from ${invoices}
+                where ${invoices.orderId} = ${orders.id}
+                  and ${invoices.status} <> 'void'
+                  and ${invoices.paidAmount} > 0
+              )`
+            : undefined
+        )
+      )
+      .orderBy(asc(orders.priority), desc(orders.createdAt))
+      .limit(200)
+
+    const hydratedOrders = await Promise.all(
+      rows.map((row) => this.findByIdWithRelations(row.id))
+    )
+
+    return hydratedOrders.filter(
+      (order): order is OrderWithRelations => Boolean(order)
+    )
   }
 
   async hasStartedPaymentForOrder(orderId: string): Promise<boolean> {

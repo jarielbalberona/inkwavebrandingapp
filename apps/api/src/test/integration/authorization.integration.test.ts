@@ -145,6 +145,64 @@ describe("authorization integration", () => {
     expect(staffOrderResponse.body.order.items[0]).not.toHaveProperty("unit_sell_price")
   })
 
+  it("lists payment-started orders without relational query alias drift", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer({
+      businessName: "Order List Authorization Customer",
+    })
+    const nonStockItem = await seedNonStockItem({
+      name: "Order List Design Fee",
+      costPrice: "5.00",
+      defaultSellPrice: "25.00",
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 1,
+          },
+        ],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+
+    const orderId = createOrderResponse.body.order.id as string
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+
+    const paymentResponse = await api
+      .post(`/invoices/${invoiceResponse.body.invoice.id}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "5.00",
+        payment_date: "2026-05-19T00:00:00.000Z",
+      })
+
+    expect(paymentResponse.status).toBe(201)
+
+    const listResponse = await api.get("/orders").set("Cookie", adminCookie)
+
+    expect(listResponse.status).toBe(200)
+    expect(listResponse.body.orders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: orderId,
+          order_number: createOrderResponse.body.order.order_number,
+        }),
+      ])
+    )
+  })
+
   it("rejects staff when creating orders with custom_charge line items", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()
