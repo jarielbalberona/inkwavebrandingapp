@@ -3,6 +3,20 @@ import { toCupDto, type CupDto } from "../cups/cups.types.js"
 import { toLidDto, type LidDto } from "../lids/lids.types.js"
 import type { InventoryMovementWithRelations } from "./inventory.repository.js"
 
+type InventoryMovementLinkedOrderDto = {
+  id: string
+  order_number: string
+  status: string
+  archived_at: string | null
+  created_at: string
+  order_item: {
+    id: string
+    item_type: string
+    description_snapshot: string
+    quantity: number
+  } | null
+}
+
 export type InventoryMovementDto =
   | {
       id: string
@@ -13,6 +27,7 @@ export type InventoryMovementDto =
       reference: string | null
       order_id: string | null
       order_item_id: string | null
+      linked_order: InventoryMovementLinkedOrderDto | null
       created_at: string
       cup: CupDto
       lid: null
@@ -31,6 +46,7 @@ export type InventoryMovementDto =
       reference: string | null
       order_id: string | null
       order_item_id: string | null
+      linked_order: InventoryMovementLinkedOrderDto | null
       created_at: string
       cup: null
       lid: LidDto
@@ -43,7 +59,7 @@ export type InventoryMovementDto =
 
 export function toInventoryMovementDto(
   movement: InventoryMovementWithRelations,
-  user: Pick<SafeUser, "role" | "permissions">,
+  user: Pick<SafeUser, "role" | "permissions">
 ): InventoryMovementDto {
   const createdBy = movement.createdByUser
     ? {
@@ -52,6 +68,7 @@ export function toInventoryMovementDto(
         email: movement.createdByUser.email,
       }
     : null
+  const linkedOrder = toLinkedOrderDto(movement)
 
   if (movement.itemType === "cup") {
     if (!movement.cup) {
@@ -67,6 +84,7 @@ export function toInventoryMovementDto(
       reference: movement.reference,
       order_id: movement.orderId,
       order_item_id: movement.orderItemId,
+      linked_order: linkedOrder,
       created_at: movement.createdAt.toISOString(),
       cup: toCupDto(movement.cup, user),
       lid: null,
@@ -87,9 +105,35 @@ export function toInventoryMovementDto(
     reference: movement.reference,
     order_id: movement.orderId,
     order_item_id: movement.orderItemId,
+    linked_order: linkedOrder,
     created_at: movement.createdAt.toISOString(),
     cup: null,
     lid: toLidDto(movement.lid, user),
     created_by: createdBy,
+  }
+}
+
+function toLinkedOrderDto(
+  movement: InventoryMovementWithRelations
+): InventoryMovementLinkedOrderDto | null {
+  if (!movement.linkedOrder) {
+    return null
+  }
+
+  return {
+    id: movement.linkedOrder.order.id,
+    order_number: movement.linkedOrder.order.orderNumber,
+    status: movement.linkedOrder.order.status,
+    archived_at: movement.linkedOrder.order.archivedAt?.toISOString() ?? null,
+    created_at: movement.linkedOrder.order.createdAt.toISOString(),
+    order_item: movement.linkedOrder.orderItem
+      ? {
+          id: movement.linkedOrder.orderItem.id,
+          item_type: movement.linkedOrder.orderItem.itemType,
+          description_snapshot:
+            movement.linkedOrder.orderItem.descriptionSnapshot,
+          quantity: movement.linkedOrder.orderItem.quantity,
+        }
+      : null,
   }
 }

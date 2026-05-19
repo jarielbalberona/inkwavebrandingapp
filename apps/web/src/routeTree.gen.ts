@@ -28,6 +28,7 @@ import { Route as AppCustomersRouteImport } from "./pages/_app.customers"
 import { Route as AppCupsRouteImport } from "./pages/_app.cups"
 import { Route as AppOrdersIndexRouteImport } from "./pages/_app.orders.index"
 import { Route as AppInvoicesIndexRouteImport } from "./pages/_app.invoices.index"
+import { Route as AppInventoryIndexRouteImport } from "./pages/_app.inventory.index"
 import { Route as AppOrdersNewRouteImport } from "./pages/_app.orders.new"
 import { Route as AppOrdersOrderIdRouteImport } from "./pages/_app.orders.$orderId"
 import { Route as AppInvoicesInvoiceIdRouteImport } from "./pages/_app.invoices.$invoiceId"
@@ -36,6 +37,7 @@ import { Route as AppInvoicesInvoiceIdIndexRouteImport } from "./pages/_app.invo
 import { Route as AppOrdersOrderIdFulfillmentRouteImport } from "./pages/_app.orders.$orderId.fulfillment"
 import { Route as AppOrdersOrderIdEditRouteImport } from "./pages/_app.orders.$orderId.edit"
 import { Route as AppInvoicesInvoiceIdPdfRouteImport } from "./pages/_app.invoices.$invoiceId.pdf"
+import { Route as AppInventoryItemTypeItemIdRouteImport } from "./pages/_app.inventory.$itemType.$itemId"
 
 const LoginRoute = LoginRouteImport.update({
   id: "/login",
@@ -131,6 +133,11 @@ const AppInvoicesIndexRoute = AppInvoicesIndexRouteImport.update({
   path: "/",
   getParentRoute: () => AppInvoicesRoute,
 } as any)
+const AppInventoryIndexRoute = AppInventoryIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => AppInventoryRoute,
+} as any)
 const AppOrdersNewRoute = AppOrdersNewRouteImport.update({
   id: "/new",
   path: "/new",
@@ -173,6 +180,12 @@ const AppInvoicesInvoiceIdPdfRoute = AppInvoicesInvoiceIdPdfRouteImport.update({
   path: "/pdf",
   getParentRoute: () => AppInvoicesInvoiceIdRoute,
 } as any)
+const AppInventoryItemTypeItemIdRoute =
+  AppInventoryItemTypeItemIdRouteImport.update({
+    id: "/$itemType/$itemId",
+    path: "/$itemType/$itemId",
+    getParentRoute: () => AppInventoryRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
@@ -182,7 +195,7 @@ export interface FileRoutesByFullPath {
   "/dashboard": typeof AppDashboardRoute
   "/design-system": typeof AppDesignSystemRoute
   "/general-items": typeof AppGeneralItemsRoute
-  "/inventory": typeof AppInventoryRoute
+  "/inventory": typeof AppInventoryRouteWithChildren
   "/inventory-history": typeof AppInventoryHistoryRoute
   "/invoices": typeof AppInvoicesRouteWithChildren
   "/lids": typeof AppLidsRoute
@@ -194,8 +207,10 @@ export interface FileRoutesByFullPath {
   "/invoices/$invoiceId": typeof AppInvoicesInvoiceIdRouteWithChildren
   "/orders/$orderId": typeof AppOrdersOrderIdRouteWithChildren
   "/orders/new": typeof AppOrdersNewRoute
+  "/inventory/": typeof AppInventoryIndexRoute
   "/invoices/": typeof AppInvoicesIndexRoute
   "/orders/": typeof AppOrdersIndexRoute
+  "/inventory/$itemType/$itemId": typeof AppInventoryItemTypeItemIdRoute
   "/invoices/$invoiceId/pdf": typeof AppInvoicesInvoiceIdPdfRoute
   "/orders/$orderId/edit": typeof AppOrdersOrderIdEditRoute
   "/orders/$orderId/fulfillment": typeof AppOrdersOrderIdFulfillmentRoute
@@ -210,7 +225,6 @@ export interface FileRoutesByTo {
   "/dashboard": typeof AppDashboardRoute
   "/design-system": typeof AppDesignSystemRoute
   "/general-items": typeof AppGeneralItemsRoute
-  "/inventory": typeof AppInventoryRoute
   "/inventory-history": typeof AppInventoryHistoryRoute
   "/lids": typeof AppLidsRoute
   "/products": typeof AppProductsRoute
@@ -218,8 +232,10 @@ export interface FileRoutesByTo {
   "/users": typeof AppUsersRoute
   "/i/$invoiceNumber": typeof IInvoiceNumberRoute
   "/orders/new": typeof AppOrdersNewRoute
+  "/inventory": typeof AppInventoryIndexRoute
   "/invoices": typeof AppInvoicesIndexRoute
   "/orders": typeof AppOrdersIndexRoute
+  "/inventory/$itemType/$itemId": typeof AppInventoryItemTypeItemIdRoute
   "/invoices/$invoiceId/pdf": typeof AppInvoicesInvoiceIdPdfRoute
   "/orders/$orderId/edit": typeof AppOrdersOrderIdEditRoute
   "/orders/$orderId/fulfillment": typeof AppOrdersOrderIdFulfillmentRoute
@@ -236,7 +252,7 @@ export interface FileRoutesById {
   "/_app/dashboard": typeof AppDashboardRoute
   "/_app/design-system": typeof AppDesignSystemRoute
   "/_app/general-items": typeof AppGeneralItemsRoute
-  "/_app/inventory": typeof AppInventoryRoute
+  "/_app/inventory": typeof AppInventoryRouteWithChildren
   "/_app/inventory-history": typeof AppInventoryHistoryRoute
   "/_app/invoices": typeof AppInvoicesRouteWithChildren
   "/_app/lids": typeof AppLidsRoute
@@ -248,8 +264,10 @@ export interface FileRoutesById {
   "/_app/invoices/$invoiceId": typeof AppInvoicesInvoiceIdRouteWithChildren
   "/_app/orders/$orderId": typeof AppOrdersOrderIdRouteWithChildren
   "/_app/orders/new": typeof AppOrdersNewRoute
+  "/_app/inventory/": typeof AppInventoryIndexRoute
   "/_app/invoices/": typeof AppInvoicesIndexRoute
   "/_app/orders/": typeof AppOrdersIndexRoute
+  "/_app/inventory/$itemType/$itemId": typeof AppInventoryItemTypeItemIdRoute
   "/_app/invoices/$invoiceId/pdf": typeof AppInvoicesInvoiceIdPdfRoute
   "/_app/orders/$orderId/edit": typeof AppOrdersOrderIdEditRoute
   "/_app/orders/$orderId/fulfillment": typeof AppOrdersOrderIdFulfillmentRoute
@@ -278,8 +296,10 @@ export interface FileRouteTypes {
     | "/invoices/$invoiceId"
     | "/orders/$orderId"
     | "/orders/new"
+    | "/inventory/"
     | "/invoices/"
     | "/orders/"
+    | "/inventory/$itemType/$itemId"
     | "/invoices/$invoiceId/pdf"
     | "/orders/$orderId/edit"
     | "/orders/$orderId/fulfillment"
@@ -294,7 +314,6 @@ export interface FileRouteTypes {
     | "/dashboard"
     | "/design-system"
     | "/general-items"
-    | "/inventory"
     | "/inventory-history"
     | "/lids"
     | "/products"
@@ -302,8 +321,10 @@ export interface FileRouteTypes {
     | "/users"
     | "/i/$invoiceNumber"
     | "/orders/new"
+    | "/inventory"
     | "/invoices"
     | "/orders"
+    | "/inventory/$itemType/$itemId"
     | "/invoices/$invoiceId/pdf"
     | "/orders/$orderId/edit"
     | "/orders/$orderId/fulfillment"
@@ -331,8 +352,10 @@ export interface FileRouteTypes {
     | "/_app/invoices/$invoiceId"
     | "/_app/orders/$orderId"
     | "/_app/orders/new"
+    | "/_app/inventory/"
     | "/_app/invoices/"
     | "/_app/orders/"
+    | "/_app/inventory/$itemType/$itemId"
     | "/_app/invoices/$invoiceId/pdf"
     | "/_app/orders/$orderId/edit"
     | "/_app/orders/$orderId/fulfillment"
@@ -482,6 +505,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppInvoicesIndexRouteImport
       parentRoute: typeof AppInvoicesRoute
     }
+    "/_app/inventory/": {
+      id: "/_app/inventory/"
+      path: "/"
+      fullPath: "/inventory/"
+      preLoaderRoute: typeof AppInventoryIndexRouteImport
+      parentRoute: typeof AppInventoryRoute
+    }
     "/_app/orders/new": {
       id: "/_app/orders/new"
       path: "/new"
@@ -538,8 +568,29 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppInvoicesInvoiceIdPdfRouteImport
       parentRoute: typeof AppInvoicesInvoiceIdRoute
     }
+    "/_app/inventory/$itemType/$itemId": {
+      id: "/_app/inventory/$itemType/$itemId"
+      path: "/$itemType/$itemId"
+      fullPath: "/inventory/$itemType/$itemId"
+      preLoaderRoute: typeof AppInventoryItemTypeItemIdRouteImport
+      parentRoute: typeof AppInventoryRoute
+    }
   }
 }
+
+interface AppInventoryRouteChildren {
+  AppInventoryIndexRoute: typeof AppInventoryIndexRoute
+  AppInventoryItemTypeItemIdRoute: typeof AppInventoryItemTypeItemIdRoute
+}
+
+const AppInventoryRouteChildren: AppInventoryRouteChildren = {
+  AppInventoryIndexRoute: AppInventoryIndexRoute,
+  AppInventoryItemTypeItemIdRoute: AppInventoryItemTypeItemIdRoute,
+}
+
+const AppInventoryRouteWithChildren = AppInventoryRoute._addFileChildren(
+  AppInventoryRouteChildren,
+)
 
 interface AppInvoicesInvoiceIdRouteChildren {
   AppInvoicesInvoiceIdPdfRoute: typeof AppInvoicesInvoiceIdPdfRoute
@@ -605,7 +656,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppDesignSystemRoute: typeof AppDesignSystemRoute
   AppGeneralItemsRoute: typeof AppGeneralItemsRoute
-  AppInventoryRoute: typeof AppInventoryRoute
+  AppInventoryRoute: typeof AppInventoryRouteWithChildren
   AppInventoryHistoryRoute: typeof AppInventoryHistoryRoute
   AppInvoicesRoute: typeof AppInvoicesRouteWithChildren
   AppLidsRoute: typeof AppLidsRoute
@@ -621,7 +672,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppDesignSystemRoute: AppDesignSystemRoute,
   AppGeneralItemsRoute: AppGeneralItemsRoute,
-  AppInventoryRoute: AppInventoryRoute,
+  AppInventoryRoute: AppInventoryRouteWithChildren,
   AppInventoryHistoryRoute: AppInventoryHistoryRoute,
   AppInvoicesRoute: AppInvoicesRouteWithChildren,
   AppLidsRoute: AppLidsRoute,

@@ -1,13 +1,16 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
   cups,
   inventoryMovements,
   lids,
+  orders,
   type Cup,
   type InventoryMovement,
   type Lid,
+  type Order,
+  type OrderItem,
   type User,
 } from "../../db/schema/index.js"
 import type {
@@ -34,27 +37,50 @@ export interface InventoryLidBalanceSummary {
   reserved: number
 }
 
-export type InventoryBalanceSummary = InventoryCupBalanceSummary | InventoryLidBalanceSummary
+export type InventoryBalanceSummary =
+  | InventoryCupBalanceSummary
+  | InventoryLidBalanceSummary
 
 export interface InventoryMovementWithRelations extends InventoryMovement {
   cup: Cup | null
   lid: Lid | null
   createdByUser: User | null
+  linkedOrder: InventoryMovementLinkedOrderSummary | null
 }
 
 export type InventoryItemReference =
   | { itemType: "cup"; cupId: string; lidId?: undefined }
   | { itemType: "lid"; cupId?: undefined; lidId: string }
 
+export interface InventoryMovementLinkedOrderSummary {
+  order: Pick<
+    Order,
+    "id" | "orderNumber" | "status" | "archivedAt" | "createdAt"
+  >
+  orderItem: Pick<
+    OrderItem,
+    "id" | "itemType" | "descriptionSnapshot" | "quantity"
+  > | null
+}
+
 export class InventoryRepository {
   constructor(private readonly db: DatabaseClient) {}
 
-  async transaction<T>(handler: (repository: InventoryRepository) => Promise<T>): Promise<T> {
-    return this.db.transaction((tx) => handler(new InventoryRepository(tx as DatabaseClient)))
+  async transaction<T>(
+    handler: (repository: InventoryRepository) => Promise<T>
+  ): Promise<T> {
+    return this.db.transaction((tx) =>
+      handler(new InventoryRepository(tx as DatabaseClient))
+    )
   }
 
-  async appendMovement(input: AppendInventoryMovementInput): Promise<InventoryMovement> {
-    const rows = await this.db.insert(inventoryMovements).values(input).returning()
+  async appendMovement(
+    input: AppendInventoryMovementInput
+  ): Promise<InventoryMovement> {
+    const rows = await this.db
+      .insert(inventoryMovements)
+      .values(input)
+      .returning()
     const movement = rows[0]
 
     if (!movement) {
@@ -64,7 +90,9 @@ export class InventoryRepository {
     return movement
   }
 
-  async getBalanceByItem(reference: InventoryItemReference): Promise<InventoryBalanceSummary | null> {
+  async getBalanceByItem(
+    reference: InventoryItemReference
+  ): Promise<InventoryBalanceSummary | null> {
     if (reference.itemType === "cup") {
       return this.getBalanceByCupId(reference.cupId)
     }
@@ -72,7 +100,9 @@ export class InventoryRepository {
     return this.getBalanceByLidId(reference.lidId)
   }
 
-  async getBalanceByCupId(cupId: string): Promise<InventoryCupBalanceSummary | null> {
+  async getBalanceByCupId(
+    cupId: string
+  ): Promise<InventoryCupBalanceSummary | null> {
     const rows = await this.db
       .select({
         cup: cups,
@@ -97,8 +127,8 @@ export class InventoryRepository {
         and(
           eq(inventoryMovements.itemType, "cup"),
           eq(inventoryMovements.cupId, cups.id),
-          eq(cups.id, cupId),
-        ),
+          eq(cups.id, cupId)
+        )
       )
       .where(eq(cups.id, cupId))
       .groupBy(cups.id)
@@ -118,7 +148,9 @@ export class InventoryRepository {
     }
   }
 
-  async getBalanceByLidId(lidId: string): Promise<InventoryLidBalanceSummary | null> {
+  async getBalanceByLidId(
+    lidId: string
+  ): Promise<InventoryLidBalanceSummary | null> {
     const rows = await this.db
       .select({
         lid: lids,
@@ -143,8 +175,8 @@ export class InventoryRepository {
         and(
           eq(inventoryMovements.itemType, "lid"),
           eq(inventoryMovements.lidId, lids.id),
-          eq(lids.id, lidId),
-        ),
+          eq(lids.id, lidId)
+        )
       )
       .where(eq(lids.id, lidId))
       .groupBy(lids.id)
@@ -192,7 +224,10 @@ export class InventoryRepository {
         .from(cups)
         .leftJoin(
           inventoryMovements,
-          and(eq(inventoryMovements.itemType, "cup"), eq(inventoryMovements.cupId, cups.id)),
+          and(
+            eq(inventoryMovements.itemType, "cup"),
+            eq(inventoryMovements.cupId, cups.id)
+          )
         )
         .where(options.includeInactive ? undefined : eq(cups.isActive, true))
         .groupBy(cups.id)
@@ -205,7 +240,7 @@ export class InventoryRepository {
           lid: null,
           onHand: Number(row.onHand),
           reserved: Number(row.reserved),
-        })),
+        }))
       )
     }
 
@@ -231,7 +266,10 @@ export class InventoryRepository {
         .from(lids)
         .leftJoin(
           inventoryMovements,
-          and(eq(inventoryMovements.itemType, "lid"), eq(inventoryMovements.lidId, lids.id)),
+          and(
+            eq(inventoryMovements.itemType, "lid"),
+            eq(inventoryMovements.lidId, lids.id)
+          )
         )
         .where(options.includeInactive ? undefined : eq(lids.isActive, true))
         .groupBy(lids.id)
@@ -244,19 +282,25 @@ export class InventoryRepository {
           lid: row.lid,
           onHand: Number(row.onHand),
           reserved: Number(row.reserved),
-        })),
+        }))
       )
     }
 
     return balances
   }
 
-  async listMovements(filters: InventoryMovementsQuery): Promise<InventoryMovementWithRelations[]> {
+  async listMovements(
+    filters: InventoryMovementsQuery
+  ): Promise<InventoryMovementWithRelations[]> {
     const conditions = [
-      filters.item_type ? eq(inventoryMovements.itemType, filters.item_type) : undefined,
+      filters.item_type
+        ? eq(inventoryMovements.itemType, filters.item_type)
+        : undefined,
       filters.cup_id ? eq(inventoryMovements.cupId, filters.cup_id) : undefined,
       filters.lid_id ? eq(inventoryMovements.lidId, filters.lid_id) : undefined,
-      filters.movement_type ? eq(inventoryMovements.movementType, filters.movement_type) : undefined,
+      filters.movement_type
+        ? eq(inventoryMovements.movementType, filters.movement_type)
+        : undefined,
     ].filter(Boolean)
 
     const rows = await this.db.query.inventoryMovements.findMany({
@@ -270,15 +314,27 @@ export class InventoryRepository {
       limit: 200,
     })
 
+    const linkedOrdersById = await this.getLinkedOrdersById(
+      rows
+        .map((row) => row.orderId)
+        .filter((orderId): orderId is string => Boolean(orderId))
+    )
+
     return rows.map((row) => ({
       ...row,
       createdByUser: row.createdByUser ?? null,
       cup: row.cup ?? null,
       lid: row.lid ?? null,
+      linkedOrder: toLinkedOrderSummary(
+        row,
+        linkedOrdersById.get(row.orderId ?? "") ?? null
+      ),
     }))
   }
 
-  toBalanceReference(item: ReserveOrderItemsInput["items"][number]): InventoryItemReference {
+  toBalanceReference(
+    item: ReserveOrderItemsInput["items"][number]
+  ): InventoryItemReference {
     if (item.itemType === "cup") {
       return {
         itemType: "cup",
@@ -290,5 +346,55 @@ export class InventoryRepository {
       itemType: "lid",
       lidId: item.lidId!,
     }
+  }
+
+  private async getLinkedOrdersById(
+    orderIds: string[]
+  ): Promise<Map<string, Order & { items: OrderItem[] }>> {
+    const uniqueOrderIds = [...new Set(orderIds)]
+
+    if (uniqueOrderIds.length === 0) {
+      return new Map()
+    }
+
+    const rows = await this.db.query.orders.findMany({
+      where: inArray(orders.id, uniqueOrderIds),
+      with: {
+        items: true,
+      },
+    })
+
+    return new Map(rows.map((order) => [order.id, order]))
+  }
+}
+
+function toLinkedOrderSummary(
+  movement: InventoryMovement,
+  order: (Order & { items: OrderItem[] }) | null
+): InventoryMovementLinkedOrderSummary | null {
+  if (!order) {
+    return null
+  }
+
+  const orderItem = movement.orderItemId
+    ? (order.items.find((item) => item.id === movement.orderItemId) ?? null)
+    : null
+
+  return {
+    order: {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      archivedAt: order.archivedAt,
+      createdAt: order.createdAt,
+    },
+    orderItem: orderItem
+      ? {
+          id: orderItem.id,
+          itemType: orderItem.itemType,
+          descriptionSnapshot: orderItem.descriptionSnapshot,
+          quantity: orderItem.quantity,
+        }
+      : null,
   }
 }

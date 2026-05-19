@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   createInventoryAdjustment,
   createStockIntake,
+  getInventoryItemDetail,
   type InventoryAdjustmentPayload,
   listInventoryMovements,
   listInventoryBalances,
@@ -14,6 +15,7 @@ import { lidsQueryKey } from "@/features/lids/hooks/use-lids"
 
 export const inventoryBalancesQueryKey = ["inventory", "balances"] as const
 export const inventoryMovementsQueryKey = ["inventory", "movements"] as const
+export const inventoryItemDetailQueryKey = ["inventory", "detail"] as const
 export const inventoryMovementTypeOptions = [
   "stock_in",
   "reserve",
@@ -41,6 +43,17 @@ export function useInventoryMovementsQuery(filters: {
   })
 }
 
+export function useInventoryItemDetailQuery(
+  itemType: InventoryItemType | null,
+  itemId: string | null
+) {
+  return useQuery({
+    queryKey: [...inventoryItemDetailQueryKey, itemType, itemId] as const,
+    queryFn: () => getInventoryItemDetail(itemType!, itemId!),
+    enabled: Boolean(itemType && itemId),
+  })
+}
+
 export function useStockIntakeMutation() {
   const queryClient = useQueryClient()
 
@@ -49,8 +62,15 @@ export function useStockIntakeMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cupsQueryKey })
       await queryClient.invalidateQueries({ queryKey: lidsQueryKey })
-      await queryClient.invalidateQueries({ queryKey: inventoryBalancesQueryKey })
-      await queryClient.invalidateQueries({ queryKey: inventoryMovementsQueryKey })
+      await queryClient.invalidateQueries({
+        queryKey: inventoryBalancesQueryKey,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: inventoryMovementsQueryKey,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: inventoryItemDetailQueryKey,
+      })
     },
   })
 }
@@ -59,12 +79,20 @@ export function useInventoryAdjustmentMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: InventoryAdjustmentPayload) => createInventoryAdjustment(payload),
+    mutationFn: (payload: InventoryAdjustmentPayload) =>
+      createInventoryAdjustment(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cupsQueryKey })
       await queryClient.invalidateQueries({ queryKey: lidsQueryKey })
-      await queryClient.invalidateQueries({ queryKey: inventoryBalancesQueryKey })
-      await queryClient.invalidateQueries({ queryKey: inventoryMovementsQueryKey })
+      await queryClient.invalidateQueries({
+        queryKey: inventoryBalancesQueryKey,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: inventoryMovementsQueryKey,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: inventoryItemDetailQueryKey,
+      })
     },
   })
 }

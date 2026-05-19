@@ -58,12 +58,14 @@ export class InventoryService {
   constructor(
     private readonly inventoryRepository: InventoryRepository,
     private readonly cupsRepository: CupsRepository,
-    private readonly lidsRepository: LidsRepository,
+    private readonly lidsRepository: LidsRepository
   ) {}
 
   async appendMovement(input: AppendInventoryMovementInput) {
     const parsedInput = appendInventoryMovementSchema.parse(input)
-    await this.assertTrackedItemIsActive(this.toInventoryItemReference(parsedInput))
+    await this.assertTrackedItemIsActive(
+      this.toInventoryItemReference(parsedInput)
+    )
 
     return this.inventoryRepository.appendMovement(parsedInput)
   }
@@ -107,6 +109,29 @@ export class InventoryService {
     return toInventoryBalanceDto(balance, user)
   }
 
+  async getItemDetail(reference: InventoryItemReference, user: SafeUser) {
+    assertPermission(user, "inventory.view")
+
+    const balance = await this.inventoryRepository.getBalanceByItem(reference)
+
+    if (!balance) {
+      throw new InventoryBalanceItemNotFoundError(reference.itemType)
+    }
+
+    const movements = await this.inventoryRepository.listMovements(
+      reference.itemType === "cup"
+        ? { item_type: "cup", cup_id: reference.cupId }
+        : { item_type: "lid", lid_id: reference.lidId }
+    )
+
+    return {
+      balance: toInventoryBalanceDto(balance, user),
+      movements: movements.map((movement) =>
+        toInventoryMovementDto(movement, user)
+      ),
+    }
+  }
+
   async listMovements(query: InventoryMovementsQuery, user: SafeUser) {
     assertPermission(user, "inventory.view")
 
@@ -121,14 +146,17 @@ export class InventoryService {
 
     const parsedInput = inventoryAdjustmentRequestSchema.parse(input)
     const balance = await this.inventoryRepository.getBalanceByItem(
-      this.toInventoryItemReference(parsedInput),
+      this.toInventoryItemReference(parsedInput)
     )
 
     if (!balance) {
       throw new InventoryBalanceItemNotFoundError(parsedInput.itemType)
     }
 
-    if (parsedInput.movementType === "adjustment_out" && balance.onHand < parsedInput.quantity) {
+    if (
+      parsedInput.movementType === "adjustment_out" &&
+      balance.onHand < parsedInput.quantity
+    ) {
       throw new InventoryAdjustmentOutInsufficientStockError()
     }
 
@@ -146,22 +174,25 @@ export class InventoryService {
 
   async reserveOrderItems(
     input: ReserveOrderItemsInput,
-    options: { useExistingTransaction?: boolean } = {},
+    options: { useExistingTransaction?: boolean } = {}
   ) {
     const parsedInput = reserveOrderItemsSchema.parse(input)
 
     if (options.useExistingTransaction) {
-      return this.reserveOrderItemsWithRepository(parsedInput, this.inventoryRepository)
+      return this.reserveOrderItemsWithRepository(
+        parsedInput,
+        this.inventoryRepository
+      )
     }
 
     return this.inventoryRepository.transaction((repository) =>
-      this.reserveOrderItemsWithRepository(parsedInput, repository),
+      this.reserveOrderItemsWithRepository(parsedInput, repository)
     )
   }
 
   private async reserveOrderItemsWithRepository(
     input: ReserveOrderItemsInput,
-    repository: InventoryRepository,
+    repository: InventoryRepository
   ) {
     const referencesByItemKey = new Map<string, InventoryItemReference>()
 
@@ -196,14 +227,16 @@ export class InventoryService {
           note: "Reserved for pending order",
           reference: input.orderId,
           createdByUserId: input.createdByUserId,
-        }),
+        })
       )
     }
 
     return movements
   }
 
-  private async assertTrackedItemIsActive(reference: InventoryItemReference): Promise<void> {
+  private async assertTrackedItemIsActive(
+    reference: InventoryItemReference
+  ): Promise<void> {
     if (reference.itemType === "cup") {
       const cup = await this.cupsRepository.findById(reference.cupId)
 
@@ -230,7 +263,7 @@ export class InventoryService {
   }
 
   private toInventoryItemReference(
-    input: Pick<AppendInventoryMovementInput, "itemType" | "cupId" | "lidId">,
+    input: Pick<AppendInventoryMovementInput, "itemType" | "cupId" | "lidId">
   ): InventoryItemReference {
     if (input.itemType === "cup") {
       return {

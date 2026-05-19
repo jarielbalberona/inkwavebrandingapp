@@ -434,6 +434,17 @@ export function InventoryPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button asChild type="button" size="sm" variant="outline">
+                        <Link
+                          to="/inventory/$itemType/$itemId"
+                          params={{
+                            itemType: balance.item_type,
+                            itemId: toInventoryItemId(balance),
+                          }}
+                        >
+                          View
+                        </Link>
+                      </Button>
                       <Dialog
                         open={
                           isReceiveStockDialogOpen &&
@@ -901,5 +912,9 @@ function stockStateVariant(balance: InventoryBalance): "default" | "secondary" |
 }
 
 function toInventoryItemKey(balance: InventoryBalance): string {
-  return balance.item_type === "cup" ? `cup:${balance.cup.id}` : `lid:${balance.lid.id}`
+  return `${balance.item_type}:${toInventoryItemId(balance)}`
+}
+
+function toInventoryItemId(balance: InventoryBalance): string {
+  return balance.item_type === "cup" ? balance.cup.id : balance.lid.id
 }

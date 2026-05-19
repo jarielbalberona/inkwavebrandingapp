@@ -1,7 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router"
-
-import { InventoryPage } from "@/features/inventory/components/inventory-page"
+import { Outlet, createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_app/inventory")({
-  component: InventoryPage,
+  component: Outlet,
 })

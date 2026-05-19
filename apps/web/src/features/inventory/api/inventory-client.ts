@@ -66,6 +66,36 @@ const inventoryBalancesResponseSchema = z.object({
   balances: z.array(inventoryBalanceSchema),
 })
 
+const linkedOrderSchema = z
+  .object({
+    id: z.string().uuid(),
+    order_number: z.string(),
+    status: z.enum([
+      "pending",
+      "in_progress",
+      "partial_released",
+      "completed",
+      "canceled",
+    ]),
+    archived_at: z.string().nullable(),
+    created_at: z.string(),
+    order_item: z
+      .object({
+        id: z.string().uuid(),
+        item_type: z.enum([
+          "cup",
+          "lid",
+          "non_stock_item",
+          "custom_charge",
+          "product_bundle",
+        ]),
+        description_snapshot: z.string(),
+        quantity: z.number().int().positive(),
+      })
+      .nullable(),
+  })
+  .nullable()
+
 const inventoryMovementListItemSchema = z.discriminatedUnion("item_type", [
   z.object({
     id: z.string().uuid(),
@@ -76,6 +106,7 @@ const inventoryMovementListItemSchema = z.discriminatedUnion("item_type", [
     reference: z.string().nullable(),
     order_id: z.string().uuid().nullable(),
     order_item_id: z.string().uuid().nullable(),
+    linked_order: linkedOrderSchema,
     created_at: z.string(),
     cup: cupSchema,
     lid: z.null(),
@@ -96,6 +127,7 @@ const inventoryMovementListItemSchema = z.discriminatedUnion("item_type", [
     reference: z.string().nullable(),
     order_id: z.string().uuid().nullable(),
     order_item_id: z.string().uuid().nullable(),
+    linked_order: linkedOrderSchema,
     created_at: z.string(),
     cup: z.null(),
     lid: lidSchema,
@@ -110,6 +142,11 @@ const inventoryMovementListItemSchema = z.discriminatedUnion("item_type", [
 ])
 
 const inventoryMovementsResponseSchema = z.object({
+  movements: z.array(inventoryMovementListItemSchema),
+})
+
+const inventoryItemDetailResponseSchema = z.object({
+  balance: inventoryBalanceSchema,
   movements: z.array(inventoryMovementListItemSchema),
 })
 
@@ -138,8 +175,15 @@ const inventoryAdjustmentResponseSchema = z.object({
 
 export type InventoryMovement = z.infer<typeof inventoryMovementSchema>
 export type InventoryBalance = z.infer<typeof inventoryBalanceSchema>
-export type InventoryMovementListItem = z.infer<typeof inventoryMovementListItemSchema>
-export type InventoryItemType = z.infer<typeof inventoryBalanceSchema>["item_type"]
+export type InventoryMovementListItem = z.infer<
+  typeof inventoryMovementListItemSchema
+>
+export type InventoryItemType = z.infer<
+  typeof inventoryBalanceSchema
+>["item_type"]
+export type InventoryItemDetail = z.infer<
+  typeof inventoryItemDetailResponseSchema
+>
 
 export type StockIntakePayload =
   | {
@@ -194,7 +238,7 @@ export async function listInventoryBalances(filters?: {
   }
 
   const data = await api.get<unknown>(
-    `/inventory/balances${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`,
+    `/inventory/balances${searchParams.size > 0 ? `?${searchParams.toString()}` : ""}`
   )
 
   return inventoryBalancesResponseSchema.parse(data).balances
@@ -223,25 +267,64 @@ export async function listInventoryMovements(filters: {
     searchParams.set("movement_type", filters.movementType)
   }
 
-  const data = await api.get<unknown>(`/inventory/movements?${searchParams.toString()}`)
+  const data = await api.get<unknown>(
+    `/inventory/movements?${searchParams.toString()}`
+  )
   return inventoryMovementsResponseSchema.parse(data).movements
 }
 
-export async function createStockIntake(payload: StockIntakePayload): Promise<InventoryMovement> {
+export async function getInventoryItemDetail(
+  itemType: InventoryItemType,
+  itemId: string
+): Promise<InventoryItemDetail> {
   try {
-    const data = await api.post<unknown, StockIntakePayload>("/inventory/stock-intake", payload)
+    const data = await api.get<unknown>(
+      `/inventory/items/${itemType}/${itemId}`
+    )
+    return inventoryItemDetailResponseSchema.parse(data)
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      if (error.status === 403) {
+        throw new Error("You do not have permission to view inventory.")
+      }
+
+      if (error.status === 404) {
+        throw new Error("Inventory item no longer exists.")
+      }
+
+      if (error.status === 400) {
+        throw new Error("Inventory item link is invalid.")
+      }
+
+      throw new Error("Unable to load inventory item.")
+    }
+
+    throw error
+  }
+}
+
+export async function createStockIntake(
+  payload: StockIntakePayload
+): Promise<InventoryMovement> {
+  try {
+    const data = await api.post<unknown, StockIntakePayload>(
+      "/inventory/stock-intake",
+      payload
+    )
     return stockIntakeResponseSchema.parse(data).movement
   } catch (error) {
     if (error instanceof ApiClientError) {
       if (error.status === 403) {
-        throw new Error("You do not have permission to receive stock into inventory.")
+        throw new Error(
+          "You do not have permission to receive stock into inventory."
+        )
       }
 
       if (error.status === 404) {
         throw new Error(
           payload.itemType === "cup"
             ? "Selected cup no longer exists."
-            : "Selected lid no longer exists.",
+            : "Selected lid no longer exists."
         )
       }
 
@@ -249,7 +332,7 @@ export async function createStockIntake(payload: StockIntakePayload): Promise<In
         throw new Error(
           payload.itemType === "cup"
             ? "Selected cup is inactive and cannot receive stock."
-            : "Selected lid is inactive and cannot receive stock.",
+            : "Selected lid is inactive and cannot receive stock."
         )
       }
 
@@ -265,44 +348,48 @@ export async function createStockIntake(payload: StockIntakePayload): Promise<In
 }
 
 export async function createInventoryAdjustment(
-  payload: InventoryAdjustmentPayload,
+  payload: InventoryAdjustmentPayload
 ): Promise<InventoryMovement> {
   try {
     const data = await api.post<unknown, InventoryAdjustmentPayload>(
       "/inventory/adjustments",
-      payload,
+      payload
     )
 
     return inventoryAdjustmentResponseSchema.parse(data).movement
   } catch (error) {
     if (error instanceof ApiClientError) {
       if (error.status === 403) {
-        throw new Error("You do not have permission to record manual inventory adjustments.")
+        throw new Error(
+          "You do not have permission to record manual inventory adjustments."
+        )
       }
 
       if (error.status === 404) {
         throw new Error(
           payload.itemType === "cup"
             ? "Selected cup no longer exists."
-            : "Selected lid no longer exists.",
+            : "Selected lid no longer exists."
         )
       }
 
       if (error.status === 409) {
         if (payload.movementType === "adjustment_out") {
-          throw new Error("Adjustment out cannot exceed the current on-hand stock.")
+          throw new Error(
+            "Adjustment out cannot exceed the current on-hand stock."
+          )
         }
 
         throw new Error(
           payload.itemType === "cup"
             ? "Selected cup is inactive and cannot be adjusted."
-            : "Selected lid is inactive and cannot be adjusted.",
+            : "Selected lid is inactive and cannot be adjusted."
         )
       }
 
       if (error.status === 400) {
         throw new Error(
-          "Enter a valid tracked item, adjustment type, quantity, and reason.",
+          "Enter a valid tracked item, adjustment type, quantity, and reason."
         )
       }
 
