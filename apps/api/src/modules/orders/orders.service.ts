@@ -193,7 +193,7 @@ export class OrderStructuralEditStatusError extends Error {
 
   constructor() {
     super(
-      "Structural order edits are only allowed while the order is pending or in progress"
+      "Structural order edits are only allowed while the order is quote, pending, or in progress"
     )
   }
 }
@@ -860,7 +860,7 @@ export class OrdersService {
             priority: getPriorityForNewOrder(
               await ordersRepository.getMaximumPriority()
             ),
-            status: "pending",
+            status: parsedInput.status,
             notes: parsedInput.notes,
             internalNotes: parsedInput.internal_notes,
             createdByUserId: user.id,
@@ -880,6 +880,10 @@ export class OrdersService {
           order,
           resolvedItems
         )
+
+        if (parsedInput.status === "quote") {
+          return toOrderDto(order, user)
+        }
 
         if (reservationRequests.length > 0) {
           await this.createInventoryService(db).reserveOrderItems(
@@ -983,6 +987,10 @@ export class OrdersService {
 
         if (orderItem.order.status === "canceled") {
           throw new OrderProgressClosedError()
+        }
+
+        if (orderItem.order.status === "quote") {
+          throw new OrderPaymentRequiredForProgressError()
         }
 
         if (!(await ordersRepository.hasStartedPaymentForOrder(orderItem.orderId))) {
@@ -1240,30 +1248,32 @@ export class OrdersService {
           })
         }
 
-        const orderItems =
-          await ordersRepository.listOrderItemsWithProgressEvents(order.id)
+        if (order.status !== "quote") {
+          const orderItems =
+            await ordersRepository.listOrderItemsWithProgressEvents(order.id)
 
-        for (const item of orderItems) {
-          if (
-            item.itemType === "non_stock_item" ||
-            item.itemType === "custom_charge"
-          ) {
-            continue
-          }
+          for (const item of orderItems) {
+            if (
+              item.itemType === "non_stock_item" ||
+              item.itemType === "custom_charge"
+            ) {
+              continue
+            }
 
-          for (const component of getCancellationReleaseComponents(item)) {
-            await inventoryRepository.appendMovement({
-              itemType: component.itemType,
-              cupId: component.cupId,
-              lidId: component.lidId,
-              movementType: "release_reservation",
-              quantity: component.quantity,
-              orderId: order.id,
-              orderItemId: item.id,
-              note: "Released unconsumed reservation on order cancellation",
-              reference: order.id,
-              createdByUserId: user.id,
-            })
+            for (const component of getCancellationReleaseComponents(item)) {
+              await inventoryRepository.appendMovement({
+                itemType: component.itemType,
+                cupId: component.cupId,
+                lidId: component.lidId,
+                movementType: "release_reservation",
+                quantity: component.quantity,
+                orderId: order.id,
+                orderItemId: item.id,
+                note: "Released unconsumed reservation on order cancellation",
+                reference: order.id,
+                createdByUserId: user.id,
+              })
+            }
           }
         }
 
@@ -1316,6 +1326,7 @@ export class OrdersService {
 
         if (
           hasStructuralChanges &&
+          order.status !== "quote" &&
           order.status !== "pending" &&
           order.status !== "in_progress"
         ) {
@@ -1560,78 +1571,80 @@ export class OrdersService {
             throw new OrderNotFoundError()
           }
 
-          const inventoryRepository = new InventoryRepository(db)
-          const claimedReserveOrderItemIds = new Set<string>()
+          if (order.status !== "quote") {
+            const inventoryRepository = new InventoryRepository(db)
+            const claimedReserveOrderItemIds = new Set<string>()
 
-          for (const adjustment of reservationAdjustments) {
-            if (adjustment.quantity === 0) {
-              continue
-            }
-
-            if (adjustment.action === "reserve") {
-              const targetOrderItem = refreshedOrder.items.find((item) => {
-                if (
-                  adjustment.orderItemId &&
-                  item.id === adjustment.orderItemId
-                ) {
-                  return true
-                }
-
-                if (claimedReserveOrderItemIds.has(item.id)) {
-                  return false
-                }
-
-                if (item.itemType !== adjustment.itemType) {
-                  return false
-                }
-
-                if (adjustment.itemType === "cup") {
-                  return item.cupId === adjustment.cupId
-                }
-
-                return item.lidId === adjustment.lidId
-              })
-
-              if (!targetOrderItem) {
-                throw new Error(
-                  "Failed to match updated order item to reservation request"
-                )
+            for (const adjustment of reservationAdjustments) {
+              if (adjustment.quantity === 0) {
+                continue
               }
 
-              claimedReserveOrderItemIds.add(targetOrderItem.id)
+              if (adjustment.action === "reserve") {
+                const targetOrderItem = refreshedOrder.items.find((item) => {
+                  if (
+                    adjustment.orderItemId &&
+                    item.id === adjustment.orderItemId
+                  ) {
+                    return true
+                  }
 
-              await this.createInventoryService(db).reserveOrderItems(
-                {
-                  orderId: refreshedOrder.id,
-                  createdByUserId: user.id,
-                  items: [
-                    {
-                      orderItemId: targetOrderItem.id,
-                      requestLineItemIndex: adjustment.requestLineItemIndex,
-                      itemType: adjustment.itemType,
-                      cupId: adjustment.cupId,
-                      lidId: adjustment.lidId,
-                      quantity: adjustment.quantity,
-                    },
-                  ],
-                },
-                { useExistingTransaction: true }
-              )
-              continue
+                  if (claimedReserveOrderItemIds.has(item.id)) {
+                    return false
+                  }
+
+                  if (item.itemType !== adjustment.itemType) {
+                    return false
+                  }
+
+                  if (adjustment.itemType === "cup") {
+                    return item.cupId === adjustment.cupId
+                  }
+
+                  return item.lidId === adjustment.lidId
+                })
+
+                if (!targetOrderItem) {
+                  throw new Error(
+                    "Failed to match updated order item to reservation request"
+                  )
+                }
+
+                claimedReserveOrderItemIds.add(targetOrderItem.id)
+
+                await this.createInventoryService(db).reserveOrderItems(
+                  {
+                    orderId: refreshedOrder.id,
+                    createdByUserId: user.id,
+                    items: [
+                      {
+                        orderItemId: targetOrderItem.id,
+                        requestLineItemIndex: adjustment.requestLineItemIndex,
+                        itemType: adjustment.itemType,
+                        cupId: adjustment.cupId,
+                        lidId: adjustment.lidId,
+                        quantity: adjustment.quantity,
+                      },
+                    ],
+                  },
+                  { useExistingTransaction: true }
+                )
+                continue
+              }
+
+              await inventoryRepository.appendMovement({
+                itemType: adjustment.itemType,
+                cupId: adjustment.cupId,
+                lidId: adjustment.lidId,
+                movementType: "release_reservation",
+                quantity: adjustment.quantity,
+                orderId: refreshedOrder.id,
+                orderItemId: adjustment.orderItemId!,
+                note: "Released reservation after unpaid order edit",
+                reference: refreshedOrder.id,
+                createdByUserId: user.id,
+              })
             }
-
-            await inventoryRepository.appendMovement({
-              itemType: adjustment.itemType,
-              cupId: adjustment.cupId,
-              lidId: adjustment.lidId,
-              movementType: "release_reservation",
-              quantity: adjustment.quantity,
-              orderId: refreshedOrder.id,
-              orderItemId: adjustment.orderItemId!,
-              note: "Released reservation after unpaid order edit",
-              reference: refreshedOrder.id,
-              createdByUserId: user.id,
-            })
           }
         }
 

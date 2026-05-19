@@ -29,6 +29,7 @@ export interface InventoryReportDto {
 }
 
 export const orderReportStatuses = [
+  "quote",
   "pending",
   "in_progress",
   "partial_released",

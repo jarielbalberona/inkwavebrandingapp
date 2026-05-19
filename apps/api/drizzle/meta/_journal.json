@@ -267,6 +267,13 @@
       "when": 1778171205656,
       "tag": "0038_pink_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1779169506092,
+      "tag": "0039_cool_dexter_bennett",
+      "breakpoints": true
     }
   ]
 }

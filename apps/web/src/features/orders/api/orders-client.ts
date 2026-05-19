@@ -4,6 +4,7 @@ import { customerSchema } from "@/features/customers/api/customers-client"
 import { ApiClientError, api } from "@/lib/api"
 
 export const orderStatusSchema = z.enum([
+  "quote",
   "pending",
   "in_progress",
   "partial_released",
@@ -331,6 +332,7 @@ export class CreateOrderError extends Error {
 
 export interface CreateOrderPayload {
   customer_id: string
+  status?: "quote" | "pending"
   notes?: string
   internal_notes?: string
   line_items: Array<

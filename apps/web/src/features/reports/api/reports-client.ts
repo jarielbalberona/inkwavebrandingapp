@@ -36,6 +36,7 @@ const inventoryReportResponseSchema = z.object({
 })
 
 const orderStatusSchema = z.enum([
+  "quote",
   "pending",
   "in_progress",
   "partial_released",

@@ -121,12 +121,15 @@ export class OrdersRepository {
           options.status ? eq(orders.status, options.status) : undefined,
           options.includeArchived ? undefined : isNull(orders.archivedAt),
           options.requirePaymentStarted
-            ? sql`exists (
+            ? sql`(
+                ${orders.status} = 'quote'
+                or exists (
                 select 1
                 from ${invoices}
                 where ${invoices.orderId} = ${orders.id}
                   and ${invoices.status} <> 'void'
                   and ${invoices.paidAmount} > 0
+                )
               )`
             : undefined
         )

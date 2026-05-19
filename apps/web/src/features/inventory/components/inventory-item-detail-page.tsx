@@ -181,7 +181,7 @@ export function InventoryItemDetailPage({
                             to="/orders/$orderId"
                             params={{ orderId: movement.linked_order.id }}
                           >
-                            {movement.linked_order.order_number}
+                            {formatLinkedOrderLabel(movement.linked_order)}
                           </Link>
                         </Button>
                         <span className="text-xs text-muted-foreground">
@@ -338,7 +338,7 @@ function getLinkedOrders(
 
     orders.set(movement.linked_order.id, {
       id: movement.linked_order.id,
-      orderNumber: movement.linked_order.order_number,
+      orderNumber: formatLinkedOrderLabel(movement.linked_order),
       status: movement.linked_order.status,
       orderItemDescription:
         movement.linked_order.order_item?.description_snapshot ?? null,
@@ -347,6 +347,15 @@ function getLinkedOrders(
   }
 
   return [...orders.values()]
+}
+
+function formatLinkedOrderLabel(order: {
+  client_name: string | null
+  order_number: string
+}): string {
+  return order.client_name
+    ? `${order.client_name} + ${order.order_number}`
+    : order.order_number
 }
 
 function parseInventoryItemType(value: string): InventoryItemType | null {

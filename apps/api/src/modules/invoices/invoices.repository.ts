@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, ilike, isNull, lte, ne, or } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
+import { OrdersRepository } from "../orders/orders.repository.js"
 import {
   invoiceItems,
   invoicePayments,
@@ -22,12 +23,14 @@ export class InvoicesRepository {
     handler: (context: {
       db: DatabaseClient
       invoicesRepository: InvoicesRepository
+      ordersRepository: OrdersRepository
     }) => Promise<T>
   ): Promise<T> {
     return this.db.transaction((tx) =>
       handler({
         db: tx as DatabaseClient,
         invoicesRepository: new InvoicesRepository(tx as DatabaseClient),
+        ordersRepository: new OrdersRepository(tx as DatabaseClient),
       })
     )
   }

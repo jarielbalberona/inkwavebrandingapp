@@ -6,6 +6,7 @@ import type { InventoryMovementWithRelations } from "./inventory.repository.js"
 type InventoryMovementLinkedOrderDto = {
   id: string
   order_number: string
+  client_name: string | null
   status: string
   archived_at: string | null
   created_at: string
@@ -123,6 +124,7 @@ function toLinkedOrderDto(
   return {
     id: movement.linkedOrder.order.id,
     order_number: movement.linkedOrder.order.orderNumber,
+    client_name: movement.linkedOrder.customer?.businessName ?? null,
     status: movement.linkedOrder.order.status,
     archived_at: movement.linkedOrder.order.archivedAt?.toISOString() ?? null,
     created_at: movement.linkedOrder.order.createdAt.toISOString(),

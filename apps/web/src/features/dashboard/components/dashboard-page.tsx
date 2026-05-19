@@ -251,6 +251,8 @@ function formatStatus(status: DashboardSummary["orders"]["statuses"][number]["st
 
 function statusDescription(status: DashboardSummary["orders"]["statuses"][number]["status"]) {
   switch (status) {
+    case "quote":
+      return "Quotation only. No inventory is reserved yet."
     case "pending":
       return "Reserved but no production progress yet."
     case "in_progress":
@@ -266,6 +268,8 @@ function statusDescription(status: DashboardSummary["orders"]["statuses"][number
 
 function statusBadgeVariant(status: DashboardSummary["orders"]["statuses"][number]["status"]) {
   switch (status) {
+    case "quote":
+      return "secondary"
     case "completed":
       return "default"
     case "partial_released":

@@ -77,6 +77,7 @@ import { useSellableProductPriceRulesQuery } from "@/features/sellable-product-p
 
 const orderCreateSchema = z.object({
   customer_id: z.string().uuid({ message: "Select a customer." }),
+  status: z.enum(["quote", "pending"]),
   notes: z.string().trim().max(1000).optional(),
   internal_notes: z.string().trim().max(1000).optional(),
   line_items: z
@@ -981,6 +982,7 @@ export function OrderCreatePage() {
     resolver: zodResolver(orderCreateSchema),
     defaultValues: {
       customer_id: "",
+      status: "quote",
       notes: "",
       internal_notes: "",
       line_items: [emptyLineItem],
@@ -997,6 +999,7 @@ export function OrderCreatePage() {
     activeLids,
     availableQuantityByTrackedItemKey
   )
+  const selectedOrderStatus = form.watch("status")
 
   function handleDragEnd(result: DropResult) {
     const { source, destination } = result
@@ -1015,6 +1018,7 @@ export function OrderCreatePage() {
     try {
       await createOrderMutation.mutateAsync({
         customer_id: values.customer_id,
+        status: values.status,
         notes: values.notes?.trim() || undefined,
         internal_notes: values.internal_notes?.trim() || undefined,
         line_items: values.line_items.map((item) =>
@@ -1089,7 +1093,7 @@ export function OrderCreatePage() {
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="grid min-w-0 gap-1">
-            <CardTitle>Create Pending Order</CardTitle>
+            <CardTitle>Create Order</CardTitle>
           </div>
           <Button
             asChild
@@ -1246,6 +1250,27 @@ export function OrderCreatePage() {
 
             <FormField
               control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Order status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="quote">Quote</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="internal_notes"
               render={({ field }) => (
                 <FormItem>
@@ -1261,12 +1286,12 @@ export function OrderCreatePage() {
               )}
             />
 
-            {systemNotes.length > 0 ? (
+            {selectedOrderStatus === "pending" && systemNotes.length > 0 ? (
               <Alert>
                 <AlertDescription>
                   <div className="grid gap-2">
                     <p>
-                      System note: this order asks for more tracked stock than
+                      System note: this pending order asks for more tracked stock than
                       is currently available. The backend will reject unsafe
                       reservations.
                     </p>
@@ -1291,7 +1316,9 @@ export function OrderCreatePage() {
             >
               {createOrderMutation.isPending
                 ? "Creating order..."
-                : "Create pending order"}
+                : selectedOrderStatus === "quote"
+                  ? "Create quote"
+                  : "Create pending order"}
             </Button>
           </form>
         </Form>

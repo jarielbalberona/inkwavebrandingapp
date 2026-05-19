@@ -142,6 +142,129 @@ describe("inventory, order, and invoice integration", () => {
     ])
   })
 
+  it("keeps quote orders out of inventory until the first invoice payment promotes them", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const cup = await seedCup()
+    const db = await getIntegrationDb()
+
+    await stockIntake(api, adminCookie, {
+      itemType: "cup",
+      cupId: cup.id,
+      quantity: 25,
+    })
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        status: "quote",
+        notes: "Quotation only",
+        line_items: [{ item_type: "cup", cup_id: cup.id, quantity: 10 }],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+    expect(createOrderResponse.body.order.status).toBe("quote")
+
+    const orderId = createOrderResponse.body.order.id as string
+    const quoteListResponse = await api
+      .get("/orders")
+      .query({ status: "quote" })
+      .set("Cookie", adminCookie)
+
+    expect(quoteListResponse.status).toBe(200)
+    expect(
+      quoteListResponse.body.orders.some((order: { id: string }) => order.id === orderId),
+    ).toBe(true)
+
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+    expect(invoiceResponse.body.invoice.status).toBe("pending")
+
+    const cupBalanceBeforePayment = await getCupBalance(api, adminCookie, cup.id)
+    expect(cupBalanceBeforePayment).toMatchObject({
+      item_type: "cup",
+      on_hand: 25,
+      reserved: 0,
+      available: 25,
+    })
+
+    const movementsBeforePayment = await db.query.inventoryMovements.findMany({
+      where: eq(schema.inventoryMovements.orderId, orderId),
+    })
+
+    expect(movementsBeforePayment).toHaveLength(0)
+
+    const quoteLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const updateQuoteResponse = await api
+      .patch(`/orders/${orderId}`)
+      .set("Cookie", adminCookie)
+      .send({
+        line_items: [
+          {
+            id: quoteLineItem.id,
+            item_type: "cup",
+            cup_id: cup.id,
+            quantity: 12,
+          },
+        ],
+      })
+
+    expect(updateQuoteResponse.status).toBe(200)
+    expect(updateQuoteResponse.body.order.status).toBe("quote")
+
+    const movementsAfterQuoteEdit = await db.query.inventoryMovements.findMany({
+      where: eq(schema.inventoryMovements.orderId, orderId),
+    })
+
+    expect(movementsAfterQuoteEdit).toHaveLength(0)
+
+    const paymentResponse = await api
+      .post(`/invoices/${invoiceResponse.body.invoice.id}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: "5.00",
+        payment_date: "2026-04-24T08:00:00.000Z",
+        note: "Quote deposit",
+      })
+
+    expect(paymentResponse.status).toBe(201)
+    expect(paymentResponse.body.invoice.status).toBe("pending")
+    expect(paymentResponse.body.invoice.paid_amount).toBe("5.00")
+
+    const orderAfterPaymentResponse = await api
+      .get(`/orders/${orderId}`)
+      .set("Cookie", adminCookie)
+
+    expect(orderAfterPaymentResponse.status).toBe(200)
+    expect(orderAfterPaymentResponse.body.order.status).toBe("pending")
+
+    const cupBalanceAfterPayment = await getCupBalance(api, adminCookie, cup.id)
+    expect(cupBalanceAfterPayment).toMatchObject({
+      item_type: "cup",
+      on_hand: 25,
+      reserved: 12,
+      available: 13,
+    })
+
+    const movementsAfterPayment = await db.query.inventoryMovements.findMany({
+      where: eq(schema.inventoryMovements.orderId, orderId),
+    })
+
+    expect(movementsAfterPayment).toHaveLength(1)
+    expect(movementsAfterPayment[0]).toMatchObject({
+      itemType: "cup",
+      movementType: "reserve",
+      quantity: 12,
+      orderId,
+    })
+  })
+
   it("allows order creation when tracked items have no available stock and offsets the negative available balance on intake", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()

@@ -102,6 +102,7 @@ const updateOrderLineItemSchema = z.discriminatedUnion("item_type", [
 ])
 
 export const orderStatusSchema = z.enum([
+  "quote",
   "pending",
   "in_progress",
   "partial_released",
@@ -119,6 +120,7 @@ export const orderLineItemProgressStageSchema = z.enum([
 
 export const createOrderSchema = z.object({
   customer_id: z.string().uuid(),
+  status: z.enum(["quote", "pending"]).optional().default("pending"),
   notes: optionalText(1000),
   internal_notes: optionalText(1000),
   line_items: z.array(createOrderLineItemSchema).min(1),
@@ -176,7 +178,7 @@ export type OrderStatus = z.infer<typeof orderStatusSchema>
 export type OrderLineItemProgressStage = z.infer<
   typeof orderLineItemProgressStageSchema
 >
-export type CreateOrderInput = z.infer<typeof createOrderSchema>
+export type CreateOrderInput = z.input<typeof createOrderSchema>
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>
 export type UpdateOrderPrioritiesInput = z.infer<
   typeof updateOrderPrioritiesSchema

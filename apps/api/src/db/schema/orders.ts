@@ -21,6 +21,7 @@ import { productBundles } from "./product-bundles.js"
 import { users } from "./users.js"
 
 export const orderStatusEnum = pgEnum("order_status", [
+  "quote",
   "pending",
   "in_progress",
   "partial_released",

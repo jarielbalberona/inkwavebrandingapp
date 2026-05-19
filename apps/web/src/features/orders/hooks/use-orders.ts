@@ -28,6 +28,7 @@ export const orderProgressEventsQueryKey = [
 export const orderInvoicesQueryKey = ["orders", "invoice"] as const
 
 export const orderStatusOptions = [
+  "quote",
   "pending",
   "in_progress",
   "partial_released",

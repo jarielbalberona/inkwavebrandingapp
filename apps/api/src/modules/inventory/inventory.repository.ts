@@ -7,6 +7,7 @@ import {
   lids,
   orders,
   type Cup,
+  type Customer,
   type InventoryMovement,
   type Lid,
   type Order,
@@ -57,6 +58,7 @@ export interface InventoryMovementLinkedOrderSummary {
     Order,
     "id" | "orderNumber" | "status" | "archivedAt" | "createdAt"
   >
+  customer: Pick<Customer, "businessName"> | null
   orderItem: Pick<
     OrderItem,
     "id" | "itemType" | "descriptionSnapshot" | "quantity"
@@ -350,7 +352,7 @@ export class InventoryRepository {
 
   private async getLinkedOrdersById(
     orderIds: string[]
-  ): Promise<Map<string, Order & { items: OrderItem[] }>> {
+  ): Promise<Map<string, Order & { customer: Customer; items: OrderItem[] }>> {
     const uniqueOrderIds = [...new Set(orderIds)]
 
     if (uniqueOrderIds.length === 0) {
@@ -360,6 +362,7 @@ export class InventoryRepository {
     const rows = await this.db.query.orders.findMany({
       where: inArray(orders.id, uniqueOrderIds),
       with: {
+        customer: true,
         items: true,
       },
     })
@@ -370,7 +373,7 @@ export class InventoryRepository {
 
 function toLinkedOrderSummary(
   movement: InventoryMovement,
-  order: (Order & { items: OrderItem[] }) | null
+  order: (Order & { customer: Customer; items: OrderItem[] }) | null
 ): InventoryMovementLinkedOrderSummary | null {
   if (!order) {
     return null
@@ -388,6 +391,11 @@ function toLinkedOrderSummary(
       archivedAt: order.archivedAt,
       createdAt: order.createdAt,
     },
+    customer: order.customer
+      ? {
+          businessName: order.customer.businessName,
+        }
+      : null,
     orderItem: orderItem
       ? {
           id: orderItem.id,

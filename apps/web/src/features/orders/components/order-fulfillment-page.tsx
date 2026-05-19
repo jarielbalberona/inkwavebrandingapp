@@ -228,9 +228,13 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
       return
     }
 
-    if (order.status === "canceled" || order.status === "completed") {
+    if (
+      order.status === "quote" ||
+      order.status === "canceled" ||
+      order.status === "completed"
+    ) {
       setProgressError(
-        "Canceled or completed orders cannot receive new progress events."
+        "Quote, canceled, or completed orders cannot receive new progress events."
       )
       return
     }
@@ -547,6 +551,7 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                         type="button"
                         disabled={
                           createProgressEventMutation.isPending ||
+                          order.status === "quote" ||
                           order.status === "canceled" ||
                           order.status === "completed" ||
                           !selectedLineItem

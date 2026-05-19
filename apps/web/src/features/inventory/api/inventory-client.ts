@@ -70,7 +70,9 @@ const linkedOrderSchema = z
   .object({
     id: z.string().uuid(),
     order_number: z.string(),
+    client_name: z.string().nullable(),
     status: z.enum([
+      "quote",
       "pending",
       "in_progress",
       "partial_released",

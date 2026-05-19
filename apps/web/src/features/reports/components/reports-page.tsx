@@ -644,6 +644,8 @@ function statusBadgeVariant(status: OrderStatusReportItem["status"]) {
 
 function statusDescription(item: OrderStatusReportItem) {
   switch (item.status) {
+    case "quote":
+      return "Quotation only, no inventory reserved"
     case "pending":
       return "Reserved, no fulfillment activity yet"
     case "in_progress":

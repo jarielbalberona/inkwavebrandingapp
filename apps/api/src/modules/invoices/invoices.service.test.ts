@@ -495,9 +495,17 @@ test("recordPayment persists a partial payment and keeps the invoice pending", a
     transaction: async (
       handler: (context: {
         invoicesRepository: unknown
+        ordersRepository: unknown
         db: unknown
       }) => Promise<unknown>
-    ) => handler({ invoicesRepository, db: {} }),
+    ) =>
+      handler({
+        invoicesRepository,
+        ordersRepository: {
+          findByIdWithRelations: async () => ({ id: "order-1", status: "pending" }),
+        },
+        db: {},
+      }),
     findByIdWithRelations: async () => currentInvoice,
     createPayment: async (input: unknown) => {
       recordedPayments.push(input)
@@ -598,9 +606,17 @@ test("recordPayment settles the invoice when the remaining balance is paid exact
     transaction: async (
       handler: (context: {
         invoicesRepository: unknown
+        ordersRepository: unknown
         db: unknown
       }) => Promise<unknown>
-    ) => handler({ invoicesRepository, db: {} }),
+    ) =>
+      handler({
+        invoicesRepository,
+        ordersRepository: {
+          findByIdWithRelations: async () => ({ id: "order-1", status: "pending" }),
+        },
+        db: {},
+      }),
     findByIdWithRelations: async () => currentInvoice,
     createPayment: async () => null,
     updateFinancialState: async (_invoiceId: string, input: unknown) => {

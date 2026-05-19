@@ -1,8 +1,15 @@
 import { randomUUID } from "node:crypto"
 
+import { CupsRepository } from "../cups/cups.repository.js"
+import { InventoryRepository } from "../inventory/inventory.repository.js"
+import { InventoryService } from "../inventory/inventory.service.js"
+import { LidsRepository } from "../lids/lids.repository.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission } from "../auth/authorization.js"
-import { OrdersRepository } from "../orders/orders.repository.js"
+import {
+  OrdersRepository,
+  type OrderWithRelations,
+} from "../orders/orders.repository.js"
 import type {
   CreateInvoicePaymentInput,
   InvoicesListQuery,
@@ -266,6 +273,95 @@ export async function syncInvoiceSnapshotForOrder(
   })
 }
 
+async function activateQuoteOrder(input: {
+  order: OrderWithRelations
+  createdByUserId: string
+  ordersRepository: OrdersRepository
+  inventoryService: InventoryService
+}) {
+  const reservationRequests = buildReservationRequestsForOrder(input.order)
+
+  if (reservationRequests.length > 0) {
+    await input.inventoryService.reserveOrderItems(
+      {
+        orderId: input.order.id,
+        createdByUserId: input.createdByUserId,
+        items: reservationRequests,
+      },
+      { useExistingTransaction: true }
+    )
+
+    await input.ordersRepository.updateOrderStatus(input.order.id, "pending")
+    return
+  }
+
+  await input.ordersRepository.updateOrderStatus(input.order.id, "completed")
+}
+
+function buildReservationRequestsForOrder(order: OrderWithRelations) {
+  return order.items.flatMap((item, index) => {
+    if (item.itemType === "cup") {
+      if (!item.cupId) {
+        throw new Error("Cup order line is missing cup reference")
+      }
+
+      return [
+        {
+          orderItemId: item.id,
+          requestLineItemIndex: index,
+          itemType: "cup" as const,
+          cupId: item.cupId,
+          quantity: item.quantity,
+        },
+      ]
+    }
+
+    if (item.itemType === "lid") {
+      if (!item.lidId) {
+        throw new Error("Lid order line is missing lid reference")
+      }
+
+      return [
+        {
+          orderItemId: item.id,
+          requestLineItemIndex: index,
+          itemType: "lid" as const,
+          lidId: item.lidId,
+          quantity: item.quantity,
+        },
+      ]
+    }
+
+    if (item.itemType !== "product_bundle" || !item.productBundle) {
+      return []
+    }
+
+    const reservations = []
+
+    if (item.productBundle.cupId && item.productBundle.cupQtyPerSet > 0) {
+      reservations.push({
+        orderItemId: item.id,
+        requestLineItemIndex: index,
+        itemType: "cup" as const,
+        cupId: item.productBundle.cupId,
+        quantity: item.quantity * item.productBundle.cupQtyPerSet,
+      })
+    }
+
+    if (item.productBundle.lidId && item.productBundle.lidQtyPerSet > 0) {
+      reservations.push({
+        orderItemId: item.id,
+        requestLineItemIndex: index,
+        itemType: "lid" as const,
+        lidId: item.productBundle.lidId,
+        quantity: item.quantity * item.productBundle.lidQtyPerSet,
+      })
+    }
+
+    return reservations
+  })
+}
+
 export class InvoicesService {
   constructor(
     private readonly invoicesRepository: InvoicesRepository,
@@ -344,7 +440,7 @@ export class InvoicesService {
     assertPermission(user, "invoices.manage")
 
     return this.invoicesRepository.transaction(
-      async ({ invoicesRepository }) => {
+      async ({ db, invoicesRepository, ordersRepository }) => {
         const invoice =
           await invoicesRepository.findByIdWithRelations(invoiceId)
 
@@ -375,6 +471,27 @@ export class InvoicesService {
         const nextRemainingBalance = centsToMoney(
           moneyToCents(invoice.totalAmount) - moneyToCents(nextPaidAmount)
         )
+
+        const linkedOrder = await ordersRepository.findByIdWithRelations(
+          invoice.orderId
+        )
+
+        if (!linkedOrder) {
+          throw new InvoiceOrderNotFoundError()
+        }
+
+        if (linkedOrder.status === "quote") {
+          await activateQuoteOrder({
+            order: linkedOrder,
+            createdByUserId: user.id,
+            ordersRepository,
+            inventoryService: new InventoryService(
+              new InventoryRepository(db),
+              new CupsRepository(db),
+              new LidsRepository(db)
+            ),
+          })
+        }
 
         await invoicesRepository.createPayment({
           invoiceId,

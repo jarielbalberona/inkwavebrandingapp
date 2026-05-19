@@ -3,7 +3,7 @@ import { z } from "zod"
 import { ApiClientError, api, skipErrorToast } from "@/lib/api"
 
 const dashboardOrderStatusSchema = z.object({
-  status: z.enum(["pending", "in_progress", "partial_released", "completed", "canceled"]),
+  status: z.enum(["quote", "pending", "in_progress", "partial_released", "completed", "canceled"]),
   count: z.number(),
 })
 
