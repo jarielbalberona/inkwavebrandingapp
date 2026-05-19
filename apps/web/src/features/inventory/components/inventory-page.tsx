@@ -395,9 +395,9 @@ export function InventoryPage() {
                 <TableHead>Item type</TableHead>
                 <TableHead>Identifier</TableHead>
                 <TableHead>Details</TableHead>
-                <TableHead>On hand</TableHead>
-                <TableHead>Reserved</TableHead>
-                <TableHead>Available</TableHead>
+                <TableHead>In Stock</TableHead>
+                <TableHead>For Orders</TableHead>
+                <TableHead>Net Available</TableHead>
                 <TableHead>Min stock</TableHead>
                 <TableHead>Risk</TableHead>
                 <TableHead>Status</TableHead>
@@ -717,9 +717,9 @@ function InventoryItemSummary({ balance }: { balance: InventoryBalance }) {
         </Badge>
       </div>
       <div className="grid grid-cols-3 gap-2 text-sm text-muted-foreground">
-        <span>On hand: {balance.on_hand}</span>
-        <span>Reserved: {balance.reserved}</span>
-        <span>Available: {balance.available}</span>
+        <span>In Stock: {balance.on_hand}</span>
+        <span>For Orders: {balance.reserved}</span>
+        <span>Net Available: {balance.available}</span>
       </div>
     </div>
   )

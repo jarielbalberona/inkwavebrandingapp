@@ -265,13 +265,13 @@ function InventoryReportSummaryCards({
         description={
           activeTab === "inventory-summary"
             ? "Tracked cups and lids in inventory summary"
-            : "Cup rows below available-vs-min-stock threshold"
+            : "Cup rows below net-available-vs-min-stock threshold"
         }
       />
       <MetricCard
-        label="Total available"
+        label="Total net available"
         value={sum(items, (item) => item.available)}
-        description="Available = on hand - reserved"
+        description="Net available = in stock - for orders"
       />
       <MetricCard
         label="Inactive rows"
@@ -337,9 +337,9 @@ function InventoryReportTable({ items }: { items: InventoryReportItem[] }) {
           <TableHead>Brand</TableHead>
           <TableHead>Size / Shape</TableHead>
           <TableHead>Diameter</TableHead>
-          <TableHead>On hand</TableHead>
-          <TableHead>Reserved</TableHead>
-          <TableHead>Available</TableHead>
+          <TableHead>In Stock</TableHead>
+          <TableHead>For Orders</TableHead>
+          <TableHead>Net Available</TableHead>
           <TableHead>Min stock</TableHead>
           <TableHead>Status</TableHead>
         </TableRow>
