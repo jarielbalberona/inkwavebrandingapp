@@ -7,7 +7,7 @@ import {
   Droppable,
   type DropResult,
 } from "@hello-pangea/dnd"
-import { Archive, GripVertical, ShoppingCartIcon } from "lucide-react"
+import { Archive, ChevronDown, GripVertical, ShoppingCartIcon } from "lucide-react"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
@@ -34,6 +34,12 @@ import {
   EmptyTitle,
 } from "@workspace/ui/components/empty"
 import { Label } from "@workspace/ui/components/label"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -74,6 +80,16 @@ const priorityRowClasses = [
 
 type OrdersSortOption = "priority" | "created_at"
 
+const defaultExcludedStatusFilters = new Set<OrderStatus>([
+  "quote",
+  "completed",
+  "canceled",
+])
+
+const defaultSelectedStatusFilters = orderStatusOptions.filter(
+  (status) => !defaultExcludedStatusFilters.has(status)
+)
+
 export function OrdersPage() {
   const currentUser = useCurrentUser()
   const navigate = useNavigate()
@@ -83,28 +99,32 @@ export function OrdersPage() {
     currentUser.data,
     appPermissions.ordersFulfillmentRecord,
   )
-  const [status, setStatus] = useState<OrderStatus | "all">("all")
+  const [selectedStatuses, setSelectedStatuses] = useState<readonly OrderStatus[]>(
+    defaultSelectedStatusFilters
+  )
   const [includeArchived, setIncludeArchived] = useState(false)
   const [customerFilterId, setCustomerFilterId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<OrdersSortOption>("priority")
   const query = useMemo(
     () => ({
-      status: status === "all" ? undefined : status,
       includeArchived,
     }),
-    [includeArchived, status]
+    [includeArchived]
   )
   const ordersQuery = useOrdersQuery(query)
   const updateOrderPrioritiesMutation = useUpdateOrderPrioritiesMutation()
   const filteredOrders = useMemo(() => {
-    const orders = ordersQuery.data ?? []
+    const selectedStatusSet = new Set(selectedStatuses)
+    const orders = (ordersQuery.data ?? []).filter((order) =>
+      selectedStatusSet.has(order.status)
+    )
 
     if (!customerFilterId) {
       return orders
     }
 
     return orders.filter((order) => order.customer.id === customerFilterId)
-  }, [customerFilterId, ordersQuery.data])
+  }, [customerFilterId, ordersQuery.data, selectedStatuses])
   const sortedOrders = useMemo(
     () => sortOrders(filteredOrders, sortBy),
     [filteredOrders, sortBy]
@@ -149,6 +169,18 @@ export function OrdersPage() {
     })
   }
 
+  function toggleStatusFilter(status: OrderStatus, checked: boolean) {
+    setSelectedStatuses((currentStatuses) => {
+      if (checked) {
+        return currentStatuses.includes(status)
+          ? currentStatuses
+          : [...currentStatuses, status]
+      }
+
+      return currentStatuses.filter((currentStatus) => currentStatus !== status)
+    })
+  }
+
   return (
     <div className="grid gap-3">
       <Card>
@@ -165,22 +197,32 @@ export function OrdersPage() {
           <div className="grid gap-3 md:grid-cols-4">
             <div className="grid gap-2">
               <Label>Fulfillment status</Label>
-              <Select
-                value={status}
-                onValueChange={(value) => setStatus(value as OrderStatus | "all")}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between px-3"
+                  >
+                    <span>{statusFilterLabel(selectedStatuses)}</span>
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
                   {orderStatusOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
+                    <DropdownMenuCheckboxItem
+                      key={option}
+                      checked={selectedStatuses.includes(option)}
+                      onCheckedChange={(checked) =>
+                        toggleStatusFilter(option, checked === true)
+                      }
+                      onSelect={(event) => event.preventDefault()}
+                    >
                       {formatFilterStatus(option)}
-                    </SelectItem>
+                    </DropdownMenuCheckboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <div className="grid gap-2">
@@ -618,6 +660,18 @@ function formatFilterStatus(status: string): string {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ")
+}
+
+function statusFilterLabel(selectedStatuses: readonly OrderStatus[]): string {
+  if (selectedStatuses.length === 0) {
+    return "No statuses"
+  }
+
+  if (selectedStatuses.length === orderStatusOptions.length) {
+    return "All statuses"
+  }
+
+  return `${selectedStatuses.length} statuses`
 }
 
 function statusVariant(
