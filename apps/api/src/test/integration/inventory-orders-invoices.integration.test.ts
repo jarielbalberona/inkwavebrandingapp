@@ -148,7 +148,7 @@ describe("inventory, order, and invoice integration", () => {
     ])
   })
 
-  it("substitutes a paid order bundle without changing its invoice snapshot", async () => {
+  it("substitutes a partially paid order bundle without changing its invoice snapshot", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()
     const customer = await seedCustomer()
@@ -214,13 +214,16 @@ describe("inventory, order, and invoice integration", () => {
       .post(`/invoices/${invoiceId}/payments`)
       .set("Cookie", adminCookie)
       .send({
-        amount: invoiceResponse.body.invoice.total_amount,
+        amount: (
+          Number(invoiceResponse.body.invoice.total_amount) - 100
+        ).toFixed(2),
         payment_date: "2026-07-31T03:00:00.000Z",
         note: "Paid before operational substitution",
       })
 
     expect(paymentResponse.status).toBe(201)
-    expect(paymentResponse.body.invoice.status).toBe("paid")
+    expect(paymentResponse.body.invoice.status).toBe("pending")
+    expect(paymentResponse.body.invoice.remaining_balance).toBe("100.00")
     const invoiceBeforeSubstitution = paymentResponse.body.invoice
 
     const substitutionResponse = await api
@@ -312,11 +315,7 @@ describe("inventory, order, and invoice integration", () => {
       },
     ])
 
-    const targetCupBalance = await getCupBalance(
-      api,
-      adminCookie,
-      targetCup.id
-    )
+    const targetCupBalance = await getCupBalance(api, adminCookie, targetCup.id)
     expect(targetCupBalance).toMatchObject({
       on_hand: 0,
       reserved: 500,

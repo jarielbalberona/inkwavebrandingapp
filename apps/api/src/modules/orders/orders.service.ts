@@ -915,9 +915,17 @@ export class OrdersService {
           orderItem.orderId
         )
 
-        if (!invoice || invoice.status !== "paid") {
+        const hasRecordedPayment =
+          invoice !== undefined &&
+          (invoice.payments.length > 0 || Number(invoice.paidAmount) > 0)
+
+        if (
+          !invoice ||
+          invoice.status === "void" ||
+          (invoice.status !== "paid" && !hasRecordedPayment)
+        ) {
           throw new OrderBundleSubstitutionError(
-            "This substitution path is only for paid invoices; use normal order editing before payment"
+            "This substitution path is only for invoices with recorded payments; use normal order editing before payment"
           )
         }
 

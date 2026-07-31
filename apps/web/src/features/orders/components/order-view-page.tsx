@@ -236,7 +236,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
         },
       })
       setPageSuccess(
-        "Bundle substituted for production. The paid invoice and charged prices were preserved."
+        "Bundle substituted for production. The issued invoice, recorded payments, and charged prices were preserved."
       )
       closeSubstitutionDialog()
     } catch (error) {
@@ -485,7 +485,9 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                       <TableCell>
                         {canManageOrders &&
                         (!canViewInvoices ||
-                          orderInvoiceQuery.data?.status === "paid") &&
+                          orderInvoiceQuery.data?.status === "paid" ||
+                          Number(orderInvoiceQuery.data?.paid_amount ?? "0") >
+                            0) &&
                         (order.status === "pending" ||
                           order.status === "in_progress") &&
                         order.archived_at === null &&
@@ -619,10 +621,10 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
           <DialogHeader>
             <DialogTitle>Substitute production bundle</DialogTitle>
             <DialogDescription>
-              The paid invoice, payment, description, and charged price stay
-              unchanged. The system will release the current reservations and
-              reserve the replacement cup and lid. Reservations may make
-              available stock negative.
+              The issued invoice, recorded payments, description, and charged
+              price stay unchanged. The system will release the current
+              reservations and reserve the replacement cup and lid. Reservations
+              may make available stock negative.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">

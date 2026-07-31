@@ -362,7 +362,7 @@ test("OrdersService.archive archives canceled orders", async () => {
   assert.equal(archivedOrder.archived_at, "2026-04-24T10:00:00.000Z")
 })
 
-test("OrdersService.substituteProductBundle preserves charged prices and records the operational substitution", async () => {
+test("OrdersService.substituteProductBundle supports a partially paid invoice without changing charged prices", async () => {
   const now = new Date("2026-07-31T03:00:00.000Z")
   const sourceBundle = {
     id: "44444444-4444-4444-8444-444444444444",
@@ -414,7 +414,8 @@ test("OrdersService.substituteProductBundle preserves charged prices and records
         findFirst: async () => ({
           id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           orderId: operationalItem.orderId,
-          status: "paid",
+          status: "pending",
+          paidAmount: "3400.00",
           items: [{ unitSellPrice: "7.00" }],
           payments: [{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }],
         }),
