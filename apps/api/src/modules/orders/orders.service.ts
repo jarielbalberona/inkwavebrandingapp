@@ -30,6 +30,7 @@ import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
   orderListQuerySchema,
+  substituteOrderItemBundleSchema,
   updateOrderSchema,
   updateOrderPrioritiesSchema,
   type CreateOrderInput,
@@ -38,6 +39,7 @@ import {
   type OrderLineItemProgressStage,
   type OrderStatus,
   type ProgressEventsQuery,
+  type SubstituteOrderItemBundleInput,
   type UpdateOrderInput,
   type UpdateOrderPrioritiesInput,
 } from "./orders.schemas.js"
@@ -255,6 +257,14 @@ export class OrderPrintedQuantityInsufficientStockError extends Error {
 }
 
 export class OrderLineItemProgressLockedError extends Error {
+  readonly statusCode = 409
+
+  constructor(message: string) {
+    super(message)
+  }
+}
+
+export class OrderBundleSubstitutionError extends Error {
   readonly statusCode = 409
 
   constructor(message: string) {
@@ -817,6 +827,152 @@ export class OrdersService {
     return toOrderDto(order, user)
   }
 
+  async substituteProductBundle(
+    orderLineItemId: string,
+    input: SubstituteOrderItemBundleInput,
+    user: SafeUser
+  ): Promise<OrderDto> {
+    assertPermission(user, "orders.manage")
+
+    const parsedInput = substituteOrderItemBundleSchema.parse(input)
+
+    return this.ordersRepository.transaction(
+      async ({ db, ordersRepository }) => {
+        await ordersRepository.lockOrderItem(orderLineItemId)
+
+        const orderItem =
+          await ordersRepository.findOrderItemWithOrder(orderLineItemId)
+
+        if (!orderItem) {
+          throw new OrderLineItemNotFoundError()
+        }
+
+        if (
+          orderItem.itemType !== "product_bundle" ||
+          !orderItem.productBundle ||
+          !orderItem.productBundleId
+        ) {
+          throw new OrderBundleSubstitutionError(
+            "Only product bundle order lines can be substituted"
+          )
+        }
+
+        if (orderItem.order.archivedAt) {
+          throw new OrderArchivedError()
+        }
+
+        if (
+          orderItem.order.status !== "pending" &&
+          orderItem.order.status !== "in_progress"
+        ) {
+          throw new OrderBundleSubstitutionError(
+            "Bundle substitution is only allowed while the order is pending or in progress"
+          )
+        }
+
+        if (orderItem.progressEvents.length > 0) {
+          throw new OrderBundleSubstitutionError(
+            "This bundle cannot be substituted after fulfillment progress has started"
+          )
+        }
+
+        if (
+          orderItem.productBundleId === parsedInput.target_product_bundle_id
+        ) {
+          throw new OrderBundleSubstitutionError(
+            "The replacement bundle must be different from the current bundle"
+          )
+        }
+
+        const targetBundle = await new ProductBundlesRepository(db).findById(
+          parsedInput.target_product_bundle_id
+        )
+
+        if (!targetBundle) {
+          throw new OrderBundleSubstitutionError(
+            "Replacement product bundle not found"
+          )
+        }
+
+        if (!targetBundle.isActive) {
+          throw new OrderBundleSubstitutionError(
+            "Replacement product bundle is inactive"
+          )
+        }
+
+        if (
+          !productBundlesHaveCompatibleComponentShape(
+            orderItem.productBundle,
+            targetBundle
+          )
+        ) {
+          throw new OrderBundleSubstitutionError(
+            "Replacement bundle must have the same cup/lid component shape and per-set quantities"
+          )
+        }
+
+        const invoice = await new InvoicesRepository(db).findByOrderId(
+          orderItem.orderId
+        )
+
+        if (!invoice || invoice.status !== "paid") {
+          throw new OrderBundleSubstitutionError(
+            "This substitution path is only for paid invoices; use normal order editing before payment"
+          )
+        }
+
+        const substitutionId = randomUUID()
+        const sourceBundle = orderItem.productBundle
+        const sourceDescriptionSnapshot = orderItem.descriptionSnapshot
+        const targetDescriptionSnapshot =
+          buildProductBundleDescriptionSnapshot(targetBundle)
+
+        await this.createInventoryService(db).substituteOrderItemReservations(
+          {
+            orderId: orderItem.orderId,
+            orderItemId: orderItem.id,
+            createdByUserId: user.id,
+            substitutionId,
+            sourceItems: toBundleReservationComponents(
+              sourceBundle,
+              orderItem.quantity
+            ),
+            targetItems: toBundleReservationComponents(
+              targetBundle,
+              orderItem.quantity
+            ),
+          },
+          { useExistingTransaction: true }
+        )
+
+        await ordersRepository.updateOrderItemProductBundle(orderItem.id, {
+          productBundleId: targetBundle.id,
+          descriptionSnapshot: targetDescriptionSnapshot,
+        })
+        await ordersRepository.createOrderItemBundleSubstitution({
+          id: substitutionId,
+          orderItemId: orderItem.id,
+          sourceProductBundleId: sourceBundle.id,
+          targetProductBundleId: targetBundle.id,
+          sourceDescriptionSnapshot,
+          targetDescriptionSnapshot,
+          reason: parsedInput.reason,
+          createdByUserId: user.id,
+        })
+
+        const updatedOrder = await ordersRepository.findByIdWithRelations(
+          orderItem.orderId
+        )
+
+        if (!updatedOrder) {
+          throw new Error("Failed to load order after bundle substitution")
+        }
+
+        return toOrderDto(updatedOrder, user)
+      }
+    )
+  }
+
   async create(input: CreateOrderInput, user: SafeUser): Promise<OrderDto> {
     assertPermission(user, "orders.manage")
 
@@ -969,6 +1125,8 @@ export class OrdersService {
 
     return this.ordersRepository.transaction(
       async ({ db, ordersRepository }) => {
+        await ordersRepository.lockOrderItem(orderLineItemId)
+
         const orderItem =
           await ordersRepository.findOrderItemWithOrder(orderLineItemId)
 
@@ -993,7 +1151,9 @@ export class OrdersService {
           throw new OrderPaymentRequiredForProgressError()
         }
 
-        if (!(await ordersRepository.hasStartedPaymentForOrder(orderItem.orderId))) {
+        if (
+          !(await ordersRepository.hasStartedPaymentForOrder(orderItem.orderId))
+        ) {
           throw new OrderPaymentRequiredForProgressError()
         }
 
@@ -2375,6 +2535,38 @@ function buildProductBundleDescriptionSnapshot(
   productBundle: ProductBundle
 ): string {
   return productBundle.name
+}
+
+function productBundlesHaveCompatibleComponentShape(
+  sourceBundle: ProductBundle,
+  targetBundle: ProductBundle
+): boolean {
+  return (
+    Boolean(sourceBundle.cupId) === Boolean(targetBundle.cupId) &&
+    Boolean(sourceBundle.lidId) === Boolean(targetBundle.lidId) &&
+    sourceBundle.cupQtyPerSet === targetBundle.cupQtyPerSet &&
+    sourceBundle.lidQtyPerSet === targetBundle.lidQtyPerSet
+  )
+}
+
+function toBundleReservationComponents(
+  productBundle: ProductBundle,
+  orderedQuantity: number
+) {
+  return toProductBundleInventoryComponents(productBundle, orderedQuantity).map(
+    (component) =>
+      component.itemType === "cup"
+        ? {
+            itemType: "cup" as const,
+            cupId: component.itemId,
+            quantity: component.quantity,
+          }
+        : {
+            itemType: "lid" as const,
+            lidId: component.itemId,
+            quantity: component.quantity,
+          }
+  )
 }
 
 function isTrackedOrderItemType(

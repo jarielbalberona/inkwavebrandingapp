@@ -2,10 +2,12 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import {
+  orderItemBundleSubstitutions,
   orderItems,
   orderLineItemProgressEvents,
   orders,
   invoices,
+  type NewOrderItemBundleSubstitution,
   type NewOrderLineItemProgressEvent,
   type NewOrder,
   type NewOrderItem,
@@ -100,6 +102,14 @@ export class OrdersRepository {
                 lid: true,
               },
             },
+            bundleSubstitutions: {
+              with: {
+                sourceProductBundle: true,
+                targetProductBundle: true,
+                createdByUser: true,
+              },
+              orderBy: [asc(orderItemBundleSubstitutions.createdAt)],
+            },
           },
         },
       },
@@ -141,8 +151,8 @@ export class OrdersRepository {
       rows.map((row) => this.findByIdWithRelations(row.id))
     )
 
-    return hydratedOrders.filter(
-      (order): order is OrderWithRelations => Boolean(order)
+    return hydratedOrders.filter((order): order is OrderWithRelations =>
+      Boolean(order)
     )
   }
 
@@ -198,8 +208,25 @@ export class OrdersRepository {
             lid: true,
           },
         },
+        progressEvents: true,
+        bundleSubstitutions: {
+          with: {
+            sourceProductBundle: true,
+            targetProductBundle: true,
+            createdByUser: true,
+          },
+          orderBy: [asc(orderItemBundleSubstitutions.createdAt)],
+        },
       },
     })
+  }
+
+  async lockOrderItem(orderItemId: string): Promise<void> {
+    await this.db
+      .select({ id: orderItems.id })
+      .from(orderItems)
+      .where(eq(orderItems.id, orderItemId))
+      .for("update")
   }
 
   async listOrderItemsWithProgressEvents(orderId: string) {
@@ -279,6 +306,29 @@ export class OrdersRepository {
         updatedAt: new Date(),
       })
       .where(eq(orderItems.id, orderItemId))
+  }
+
+  async updateOrderItemProductBundle(
+    orderItemId: string,
+    input: {
+      productBundleId: string
+      descriptionSnapshot: string
+    }
+  ): Promise<void> {
+    await this.db
+      .update(orderItems)
+      .set({
+        productBundleId: input.productBundleId,
+        descriptionSnapshot: input.descriptionSnapshot,
+        updatedAt: new Date(),
+      })
+      .where(eq(orderItems.id, orderItemId))
+  }
+
+  async createOrderItemBundleSubstitution(
+    input: NewOrderItemBundleSubstitution
+  ): Promise<void> {
+    await this.db.insert(orderItemBundleSubstitutions).values(input)
   }
 
   async deleteOrderItems(orderItemIds: string[]): Promise<void> {

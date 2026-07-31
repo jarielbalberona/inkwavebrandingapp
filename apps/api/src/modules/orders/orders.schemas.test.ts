@@ -6,9 +6,32 @@ import { ZodError } from "zod"
 import {
   createOrderLineItemProgressEventSchema,
   createOrderSchema,
+  substituteOrderItemBundleSchema,
 } from "./orders.schemas.js"
 
 const validCustomerId = "11111111-1111-1111-1111-111111111111"
+
+test("substituteOrderItemBundleSchema requires a target bundle and audit reason", () => {
+  assert.deepEqual(
+    substituteOrderItemBundleSchema.parse({
+      target_product_bundle_id: "22222222-2222-4222-8222-222222222222",
+      reason: "Use Dabba stock for production",
+    }),
+    {
+      target_product_bundle_id: "22222222-2222-4222-8222-222222222222",
+      reason: "Use Dabba stock for production",
+    }
+  )
+
+  assert.throws(
+    () =>
+      substituteOrderItemBundleSchema.parse({
+        target_product_bundle_id: "22222222-2222-4222-8222-222222222222",
+        reason: " ",
+      }),
+    ZodError
+  )
+})
 
 test("createOrderSchema accepts a valid product_bundle line item with override pricing", () => {
   const parsed = createOrderSchema.parse({
@@ -75,8 +98,8 @@ test("createOrderSchema rejects custom_charge without a description snapshot", (
       error.issues.some(
         (issue) =>
           issue.path.join(".") === "line_items.0.description_snapshot" &&
-          issue.message === "String must contain at least 1 character(s)",
-      ),
+          issue.message === "String must contain at least 1 character(s)"
+      )
   )
 })
 
@@ -99,8 +122,8 @@ test("createOrderSchema rejects negative custom_charge sell pricing", () => {
       error.issues.some(
         (issue) =>
           issue.path.join(".") === "line_items.0.unit_sell_price" &&
-          issue.message === "Must be a valid non-negative money amount",
-      ),
+          issue.message === "Must be a valid non-negative money amount"
+      )
   )
 })
 

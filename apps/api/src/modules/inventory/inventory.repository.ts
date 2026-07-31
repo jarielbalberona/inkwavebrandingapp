@@ -53,6 +53,10 @@ export type InventoryItemReference =
   | { itemType: "cup"; cupId: string; lidId?: undefined }
   | { itemType: "lid"; cupId?: undefined; lidId: string }
 
+export type OutstandingOrderItemReservation = InventoryItemReference & {
+  quantity: number
+}
+
 export interface InventoryMovementLinkedOrderSummary {
   order: Pick<
     Order,
@@ -100,6 +104,63 @@ export class InventoryRepository {
     }
 
     return this.getBalanceByLidId(reference.lidId)
+  }
+
+  async getOutstandingReservationsForOrderItem(
+    orderItemId: string
+  ): Promise<OutstandingOrderItemReservation[]> {
+    const rows = await this.db
+      .select({
+        itemType: inventoryMovements.itemType,
+        cupId: inventoryMovements.cupId,
+        lidId: inventoryMovements.lidId,
+        quantity: sql<number>`COALESCE(SUM(
+          CASE
+            WHEN ${inventoryMovements.movementType} = 'reserve' THEN ${inventoryMovements.quantity}
+            WHEN ${inventoryMovements.movementType} IN ('release_reservation', 'consume') THEN -${inventoryMovements.quantity}
+            ELSE 0
+          END
+        ), 0)`,
+      })
+      .from(inventoryMovements)
+      .where(eq(inventoryMovements.orderItemId, orderItemId))
+      .groupBy(
+        inventoryMovements.itemType,
+        inventoryMovements.cupId,
+        inventoryMovements.lidId
+      )
+
+    const reservations: OutstandingOrderItemReservation[] = []
+
+    for (const row of rows) {
+      const quantity = Number(row.quantity)
+
+      if (quantity === 0) {
+        continue
+      }
+
+      if (row.itemType === "cup" && row.cupId) {
+        reservations.push({
+          itemType: "cup",
+          cupId: row.cupId,
+          quantity,
+        })
+        continue
+      }
+
+      if (row.itemType === "lid" && row.lidId) {
+        reservations.push({
+          itemType: "lid",
+          lidId: row.lidId,
+          quantity,
+        })
+        continue
+      }
+
+      throw new Error("Invalid inventory reservation item reference")
+    }
+
+    return reservations
   }
 
   async getBalanceByCupId(

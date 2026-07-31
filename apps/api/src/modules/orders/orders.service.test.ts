@@ -24,7 +24,7 @@ function createOrdersService(overrides: {
     {} as never,
     {} as never,
     {} as never,
-    (() => ({})) as never,
+    (() => ({})) as never
   )
 }
 
@@ -120,8 +120,13 @@ test("OrdersService.list restricts admins to orders with started payment", async
 test("OrdersService.createProgressEvent rejects production staff before any payment is recorded", async () => {
   let checkedPaymentForOrderId: string | null = null
   const ordersRepository = {
-    transaction: async (handler: (context: { db: unknown; ordersRepository: unknown }) => Promise<unknown>) =>
-      handler({ db: {}, ordersRepository }),
+    transaction: async (
+      handler: (context: {
+        db: unknown
+        ordersRepository: unknown
+      }) => Promise<unknown>
+    ) => handler({ db: {}, ordersRepository }),
+    lockOrderItem: async () => undefined,
     findOrderItemWithOrder: async () => ({
       id: "33333333-3333-3333-3333-333333333333",
       orderId: "order-1",
@@ -152,7 +157,7 @@ test("OrdersService.createProgressEvent rejects production staff before any paym
     {} as never,
     {} as never,
     {} as never,
-    (() => ({})) as never,
+    (() => ({})) as never
   )
 
   await assert.rejects(
@@ -164,7 +169,7 @@ test("OrdersService.createProgressEvent rejects production staff before any paym
           quantity: 1,
           event_date: new Date("2026-05-18T00:00:00.000Z"),
         },
-        productionStaffUser,
+        productionStaffUser
       ),
     /Payment must be recorded before production can start/
   )
@@ -198,7 +203,9 @@ test("OrdersService.cancel voids an unpaid pending linked invoice", async () => 
     },
     update: () => ({
       set: (input: unknown) => {
-        invoiceFinancialState = input as NonNullable<typeof invoiceFinancialState>
+        invoiceFinancialState = input as NonNullable<
+          typeof invoiceFinancialState
+        >
         return {
           where: async () => undefined,
         }
@@ -207,8 +214,12 @@ test("OrdersService.cancel voids an unpaid pending linked invoice", async () => 
   }
 
   const ordersRepository = {
-    transaction: async (handler: (context: { db: unknown; ordersRepository: unknown }) => Promise<unknown>) =>
-      handler({ db: fakeDb, ordersRepository }),
+    transaction: async (
+      handler: (context: {
+        db: unknown
+        ordersRepository: unknown
+      }) => Promise<unknown>
+    ) => handler({ db: fakeDb, ordersRepository }),
     findByIdWithRelations: async () => order,
     listOrderItemsWithProgressEvents: async () => [],
     cancelOrder: async (orderId: string) => {
@@ -229,7 +240,7 @@ test("OrdersService.cancel voids an unpaid pending linked invoice", async () => 
     {} as never,
     {} as never,
     {} as never,
-    (() => ({})) as never,
+    (() => ({})) as never
   )
 
   const canceledOrder = await service.cancel("order-1", adminUser)
@@ -263,8 +274,12 @@ test("OrdersService.cancel rejects a linked pending invoice once payments exist"
   }
 
   const ordersRepository = {
-    transaction: async (handler: (context: { db: unknown; ordersRepository: unknown }) => Promise<unknown>) =>
-      handler({ db: fakeDb, ordersRepository }),
+    transaction: async (
+      handler: (context: {
+        db: unknown
+        ordersRepository: unknown
+      }) => Promise<unknown>
+    ) => handler({ db: fakeDb, ordersRepository }),
     findByIdWithRelations: async () => order,
     listOrderItemsWithProgressEvents: async () => [],
     cancelOrder: async () => {
@@ -280,10 +295,13 @@ test("OrdersService.cancel rejects a linked pending invoice once payments exist"
     {} as never,
     {} as never,
     {} as never,
-    (() => ({})) as never,
+    (() => ({})) as never
   )
 
-  await assert.rejects(() => service.cancel("order-1", adminUser), InvoicePaymentLockError)
+  await assert.rejects(
+    () => service.cancel("order-1", adminUser),
+    InvoicePaymentLockError
+  )
   assert.equal(cancelAttempted, false)
 })
 
@@ -304,16 +322,22 @@ test("OrdersService.archive rejects orders that are not canceled", async () => {
     {} as never,
     {} as never,
     {} as never,
-    (() => ({})) as never,
+    (() => ({})) as never
   )
 
-  await assert.rejects(() => service.archive("order-1", adminUser), OrderArchiveStatusError)
+  await assert.rejects(
+    () => service.archive("order-1", adminUser),
+    OrderArchiveStatusError
+  )
   assert.equal(archiveAttempted, false)
 })
 
 test("OrdersService.archive archives canceled orders", async () => {
   let archiveAttempted = false
-  let order = buildOrder({ status: "canceled", canceledAt: new Date("2026-04-24T09:00:00.000Z") })
+  let order = buildOrder({
+    status: "canceled",
+    canceledAt: new Date("2026-04-24T09:00:00.000Z"),
+  })
   const ordersRepository = {
     findByIdWithRelations: async () => order,
     archiveOrder: async () => {
@@ -329,13 +353,167 @@ test("OrdersService.archive archives canceled orders", async () => {
     {} as never,
     {} as never,
     {} as never,
-    (() => ({})) as never,
+    (() => ({})) as never
   )
 
   const archivedOrder = await service.archive("order-1", adminUser)
 
   assert.equal(archiveAttempted, true)
   assert.equal(archivedOrder.archived_at, "2026-04-24T10:00:00.000Z")
+})
+
+test("OrdersService.substituteProductBundle preserves charged prices and records the operational substitution", async () => {
+  const now = new Date("2026-07-31T03:00:00.000Z")
+  const sourceBundle = {
+    id: "44444444-4444-4444-8444-444444444444",
+    name: "Grecoopack cup + flat lid",
+    description: null,
+    cupId: "55555555-5555-4555-8555-555555555555",
+    lidId: "66666666-6666-4666-8666-666666666666",
+    cupQtyPerSet: 1,
+    lidQtyPerSet: 1,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const targetBundle = {
+    ...sourceBundle,
+    id: "77777777-7777-4777-8777-777777777777",
+    name: "Dabba cup + flat lid",
+    cupId: "88888888-8888-4888-8888-888888888888",
+  }
+  let operationalItem = {
+    id: "33333333-3333-4333-8333-333333333333",
+    orderId: "99999999-9999-4999-8999-999999999999",
+    itemType: "product_bundle" as const,
+    cupId: null,
+    lidId: null,
+    nonStockItemId: null,
+    productBundleId: sourceBundle.id,
+    productBundle: sourceBundle,
+    descriptionSnapshot: sourceBundle.name,
+    quantity: 500,
+    unitCostPrice: "5.00",
+    unitSellPrice: "7.00",
+    notes: null,
+    progressEvents: [],
+    bundleSubstitutions: [] as unknown[],
+    createdAt: now,
+    updatedAt: now,
+  }
+  const order = buildOrder({
+    id: operationalItem.orderId,
+    items: [operationalItem],
+  })
+  const inventoryCalls: unknown[] = []
+  const auditRows: unknown[] = []
+  let invoiceWriteAttempted = false
+  const fakeDb = {
+    query: {
+      invoices: {
+        findFirst: async () => ({
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          orderId: operationalItem.orderId,
+          status: "paid",
+          items: [{ unitSellPrice: "7.00" }],
+          payments: [{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }],
+        }),
+      },
+    },
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [targetBundle],
+        }),
+      }),
+    }),
+    update: () => {
+      invoiceWriteAttempted = true
+      throw new Error("Invoice mutation is forbidden")
+    },
+  }
+  const ordersRepository = {
+    transaction: async (
+      handler: (context: {
+        db: unknown
+        ordersRepository: unknown
+      }) => Promise<unknown>
+    ) => handler({ db: fakeDb, ordersRepository }),
+    lockOrderItem: async () => undefined,
+    findOrderItemWithOrder: async () => ({
+      ...operationalItem,
+      order,
+    }),
+    updateOrderItemProductBundle: async (
+      _id: string,
+      input: { productBundleId: string; descriptionSnapshot: string }
+    ) => {
+      operationalItem = {
+        ...operationalItem,
+        productBundleId: input.productBundleId,
+        productBundle: targetBundle,
+        descriptionSnapshot: input.descriptionSnapshot,
+        updatedAt: now,
+      }
+    },
+    createOrderItemBundleSubstitution: async (
+      input: Record<string, unknown>
+    ) => {
+      auditRows.push(input)
+      operationalItem.bundleSubstitutions = [
+        {
+          ...input,
+          sourceProductBundle: sourceBundle,
+          targetProductBundle: targetBundle,
+          createdByUser: adminUser,
+          createdAt: now,
+        },
+      ]
+    },
+    findByIdWithRelations: async () => ({
+      ...order,
+      items: [operationalItem],
+    }),
+  }
+  const service = new OrdersService(
+    ordersRepository as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    (() => ({
+      substituteOrderItemReservations: async (input: unknown) => {
+        inventoryCalls.push(input)
+      },
+    })) as never
+  )
+
+  const result = await service.substituteProductBundle(
+    operationalItem.id,
+    {
+      target_product_bundle_id: targetBundle.id,
+      reason: "Use the Dabba cup for production",
+    },
+    adminUser
+  )
+  const resultItem = result.items[0] as
+    | {
+        product_bundle: { id: string } | null
+        description_snapshot: string
+        unit_sell_price?: string
+        unit_cost_price?: string
+      }
+    | undefined
+
+  assert.equal(resultItem?.product_bundle?.id, targetBundle.id)
+  assert.equal(resultItem?.description_snapshot, targetBundle.name)
+  assert.equal(resultItem?.unit_sell_price, "7.00")
+  assert.equal(resultItem?.unit_cost_price, "5.00")
+  assert.equal(inventoryCalls.length, 1)
+  assert.equal(auditRows.length, 1)
+  assert.equal(invoiceWriteAttempted, false)
 })
 
 function buildOrder(overrides: Record<string, unknown> = {}): any {

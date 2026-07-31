@@ -16,6 +16,7 @@ import {
   InventoryBalanceItemNotFoundError,
   InventoryItemInactiveError,
   InventoryItemNotFoundError,
+  InventoryReservationStateMismatchError,
   InventoryService,
 } from "../inventory/inventory.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
@@ -33,6 +34,7 @@ import {
   createOrderSchema,
   orderListQuerySchema,
   progressEventsQuerySchema,
+  substituteOrderItemBundleSchema,
   updateOrderPrioritiesSchema,
   updateOrderSchema,
 } from "./orders.schemas.js"
@@ -44,6 +46,7 @@ import {
   OrderCustomerReassignmentProgressError,
   OrderArchiveStatusError,
   OrderArchivedError,
+  OrderBundleSubstitutionError,
   OrderCupInactiveError,
   OrderCupNotFoundError,
   OrderLidInactiveError,
@@ -194,6 +197,32 @@ export async function handleOrdersRoute(
     /^\/order-line-items\/([^/]+)\/progress-events$/
   )
 
+  const bundleSubstitutionMatch = path.match(
+    /^\/order-line-items\/([^/]+)\/bundle-substitution$/
+  )
+
+  if (bundleSubstitutionMatch && request.method === "POST") {
+    await withAuthenticatedUser(
+      request,
+      response,
+      context,
+      async (service, user) => {
+        const input = substituteOrderItemBundleSchema.parse(
+          await readJsonBody(request)
+        )
+
+        sendJson(response, 200, {
+          order: await service.substituteProductBundle(
+            bundleSubstitutionMatch[1] ?? "",
+            input,
+            user
+          ),
+        })
+      }
+    )
+    return true
+  }
+
   if (progressEventsMatch && request.method === "GET") {
     await withAuthenticatedUser(
       request,
@@ -318,6 +347,7 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
 
   if (
     error instanceof OrderCreateValidationError ||
+    error instanceof OrderBundleSubstitutionError ||
     error instanceof OrderArchiveStatusError ||
     error instanceof OrderArchivedError ||
     error instanceof OrderCustomerNotFoundError ||
@@ -344,7 +374,8 @@ function handleOrdersError(response: ServerResponse, error: unknown) {
     error instanceof InvoiceVoidLockError ||
     error instanceof InventoryBalanceItemNotFoundError ||
     error instanceof InventoryItemNotFoundError ||
-    error instanceof InventoryItemInactiveError
+    error instanceof InventoryItemInactiveError ||
+    error instanceof InventoryReservationStateMismatchError
   ) {
     if (error instanceof OrderCreateValidationError) {
       sendJson(response, error.statusCode, {

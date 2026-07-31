@@ -76,6 +76,28 @@ const orderProductBundleSchema = z.object({
   lid: nullableOmittedField(orderLidSchema),
 })
 
+const orderItemBundleSubstitutionSchema = z.object({
+  id: z.string().uuid(),
+  source_product_bundle: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+  }),
+  target_product_bundle: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+  }),
+  source_description_snapshot: z.string(),
+  target_description_snapshot: z.string(),
+  reason: z.string(),
+  created_by: z
+    .object({
+      id: z.string().uuid(),
+      display_name: z.string().nullable(),
+    })
+    .nullable(),
+  created_at: z.string(),
+})
+
 const orderItemSchema = z.discriminatedUnion("item_type", [
   z.object({
     id: z.string().uuid(),
@@ -85,6 +107,9 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: nullableOmittedField(z.null()),
+    bundle_substitutions: z
+      .array(orderItemBundleSubstitutionSchema)
+      .default([]),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -101,6 +126,9 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: nullableOmittedField(z.null()),
+    bundle_substitutions: z
+      .array(orderItemBundleSubstitutionSchema)
+      .default([]),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -117,6 +145,9 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     non_stock_item: orderNonStockItemSchema,
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: nullableOmittedField(z.null()),
+    bundle_substitutions: z
+      .array(orderItemBundleSubstitutionSchema)
+      .default([]),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -133,6 +164,9 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: orderCustomChargeSchema,
     product_bundle: nullableOmittedField(z.null()),
+    bundle_substitutions: z
+      .array(orderItemBundleSubstitutionSchema)
+      .default([]),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -149,6 +183,9 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: orderProductBundleSchema,
+    bundle_substitutions: z
+      .array(orderItemBundleSubstitutionSchema)
+      .default([]),
     description_snapshot: z.string(),
     quantity: z.number().int().positive(),
     notes: z.string().nullable(),
@@ -439,6 +476,11 @@ export interface UpdateOrderPrioritiesPayload {
   order_ids: string[]
 }
 
+export interface SubstituteOrderItemBundlePayload {
+  target_product_bundle_id: string
+  reason: string
+}
+
 function parseCreateOrderApiError(data: unknown) {
   return createOrderErrorResponseSchema.safeParse(data)
 }
@@ -538,6 +580,30 @@ export async function getOrder(id: string): Promise<Order> {
 
     if (error instanceof ApiClientError) {
       throw new Error("Unable to load order.")
+    }
+
+    throw error
+  }
+}
+
+export async function substituteOrderItemBundle(
+  orderLineItemId: string,
+  payload: SubstituteOrderItemBundlePayload
+): Promise<Order> {
+  try {
+    const data = await api.post<unknown, SubstituteOrderItemBundlePayload>(
+      `/order-line-items/${orderLineItemId}/bundle-substitution`,
+      payload
+    )
+    return orderResponseSchema.parse(data).order
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      throw new Error(
+        orderApiErrorMessage(
+          error.data,
+          "Unable to substitute this product bundle."
+        )
+      )
     }
 
     throw error

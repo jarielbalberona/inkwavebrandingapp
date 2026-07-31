@@ -23,6 +23,22 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
+import {
   Table,
   TableBody,
   TableCell,
@@ -30,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
+import { Textarea } from "@workspace/ui/components/textarea"
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import {
@@ -43,12 +60,15 @@ import type {
   OrderStatus,
 } from "@/features/orders/api/orders-client"
 import { openInvoicePdfInNewTab } from "@/features/invoices/api/invoices-client"
+import type { ProductBundle } from "@/features/product-bundles/api/product-bundles-client"
+import { useProductBundlesQuery } from "@/features/product-bundles/hooks/use-product-bundles"
 import {
   useCancelOrderMutation,
   useArchiveOrderMutation,
   useGenerateOrderInvoiceMutation,
   useOrderInvoiceQuery,
   useOrderQuery,
+  useSubstituteOrderItemBundleMutation,
 } from "@/features/orders/hooks/use-orders"
 import { formatMoneyValue } from "@/lib/money"
 
@@ -79,12 +99,30 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
   const generateOrderInvoiceMutation = useGenerateOrderInvoiceMutation()
   const cancelOrderMutation = useCancelOrderMutation()
   const archiveOrderMutation = useArchiveOrderMutation()
+  const substituteBundleMutation = useSubstituteOrderItemBundleMutation()
+  const productBundlesQuery = useProductBundlesQuery(canManageOrders)
   const [pageError, setPageError] = useState<string | null>(null)
   const [pageSuccess, setPageSuccess] = useState<string | null>(null)
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
+  const [substitutionLineItemId, setSubstitutionLineItemId] = useState<
+    string | null
+  >(null)
+  const [targetBundleId, setTargetBundleId] = useState("")
+  const [substitutionReason, setSubstitutionReason] = useState("")
 
   const order = orderQuery.data ?? null
+  const substitutionLineItem =
+    order?.items.find((item) => item.id === substitutionLineItemId) ?? null
+  const compatibleReplacementBundles =
+    substitutionLineItem?.item_type === "product_bundle"
+      ? (productBundlesQuery.data ?? []).filter(
+          (bundle) =>
+            bundle.is_active &&
+            bundle.id !== substitutionLineItem.product_bundle.id &&
+            isCompatibleReplacementBundle(substitutionLineItem, bundle)
+        )
+      : []
   const invoiceLockBlocksEdit =
     orderInvoiceQuery.data?.status === "paid" ||
     orderInvoiceQuery.data?.status === "void" ||
@@ -175,6 +213,45 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
         error instanceof Error ? error.message : "Unable to archive order."
       )
     }
+  }
+
+  async function handleBundleSubstitution() {
+    setPageError(null)
+    setPageSuccess(null)
+
+    if (
+      !substitutionLineItem ||
+      !targetBundleId ||
+      !substitutionReason.trim()
+    ) {
+      return
+    }
+
+    try {
+      await substituteBundleMutation.mutateAsync({
+        orderLineItemId: substitutionLineItem.id,
+        payload: {
+          target_product_bundle_id: targetBundleId,
+          reason: substitutionReason.trim(),
+        },
+      })
+      setPageSuccess(
+        "Bundle substituted for production. The paid invoice and charged prices were preserved."
+      )
+      closeSubstitutionDialog()
+    } catch (error) {
+      setPageError(
+        error instanceof Error
+          ? error.message
+          : "Unable to substitute this product bundle."
+      )
+    }
+  }
+
+  function closeSubstitutionDialog() {
+    setSubstitutionLineItemId(null)
+    setTargetBundleId("")
+    setSubstitutionReason("")
   }
 
   return (
@@ -390,6 +467,7 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                     <TableHead>Description</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Notes</TableHead>
+                    <TableHead>Operations</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -404,11 +482,68 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
                       <TableCell>
                         {item.notes?.trim() ? item.notes : "—"}
                       </TableCell>
+                      <TableCell>
+                        {canManageOrders &&
+                        (!canViewInvoices ||
+                          orderInvoiceQuery.data?.status === "paid") &&
+                        (order.status === "pending" ||
+                          order.status === "in_progress") &&
+                        order.archived_at === null &&
+                        item.item_type === "product_bundle" ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSubstitutionLineItemId(item.id)
+                              setTargetBundleId("")
+                              setSubstitutionReason("")
+                            }}
+                          >
+                            Substitute bundle
+                          </Button>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+
+            {order.items.some(
+              (item) => item.bundle_substitutions.length > 0
+            ) ? (
+              <div className="grid gap-3 border p-4 text-sm">
+                <div>
+                  <p className="font-medium">Bundle substitution history</p>
+                  <p className="text-muted-foreground">
+                    Operational changes only. Invoice descriptions, prices, and
+                    payments remain as originally issued.
+                  </p>
+                </div>
+                {order.items.flatMap((item) =>
+                  item.bundle_substitutions.map((substitution) => (
+                    <div
+                      key={substitution.id}
+                      className="grid gap-1 border-l-2 pl-3"
+                    >
+                      <p className="font-medium">
+                        {substitution.source_description_snapshot} →{" "}
+                        {substitution.target_description_snapshot}
+                      </p>
+                      <p>{substitution.reason}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(substitution.created_at).toLocaleString()} ·{" "}
+                        {substitution.created_by?.display_name ??
+                          "Former user or system"}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : null}
           </>
         ) : null}
       </CardContent>
@@ -472,6 +607,100 @@ export function OrderViewPage({ orderId }: { orderId: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog
+        open={substitutionLineItem !== null}
+        onOpenChange={(open) => {
+          if (!open && !substituteBundleMutation.isPending) {
+            closeSubstitutionDialog()
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Substitute production bundle</DialogTitle>
+            <DialogDescription>
+              The paid invoice, payment, description, and charged price stay
+              unchanged. The system will release the current reservations and
+              reserve the replacement cup and lid. Reservations may make
+              available stock negative.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Current operational bundle</Label>
+              <p className="rounded-md border p-3 text-sm">
+                {substitutionLineItem?.description_snapshot ?? "—"}
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="replacement-bundle">Replacement bundle</Label>
+              <Select
+                value={targetBundleId}
+                onValueChange={setTargetBundleId}
+                disabled={
+                  productBundlesQuery.isLoading ||
+                  substituteBundleMutation.isPending
+                }
+              >
+                <SelectTrigger id="replacement-bundle">
+                  <SelectValue placeholder="Select a compatible bundle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {compatibleReplacementBundles.map((bundle) => (
+                    <SelectItem key={bundle.id} value={bundle.id}>
+                      {bundle.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!productBundlesQuery.isLoading &&
+              compatibleReplacementBundles.length === 0 ? (
+                <p className="text-xs text-destructive">
+                  No active bundle has the same cup/lid shape and quantities.
+                </p>
+              ) : null}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="substitution-reason">Reason</Label>
+              <Textarea
+                id="substitution-reason"
+                value={substitutionReason}
+                maxLength={500}
+                placeholder="Explain why production is using the replacement."
+                disabled={substituteBundleMutation.isPending}
+                onChange={(event) => {
+                  setSubstitutionReason(event.target.value)
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={substituteBundleMutation.isPending}
+              onClick={closeSubstitutionDialog}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                substituteBundleMutation.isPending ||
+                !targetBundleId ||
+                !substitutionReason.trim()
+              }
+              onClick={() => {
+                void handleBundleSubstitution()
+              }}
+            >
+              {substituteBundleMutation.isPending
+                ? "Substituting..."
+                : "Confirm substitution"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
@@ -650,6 +879,18 @@ function invoiceStatusVariant(
 
 function totalQuantity(order: Order): number {
   return order.items.reduce((total, item) => total + item.quantity, 0)
+}
+
+function isCompatibleReplacementBundle(
+  item: Extract<Order["items"][number], { item_type: "product_bundle" }>,
+  bundle: ProductBundle
+): boolean {
+  return (
+    Boolean(item.product_bundle.cup) === Boolean(bundle.cup_id) &&
+    Boolean(item.product_bundle.lid) === Boolean(bundle.lid_id) &&
+    item.product_bundle.cup_qty_per_set === bundle.cup_qty_per_set &&
+    item.product_bundle.lid_qty_per_set === bundle.lid_qty_per_set
+  )
 }
 
 function formatOrderItemLabel(item: Order["items"][number]): string {

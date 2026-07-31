@@ -127,6 +127,13 @@ export const createOrderSchema = z.object({
   line_items: z.array(createOrderLineItemSchema).min(1),
 })
 
+export const substituteOrderItemBundleSchema = z
+  .object({
+    target_product_bundle_id: z.string().uuid(),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict()
+
 export const releaseMethodSchema = z.enum(["delivery", "office_pickup"])
 
 export const createOrderLineItemProgressEventSchema = z
@@ -167,10 +174,7 @@ export const createOrderLineItemProgressEventSchema = z
       })
     }
 
-    if (
-      input.release_method === "office_pickup" &&
-      !input.staging_location
-    ) {
+    if (input.release_method === "office_pickup" && !input.staging_location) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["staging_location"],
@@ -224,6 +228,9 @@ export type OrderLineItemProgressStage = z.infer<
   typeof orderLineItemProgressStageSchema
 >
 export type CreateOrderInput = z.input<typeof createOrderSchema>
+export type SubstituteOrderItemBundleInput = z.infer<
+  typeof substituteOrderItemBundleSchema
+>
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>
 export type UpdateOrderPrioritiesInput = z.infer<
   typeof updateOrderPrioritiesSchema

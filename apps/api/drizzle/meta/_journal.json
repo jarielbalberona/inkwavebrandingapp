@@ -281,6 +281,13 @@
       "when": 1779171306268,
       "tag": "0040_nebulous_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1785476843345,
+      "tag": "0041_solid_rhodey",
+      "breakpoints": true
     }
   ]
 }

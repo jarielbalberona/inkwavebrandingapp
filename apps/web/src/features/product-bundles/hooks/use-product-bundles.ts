@@ -9,10 +9,11 @@ import {
 
 export const productBundlesQueryKey = ["product-bundles"] as const
 
-export function useProductBundlesQuery() {
+export function useProductBundlesQuery(enabled = true) {
   return useQuery({
     queryKey: productBundlesQueryKey,
     queryFn: listProductBundles,
+    enabled,
   })
 }
 
@@ -31,8 +32,13 @@ export function useUpdateProductBundleMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: ProductBundlePayload }) =>
-      updateProductBundle(id, payload),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string
+      payload: ProductBundlePayload
+    }) => updateProductBundle(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: productBundlesQueryKey })
     },

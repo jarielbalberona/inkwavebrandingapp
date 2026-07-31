@@ -140,6 +140,12 @@ async function createHarness(): Promise<IntegrationHarnessState> {
   process.env.NODE_ENV = "test"
   process.env.PORT = "3000"
   process.env.DATABASE_URL = connectionString
+  process.env.DATABASE_HOST = ""
+  process.env.DATABASE_USER = ""
+  process.env.DATABASE_PASSWORD = ""
+  process.env.DATABASE_NAME = ""
+  process.env.DATABASE_PORT = ""
+  process.env.DATABASE_EXTERNAL_URL = ""
   process.env.DATABASE_SSL_MODE = "disable"
   process.env.AUTH_SESSION_SECRET = "integration-test-auth-session-secret-123456"
   process.env.AUTH_SESSION_TTL_SECONDS = "28800"

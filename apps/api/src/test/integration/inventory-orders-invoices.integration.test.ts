@@ -8,12 +8,7 @@ import {
   getIntegrationRequest,
   useIntegrationHarness,
 } from "./harness.js"
-import {
-  seedCup,
-  seedCustomer,
-  seedLid,
-  seedNonStockItem,
-} from "./fixtures.js"
+import { seedCup, seedCustomer, seedLid, seedNonStockItem } from "./fixtures.js"
 
 describe("inventory, order, and invoice integration", () => {
   useIntegrationHarness()
@@ -98,14 +93,20 @@ describe("inventory, order, and invoice integration", () => {
         line_items: [
           { item_type: "cup", cup_id: cup.id, quantity: 12 },
           { item_type: "lid", lid_id: lid.id, quantity: 8 },
-          { item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 3 },
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 3,
+          },
         ],
       })
 
     expect(createOrderResponse.status).toBe(201)
     expect(createOrderResponse.body.order.status).toBe("pending")
     expect(
-      createOrderResponse.body.order.items.map((item: { item_type: string }) => item.item_type),
+      createOrderResponse.body.order.items.map(
+        (item: { item_type: string }) => item.item_type
+      )
     ).toEqual(["cup", "lid", "non_stock_item"])
 
     const cupBalance = await getCupBalance(api, adminCookie, cup.id)
@@ -125,8 +126,13 @@ describe("inventory, order, and invoice integration", () => {
     })
 
     const movementsForOrder = await db.query.inventoryMovements.findMany({
-      where: eq(schema.inventoryMovements.orderId, createOrderResponse.body.order.id),
-      orderBy: (inventoryMovements, { asc }) => [asc(inventoryMovements.createdAt)],
+      where: eq(
+        schema.inventoryMovements.orderId,
+        createOrderResponse.body.order.id
+      ),
+      orderBy: (inventoryMovements, { asc }) => [
+        asc(inventoryMovements.createdAt),
+      ],
     })
 
     expect(movementsForOrder).toHaveLength(2)
@@ -135,11 +141,200 @@ describe("inventory, order, and invoice integration", () => {
         itemType: movement.itemType,
         movementType: movement.movementType,
         quantity: movement.quantity,
-      })),
+      }))
     ).toEqual([
       { itemType: "cup", movementType: "reserve", quantity: 12 },
       { itemType: "lid", movementType: "reserve", quantity: 8 },
     ])
+  })
+
+  it("substitutes a paid order bundle without changing its invoice snapshot", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const sourceCup = await seedCup({ sku: "INT-GREECO-16OZ" })
+    const targetCup = await seedCup({ sku: "INT-DABBA-16OZ" })
+    const lid = await seedLid({ sku: "INT-FLAT-LID-95MM" })
+    const db = await getIntegrationDb()
+    const [sourceBundle] = await db
+      .insert(schema.productBundles)
+      .values({
+        name: "Integration Grecoopack cup + flat lid",
+        cupId: sourceCup.id,
+        lidId: lid.id,
+        cupQtyPerSet: 1,
+        lidQtyPerSet: 1,
+        isActive: true,
+      })
+      .returning()
+    const [targetBundle] = await db
+      .insert(schema.productBundles)
+      .values({
+        name: "Integration Dabba cup + flat lid",
+        cupId: targetCup.id,
+        lidId: lid.id,
+        cupQtyPerSet: 1,
+        lidQtyPerSet: 1,
+        isActive: true,
+      })
+      .returning()
+
+    if (!sourceBundle || !targetBundle) {
+      throw new Error("Failed to seed bundle substitution fixtures")
+    }
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [
+          {
+            item_type: "product_bundle",
+            product_bundle_id: sourceBundle.id,
+            quantity: 500,
+            unit_sell_price: "7.00",
+          },
+        ],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+    const orderId = createOrderResponse.body.order.id as string
+    const orderItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "product_bundle"
+    )
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceResponse.status).toBe(200)
+    const invoiceId = invoiceResponse.body.invoice.id as string
+    const paymentResponse = await api
+      .post(`/invoices/${invoiceId}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: invoiceResponse.body.invoice.total_amount,
+        payment_date: "2026-07-31T03:00:00.000Z",
+        note: "Paid before operational substitution",
+      })
+
+    expect(paymentResponse.status).toBe(201)
+    expect(paymentResponse.body.invoice.status).toBe("paid")
+    const invoiceBeforeSubstitution = paymentResponse.body.invoice
+
+    const substitutionResponse = await api
+      .post(`/order-line-items/${orderItem.id}/bundle-substitution`)
+      .set("Cookie", adminCookie)
+      .send({
+        target_product_bundle_id: targetBundle.id,
+        reason: "Use Dabba cup stock for production",
+      })
+
+    expect(substitutionResponse.status).toBe(200)
+    expect(substitutionResponse.body.order.items[0]).toMatchObject({
+      id: orderItem.id,
+      description_snapshot: targetBundle.name,
+      quantity: 500,
+      unit_sell_price: "7.00",
+      product_bundle: {
+        id: targetBundle.id,
+      },
+    })
+    expect(
+      substitutionResponse.body.order.items[0].bundle_substitutions
+    ).toHaveLength(1)
+
+    const invoiceAfterResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
+
+    expect(invoiceAfterResponse.status).toBe(200)
+    expect(invoiceAfterResponse.body.invoice).toEqual(invoiceBeforeSubstitution)
+
+    const movements = await db.query.inventoryMovements.findMany({
+      where: eq(schema.inventoryMovements.orderItemId, orderItem.id),
+      orderBy: (inventoryMovements, { asc }) => [
+        asc(inventoryMovements.createdAt),
+      ],
+    })
+
+    expect(
+      movements.map((movement) => ({
+        movementType: movement.movementType,
+        itemType: movement.itemType,
+        cupId: movement.cupId,
+        lidId: movement.lidId,
+        quantity: movement.quantity,
+      }))
+    ).toEqual([
+      {
+        movementType: "reserve",
+        itemType: "cup",
+        cupId: sourceCup.id,
+        lidId: null,
+        quantity: 500,
+      },
+      {
+        movementType: "reserve",
+        itemType: "lid",
+        cupId: null,
+        lidId: lid.id,
+        quantity: 500,
+      },
+      {
+        movementType: "release_reservation",
+        itemType: "cup",
+        cupId: sourceCup.id,
+        lidId: null,
+        quantity: 500,
+      },
+      {
+        movementType: "release_reservation",
+        itemType: "lid",
+        cupId: null,
+        lidId: lid.id,
+        quantity: 500,
+      },
+      {
+        movementType: "reserve",
+        itemType: "cup",
+        cupId: targetCup.id,
+        lidId: null,
+        quantity: 500,
+      },
+      {
+        movementType: "reserve",
+        itemType: "lid",
+        cupId: null,
+        lidId: lid.id,
+        quantity: 500,
+      },
+    ])
+
+    const targetCupBalance = await getCupBalance(
+      api,
+      adminCookie,
+      targetCup.id
+    )
+    expect(targetCupBalance).toMatchObject({
+      on_hand: 0,
+      reserved: 500,
+      available: -500,
+    })
+
+    const substitutions = await db.query.orderItemBundleSubstitutions.findMany({
+      where: eq(schema.orderItemBundleSubstitutions.orderItemId, orderItem.id),
+    })
+
+    expect(substitutions).toHaveLength(1)
+    expect(substitutions[0]).toMatchObject({
+      sourceProductBundleId: sourceBundle.id,
+      targetProductBundleId: targetBundle.id,
+      sourceDescriptionSnapshot: sourceBundle.name,
+      targetDescriptionSnapshot: targetBundle.name,
+      reason: "Use Dabba cup stock for production",
+    })
   })
 
   it("keeps quote orders out of inventory until the first invoice payment promotes them", async () => {
@@ -176,7 +371,9 @@ describe("inventory, order, and invoice integration", () => {
 
     expect(quoteListResponse.status).toBe(200)
     expect(
-      quoteListResponse.body.orders.some((order: { id: string }) => order.id === orderId),
+      quoteListResponse.body.orders.some(
+        (order: { id: string }) => order.id === orderId
+      )
     ).toBe(true)
 
     const invoiceResponse = await api
@@ -186,7 +383,11 @@ describe("inventory, order, and invoice integration", () => {
     expect(invoiceResponse.status).toBe(200)
     expect(invoiceResponse.body.invoice.status).toBe("pending")
 
-    const cupBalanceBeforePayment = await getCupBalance(api, adminCookie, cup.id)
+    const cupBalanceBeforePayment = await getCupBalance(
+      api,
+      adminCookie,
+      cup.id
+    )
     expect(cupBalanceBeforePayment).toMatchObject({
       item_type: "cup",
       on_hand: 25,
@@ -200,7 +401,10 @@ describe("inventory, order, and invoice integration", () => {
 
     expect(movementsBeforePayment).toHaveLength(0)
 
-    const quoteLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const quoteLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
     const updateQuoteResponse = await api
       .patch(`/orders/${orderId}`)
       .set("Cookie", adminCookie)
@@ -289,7 +493,10 @@ describe("inventory, order, and invoice integration", () => {
     expect(createOrderResponse.body.order.status).toBe("pending")
 
     const orderId = createOrderResponse.body.order.id as string
-    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const cupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
     const invoiceResponse = await api
       .get(`/orders/${orderId}/invoice`)
       .set("Cookie", adminCookie)
@@ -371,7 +578,11 @@ describe("inventory, order, and invoice integration", () => {
         line_items: [
           { item_type: "cup", cup_id: cup.id, quantity: 50 },
           { item_type: "lid", lid_id: lid.id, quantity: 50 },
-          { item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 },
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 1,
+          },
           {
             item_type: "custom_charge",
             description_snapshot: "Rush fee",
@@ -422,8 +633,13 @@ describe("inventory, order, and invoice integration", () => {
     })
 
     const movementsForOrder = await db.query.inventoryMovements.findMany({
-      where: eq(schema.inventoryMovements.orderId, createOrderResponse.body.order.id),
-      orderBy: (inventoryMovements, { asc }) => [asc(inventoryMovements.createdAt)],
+      where: eq(
+        schema.inventoryMovements.orderId,
+        createOrderResponse.body.order.id
+      ),
+      orderBy: (inventoryMovements, { asc }) => [
+        asc(inventoryMovements.createdAt),
+      ],
     })
 
     expect(
@@ -431,7 +647,7 @@ describe("inventory, order, and invoice integration", () => {
         itemType: movement.itemType,
         movementType: movement.movementType,
         quantity: movement.quantity,
-      })),
+      }))
     ).toEqual([
       { itemType: "cup", movementType: "reserve", quantity: 50 },
       { itemType: "lid", movementType: "reserve", quantity: 50 },
@@ -461,7 +677,10 @@ describe("inventory, order, and invoice integration", () => {
 
     expect(createOrderResponse.status).toBe(201)
 
-    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const cupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
 
     const printedResponse = await api
       .post(`/order-line-items/${cupLineItem.id}/progress-events`)
@@ -503,15 +722,20 @@ describe("inventory, order, and invoice integration", () => {
     })
 
     const movementsForOrder = await db.query.inventoryMovements.findMany({
-      where: eq(schema.inventoryMovements.orderId, createOrderResponse.body.order.id),
-      orderBy: (inventoryMovements, { asc }) => [asc(inventoryMovements.createdAt)],
+      where: eq(
+        schema.inventoryMovements.orderId,
+        createOrderResponse.body.order.id
+      ),
+      orderBy: (inventoryMovements, { asc }) => [
+        asc(inventoryMovements.createdAt),
+      ],
     })
 
     expect(
       movementsForOrder.map((movement) => ({
         movementType: movement.movementType,
         quantity: movement.quantity,
-      })),
+      }))
     ).toEqual([
       { movementType: "reserve", quantity: 10 },
       { movementType: "consume", quantity: 4 },
@@ -561,7 +785,11 @@ describe("inventory, order, and invoice integration", () => {
         line_items: [
           { item_type: "cup", cup_id: cup.id, quantity: 2 },
           { item_type: "lid", lid_id: lid.id, quantity: 3 },
-          { item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 },
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 1,
+          },
         ],
       })
 
@@ -576,26 +804,46 @@ describe("inventory, order, and invoice integration", () => {
     expect(invoiceAfterCreateResponse.body.invoice.status).toBe("pending")
     expect(invoiceAfterCreateResponse.body.invoice.subtotal).toBe("52.50")
     expect(
-      invoiceAfterCreateResponse.body.invoice.items.map((item: { item_type: string }) => item.item_type),
+      invoiceAfterCreateResponse.body.invoice.items.map(
+        (item: { item_type: string }) => item.item_type
+      )
     ).toEqual(["cup", "lid", "non_stock_item"])
 
     const invoiceId = invoiceAfterCreateResponse.body.invoice.id as string
-    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
-    const lidLineItem = findOrderItem(createOrderResponse.body.order.items, "lid")
+    const cupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
+    const lidLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "lid"
+    )
 
     await postProgressEvent(api, adminCookie, cupLineItem.id, "printed", 2)
     await postProgressEvent(api, adminCookie, cupLineItem.id, "qa_passed", 2)
     await postProgressEvent(api, adminCookie, cupLineItem.id, "packed", 2)
-    await postProgressEvent(api, adminCookie, cupLineItem.id, "ready_for_release", 2)
+    await postProgressEvent(
+      api,
+      adminCookie,
+      cupLineItem.id,
+      "ready_for_release",
+      2
+    )
     await postProgressEvent(api, adminCookie, cupLineItem.id, "released", 2)
     await postProgressEvent(api, adminCookie, lidLineItem.id, "packed", 3)
-    await postProgressEvent(api, adminCookie, lidLineItem.id, "ready_for_release", 3)
+    await postProgressEvent(
+      api,
+      adminCookie,
+      lidLineItem.id,
+      "ready_for_release",
+      3
+    )
     const lidReleasedResponse = await postProgressEvent(
       api,
       adminCookie,
       lidLineItem.id,
       "released",
-      3,
+      3
     )
 
     expect(lidReleasedResponse.status).toBe(201)
@@ -606,10 +854,12 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
 
     expect(invoiceResponse.status).toBe(409)
-    expect(invoiceResponse.body.error).toBe("Invoice already exists for this order")
+    expect(invoiceResponse.body.error).toBe(
+      "Invoice already exists for this order"
+    )
 
     const cupInvoiceItem = invoiceAfterCreateResponse.body.invoice.items.find(
-      (item: { item_type: string }) => item.item_type === "cup",
+      (item: { item_type: string }) => item.item_type === "cup"
     )
     expect(cupInvoiceItem?.unit_price).toBe("15.00")
 
@@ -633,11 +883,13 @@ describe("inventory, order, and invoice integration", () => {
 
     expect(invoiceDetailResponse.status).toBe(200)
     expect(invoiceDetailResponse.body.invoice.status).toBe("pending")
-    expect(invoiceDetailResponse.body.invoice.customer.business_name).toBe("Snapshot Customer")
+    expect(invoiceDetailResponse.body.invoice.customer.business_name).toBe(
+      "Snapshot Customer"
+    )
     expect(
       invoiceDetailResponse.body.invoice.items.find(
-        (item: { item_type: string }) => item.item_type === "cup",
-      )?.unit_price,
+        (item: { item_type: string }) => item.item_type === "cup"
+      )?.unit_price
     ).toBe("15.00")
 
     const persistedInvoiceItems = await db.query.invoiceItems.findMany({
@@ -658,10 +910,12 @@ describe("inventory, order, and invoice integration", () => {
     expect(pdfResponse.status).toBe(200)
     expect(pdfResponse.headers["content-type"]).toContain("application/pdf")
     expect(pdfResponse.headers["content-disposition"]).toContain(
-      `${invoiceAfterCreateResponse.body.invoice.invoice_number}.pdf`,
+      `${invoiceAfterCreateResponse.body.invoice.invoice_number}.pdf`
     )
     expect(Buffer.isBuffer(pdfResponse.body)).toBe(true)
-    expect((pdfResponse.body as Buffer).subarray(0, 4).toString("utf8")).toBe("%PDF")
+    expect((pdfResponse.body as Buffer).subarray(0, 4).toString("utf8")).toBe(
+      "%PDF"
+    )
   })
 
   it("allows unpaid pending orders to be structurally edited and resyncs the same invoice", async () => {
@@ -715,15 +969,25 @@ describe("inventory, order, and invoice integration", () => {
         line_items: [
           { item_type: "cup", cup_id: cup.id, quantity: 10 },
           { item_type: "lid", lid_id: lid.id, quantity: 8 },
-          { item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 2 },
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 2,
+          },
         ],
       })
 
     expect(createOrderResponse.status).toBe(201)
 
     const orderId = createOrderResponse.body.order.id as string
-    const existingCupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
-    const existingNonStockLineItem = findOrderItem(createOrderResponse.body.order.items, "non_stock_item")
+    const existingCupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
+    const existingNonStockLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "non_stock_item"
+    )
     const initialInvoiceResponse = await api
       .get(`/orders/${orderId}/invoice`)
       .set("Cookie", adminCookie)
@@ -776,8 +1040,12 @@ describe("inventory, order, and invoice integration", () => {
     expect(invoiceAfterUpdateResponse.body.invoice.id).toBe(initialInvoiceId)
     expect(invoiceAfterUpdateResponse.body.invoice.subtotal).toBe("249.50")
     expect(
-      invoiceAfterUpdateResponse.body.invoice.items.map((item: { item_type: string }) => item.item_type),
-    ).toEqual(expect.arrayContaining(["cup", "cup", "non_stock_item", "custom_charge"]))
+      invoiceAfterUpdateResponse.body.invoice.items.map(
+        (item: { item_type: string }) => item.item_type
+      )
+    ).toEqual(
+      expect.arrayContaining(["cup", "cup", "non_stock_item", "custom_charge"])
+    )
 
     const invoiceRows = await db.query.invoices.findMany({
       where: eq(schema.invoices.orderId, orderId),
@@ -792,7 +1060,11 @@ describe("inventory, order, and invoice integration", () => {
       available: 14,
     })
 
-    const replacementCupBalance = await getCupBalance(api, adminCookie, replacementCup.id)
+    const replacementCupBalance = await getCupBalance(
+      api,
+      adminCookie,
+      replacementCup.id
+    )
     expect(replacementCupBalance).toMatchObject({
       on_hand: 10,
       reserved: 4,
@@ -834,7 +1106,10 @@ describe("inventory, order, and invoice integration", () => {
     expect(createOrderResponse.status).toBe(201)
 
     const orderId = createOrderResponse.body.order.id as string
-    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const cupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
     const initialInvoiceResponse = await api
       .get(`/orders/${orderId}/invoice`)
       .set("Cookie", adminCookie)
@@ -877,7 +1152,9 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
 
     expect(invoiceAfterUpdateResponse.status).toBe(200)
-    expect(invoiceAfterUpdateResponse.body.invoice.id).toBe(initialInvoiceResponse.body.invoice.id)
+    expect(invoiceAfterUpdateResponse.body.invoice.id).toBe(
+      initialInvoiceResponse.body.invoice.id
+    )
     expect(invoiceAfterUpdateResponse.body.invoice.subtotal).toBe("180.00")
     expect(invoiceAfterUpdateResponse.body.invoice.items[0].quantity).toBe(12)
 
@@ -913,7 +1190,10 @@ describe("inventory, order, and invoice integration", () => {
     expect(createOrderResponse.status).toBe(201)
 
     const orderId = createOrderResponse.body.order.id as string
-    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const cupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
 
     await db
       .update(schema.invoices)
@@ -935,7 +1215,9 @@ describe("inventory, order, and invoice integration", () => {
       })
 
     expect(updateResponse.status).toBe(409)
-    expect(updateResponse.body.error).toBe("Invoice is locked because it has been paid")
+    expect(updateResponse.body.error).toBe(
+      "Invoice is locked because it has been paid"
+    )
   })
 
   it("rejects structural edits when the linked invoice has any recorded payment", async () => {
@@ -961,7 +1243,10 @@ describe("inventory, order, and invoice integration", () => {
     expect(createOrderResponse.status).toBe(201)
 
     const orderId = createOrderResponse.body.order.id as string
-    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const cupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
     const invoiceResponse = await api
       .get(`/orders/${orderId}/invoice`)
       .set("Cookie", adminCookie)
@@ -997,7 +1282,9 @@ describe("inventory, order, and invoice integration", () => {
       })
 
     expect(updateResponse.status).toBe(409)
-    expect(updateResponse.body.error).toBe("Invoice is locked because payments have already been recorded")
+    expect(updateResponse.body.error).toBe(
+      "Invoice is locked because payments have already been recorded"
+    )
   })
 
   it("reflects persisted payment history and settlement state in invoice detail", async () => {
@@ -1017,7 +1304,13 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
       .send({
         customer_id: customer.id,
-        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 2 }],
+        line_items: [
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 2,
+          },
+        ],
       })
 
     expect(createOrderResponse.status).toBe(201)
@@ -1073,12 +1366,16 @@ describe("inventory, order, and invoice integration", () => {
       amount: "14.00",
       note: "Remaining balance",
     })
-    expect(invoiceDetailResponse.body.invoice.payments[0]?.created_by?.email).toContain("@")
+    expect(
+      invoiceDetailResponse.body.invoice.payments[0]?.created_by?.email
+    ).toContain("@")
     expect(invoiceDetailResponse.body.invoice.payments[1]).toMatchObject({
       amount: "10.00",
       note: "Initial deposit",
     })
-    expect(invoiceDetailResponse.body.invoice.payments[1]?.created_by?.email).toContain("@")
+    expect(
+      invoiceDetailResponse.body.invoice.payments[1]?.created_by?.email
+    ).toContain("@")
   })
 
   it("rejects voiding invoices after payment activity has started", async () => {
@@ -1098,7 +1395,13 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
       .send({
         customer_id: customer.id,
-        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 }],
+        line_items: [
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 1,
+          },
+        ],
       })
 
     expect(createOrderResponse.status).toBe(201)
@@ -1127,7 +1430,9 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
 
     expect(voidResponse.status).toBe(409)
-    expect(voidResponse.body.error).toBe("Invoices with recorded payments cannot be voided")
+    expect(voidResponse.body.error).toBe(
+      "Invoices with recorded payments cannot be voided"
+    )
   })
 
   it("rejects voiding invoices while the linked order is still active", async () => {
@@ -1147,21 +1452,33 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
       .send({
         customer_id: customer.id,
-        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 }],
+        line_items: [
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 1,
+          },
+        ],
       })
 
     expect(createOrderResponse.status).toBe(201)
 
     const orderId = createOrderResponse.body.order.id as string
-    const invoiceResponse = await api.get(`/orders/${orderId}/invoice`).set("Cookie", adminCookie)
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
 
     expect(invoiceResponse.status).toBe(200)
 
     const invoiceId = invoiceResponse.body.invoice.id as string
-    const voidResponse = await api.post(`/invoices/${invoiceId}/void`).set("Cookie", adminCookie)
+    const voidResponse = await api
+      .post(`/invoices/${invoiceId}/void`)
+      .set("Cookie", adminCookie)
 
     expect(voidResponse.status).toBe(409)
-    expect(voidResponse.body.error).toBe("Cancel the linked order before voiding this invoice")
+    expect(voidResponse.body.error).toBe(
+      "Cancel the linked order before voiding this invoice"
+    )
   })
 
   it("allows voiding an unpaid invoice after the linked order is canceled", async () => {
@@ -1181,29 +1498,43 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
       .send({
         customer_id: customer.id,
-        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 1 }],
+        line_items: [
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 1,
+          },
+        ],
       })
 
     expect(createOrderResponse.status).toBe(201)
 
     const orderId = createOrderResponse.body.order.id as string
-    const invoiceResponse = await api.get(`/orders/${orderId}/invoice`).set("Cookie", adminCookie)
+    const invoiceResponse = await api
+      .get(`/orders/${orderId}/invoice`)
+      .set("Cookie", adminCookie)
 
     expect(invoiceResponse.status).toBe(200)
 
     const invoiceId = invoiceResponse.body.invoice.id as string
 
-    const cancelResponse = await api.patch(`/orders/${orderId}/cancel`).set("Cookie", adminCookie)
+    const cancelResponse = await api
+      .patch(`/orders/${orderId}/cancel`)
+      .set("Cookie", adminCookie)
 
     expect(cancelResponse.status).toBe(200)
     expect(cancelResponse.body.order.status).toBe("canceled")
 
-    const invoiceBeforeVoid = await api.get(`/invoices/${invoiceId}`).set("Cookie", adminCookie)
+    const invoiceBeforeVoid = await api
+      .get(`/invoices/${invoiceId}`)
+      .set("Cookie", adminCookie)
 
     expect(invoiceBeforeVoid.status).toBe(200)
     expect(invoiceBeforeVoid.body.invoice.status).toBe("pending")
 
-    const voidResponse = await api.post(`/invoices/${invoiceId}/void`).set("Cookie", adminCookie)
+    const voidResponse = await api
+      .post(`/invoices/${invoiceId}/void`)
+      .set("Cookie", adminCookie)
 
     expect(voidResponse.status).toBe(200)
     expect(voidResponse.body.invoice.status).toBe("void")
@@ -1224,7 +1555,13 @@ describe("inventory, order, and invoice integration", () => {
       .set("Cookie", adminCookie)
       .send({
         customer_id: customer.id,
-        line_items: [{ item_type: "non_stock_item", non_stock_item_id: nonStockItem.id, quantity: 2 }],
+        line_items: [
+          {
+            item_type: "non_stock_item",
+            non_stock_item_id: nonStockItem.id,
+            quantity: 2,
+          },
+        ],
       })
 
     expect(createOrderResponse.status).toBe(201)
@@ -1292,12 +1629,19 @@ describe("inventory, order, and invoice integration", () => {
 
     expect(createOrderResponse.status).toBe(201)
     expect(
-      createOrderResponse.body.order.items.map((item: { item_type: string }) => item.item_type),
+      createOrderResponse.body.order.items.map(
+        (item: { item_type: string }) => item.item_type
+      )
     ).toEqual(["cup", "custom_charge"])
 
     const movementsForOrder = await db.query.inventoryMovements.findMany({
-      where: eq(schema.inventoryMovements.orderId, createOrderResponse.body.order.id),
-      orderBy: (inventoryMovements, { asc }) => [asc(inventoryMovements.createdAt)],
+      where: eq(
+        schema.inventoryMovements.orderId,
+        createOrderResponse.body.order.id
+      ),
+      orderBy: (inventoryMovements, { asc }) => [
+        asc(inventoryMovements.createdAt),
+      ],
     })
 
     expect(movementsForOrder).toHaveLength(1)
@@ -1307,13 +1651,28 @@ describe("inventory, order, and invoice integration", () => {
       quantity: 2,
     })
 
-    const cupLineItem = findOrderItem(createOrderResponse.body.order.items, "cup")
+    const cupLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "cup"
+    )
 
     await postProgressEvent(api, adminCookie, cupLineItem.id, "printed", 2)
     await postProgressEvent(api, adminCookie, cupLineItem.id, "qa_passed", 2)
     await postProgressEvent(api, adminCookie, cupLineItem.id, "packed", 2)
-    await postProgressEvent(api, adminCookie, cupLineItem.id, "ready_for_release", 2)
-    const releasedResponse = await postProgressEvent(api, adminCookie, cupLineItem.id, "released", 2)
+    await postProgressEvent(
+      api,
+      adminCookie,
+      cupLineItem.id,
+      "ready_for_release",
+      2
+    )
+    const releasedResponse = await postProgressEvent(
+      api,
+      adminCookie,
+      cupLineItem.id,
+      "released",
+      2
+    )
 
     expect(releasedResponse.status).toBe(201)
     expect(releasedResponse.body.order_status).toBe("completed")
@@ -1380,7 +1739,10 @@ describe("inventory, order, and invoice integration", () => {
     expect(createOrderResponse.status).toBe(201)
     expect(createOrderResponse.body.order.status).toBe("completed")
 
-    const customChargeLineItem = findOrderItem(createOrderResponse.body.order.items, "custom_charge")
+    const customChargeLineItem = findOrderItem(
+      createOrderResponse.body.order.items,
+      "custom_charge"
+    )
 
     const progressResponse = await api
       .post(`/order-line-items/${customChargeLineItem.id}/progress-events`)
@@ -1393,7 +1755,7 @@ describe("inventory, order, and invoice integration", () => {
 
     expect(progressResponse.status).toBe(409)
     expect(progressResponse.body.error).toBe(
-      "Non-stock and custom charge line items do not support fulfillment progress events",
+      "Non-stock and custom charge line items do not support fulfillment progress events"
     )
   })
 })
@@ -1403,7 +1765,7 @@ async function stockIntake(
   adminCookie: string[],
   input:
     | { itemType: "cup"; cupId: string; quantity: number }
-    | { itemType: "lid"; lidId: string; quantity: number },
+    | { itemType: "lid"; lidId: string; quantity: number }
 ) {
   const response = await api
     .post("/inventory/stock-intake")
@@ -1420,7 +1782,7 @@ async function stockIntake(
 async function getCupBalance(
   api: Awaited<ReturnType<typeof getIntegrationRequest>>,
   adminCookie: string[],
-  cupId: string,
+  cupId: string
 ) {
   const response = await api
     .get(`/inventory/balances/${cupId}`)
@@ -1434,7 +1796,7 @@ async function getCupBalance(
 async function getLidBalance(
   api: Awaited<ReturnType<typeof getIntegrationRequest>>,
   adminCookie: string[],
-  lidId: string,
+  lidId: string
 ) {
   const response = await api
     .get("/inventory/balances")
@@ -1445,7 +1807,7 @@ async function getLidBalance(
 
   const balance = response.body.balances.find(
     (item: { item_type: string; lid: { id: string } | null }) =>
-      item.item_type === "lid" && item.lid?.id === lidId,
+      item.item_type === "lid" && item.lid?.id === lidId
   )
 
   if (!balance) {
@@ -1457,7 +1819,12 @@ async function getLidBalance(
 
 function findOrderItem(
   items: Array<{ id: string; item_type: string }>,
-  itemType: "cup" | "lid" | "non_stock_item" | "custom_charge",
+  itemType:
+    | "cup"
+    | "lid"
+    | "non_stock_item"
+    | "custom_charge"
+    | "product_bundle"
 ) {
   const item = items.find((entry) => entry.item_type === itemType)
 
@@ -1472,13 +1839,8 @@ async function postProgressEvent(
   api: Awaited<ReturnType<typeof getIntegrationRequest>>,
   adminCookie: string[],
   orderLineItemId: string,
-  stage:
-    | "printed"
-    | "qa_passed"
-    | "packed"
-    | "ready_for_release"
-    | "released",
-  quantity: number,
+  stage: "printed" | "qa_passed" | "packed" | "ready_for_release" | "released",
+  quantity: number
 ) {
   return api
     .post(`/order-line-items/${orderLineItemId}/progress-events`)

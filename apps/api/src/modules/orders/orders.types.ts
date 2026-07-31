@@ -56,6 +56,17 @@ interface OrderProductBundleDto {
   lid: OrderLidDto | null
 }
 
+interface OrderItemBundleSubstitutionDto {
+  id: string
+  source_product_bundle: { id: string; name: string }
+  target_product_bundle: { id: string; name: string }
+  source_description_snapshot: string
+  target_description_snapshot: string
+  reason: string
+  created_by: { id: string; display_name: string | null } | null
+  created_at: string
+}
+
 interface BaseOrderItemDto {
   id: string
   item_type:
@@ -69,6 +80,7 @@ interface BaseOrderItemDto {
   non_stock_item: OrderNonStockItemDto | null
   custom_charge: OrderCustomChargeDto | null
   product_bundle: OrderProductBundleDto | null
+  bundle_substitutions: OrderItemBundleSubstitutionDto[]
   description_snapshot: string
   quantity: number
   notes: string | null
@@ -193,6 +205,7 @@ function toBaseOrderItemDto(
       non_stock_item: null,
       custom_charge: null,
       product_bundle: null,
+      bundle_substitutions: toBundleSubstitutionDtos(item),
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -210,6 +223,7 @@ function toBaseOrderItemDto(
       non_stock_item: null,
       custom_charge: null,
       product_bundle: null,
+      bundle_substitutions: toBundleSubstitutionDtos(item),
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -229,6 +243,7 @@ function toBaseOrderItemDto(
         description_snapshot: item.descriptionSnapshot,
       },
       product_bundle: null,
+      bundle_substitutions: toBundleSubstitutionDtos(item),
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -246,6 +261,7 @@ function toBaseOrderItemDto(
       non_stock_item: null,
       custom_charge: null,
       product_bundle: toProductBundleDto(item.productBundle as ProductBundle),
+      bundle_substitutions: toBundleSubstitutionDtos(item),
       description_snapshot: item.descriptionSnapshot,
       quantity: item.quantity,
       notes: item.notes ?? null,
@@ -262,12 +278,39 @@ function toBaseOrderItemDto(
     non_stock_item: toNonStockItemDto(item.nonStockItem as NonStockItem),
     custom_charge: null,
     product_bundle: null,
+    bundle_substitutions: toBundleSubstitutionDtos(item),
     description_snapshot: item.descriptionSnapshot,
     quantity: item.quantity,
     notes: item.notes ?? null,
     created_at: item.createdAt.toISOString(),
     updated_at: item.updatedAt.toISOString(),
   }
+}
+
+function toBundleSubstitutionDtos(
+  item: OrderWithRelations["items"][number]
+): OrderItemBundleSubstitutionDto[] {
+  return (item.bundleSubstitutions ?? []).map((substitution) => ({
+    id: substitution.id,
+    source_product_bundle: {
+      id: substitution.sourceProductBundle.id,
+      name: substitution.sourceProductBundle.name,
+    },
+    target_product_bundle: {
+      id: substitution.targetProductBundle.id,
+      name: substitution.targetProductBundle.name,
+    },
+    source_description_snapshot: substitution.sourceDescriptionSnapshot,
+    target_description_snapshot: substitution.targetDescriptionSnapshot,
+    reason: substitution.reason,
+    created_by: substitution.createdByUser
+      ? {
+          id: substitution.createdByUser.id,
+          display_name: substitution.createdByUser.displayName ?? null,
+        }
+      : null,
+    created_at: substitution.createdAt.toISOString(),
+  }))
 }
 
 function toCupDto(cup: Cup): OrderCupDto {

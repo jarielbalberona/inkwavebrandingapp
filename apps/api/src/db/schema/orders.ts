@@ -209,6 +209,53 @@ export const orderItems = pgTable(
   ]
 )
 
+export const orderItemBundleSubstitutions = pgTable(
+  "order_item_bundle_substitutions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderItemId: uuid("order_item_id")
+      .notNull()
+      .references(() => orderItems.id, { onDelete: "restrict" }),
+    sourceProductBundleId: uuid("source_product_bundle_id")
+      .notNull()
+      .references(() => productBundles.id, { onDelete: "restrict" }),
+    targetProductBundleId: uuid("target_product_bundle_id")
+      .notNull()
+      .references(() => productBundles.id, { onDelete: "restrict" }),
+    sourceDescriptionSnapshot: text("source_description_snapshot").notNull(),
+    targetDescriptionSnapshot: text("target_description_snapshot").notNull(),
+    reason: text("reason").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("order_item_bundle_substitutions_order_item_id_idx").on(
+      table.orderItemId
+    ),
+    index("order_item_bundle_substitutions_created_at_idx").on(table.createdAt),
+    check(
+      "order_item_bundle_substitutions_different_bundles",
+      sql`${table.sourceProductBundleId} <> ${table.targetProductBundleId}`
+    ),
+    check(
+      "order_item_bundle_substitutions_source_description_not_blank",
+      sql`length(trim(${table.sourceDescriptionSnapshot})) > 0`
+    ),
+    check(
+      "order_item_bundle_substitutions_target_description_not_blank",
+      sql`length(trim(${table.targetDescriptionSnapshot})) > 0`
+    ),
+    check(
+      "order_item_bundle_substitutions_reason_not_blank",
+      sql`length(trim(${table.reason})) > 0`
+    ),
+  ]
+)
+
 export const ordersRelations = relations(orders, ({ many, one }) => ({
   customer: one(customers, {
     fields: [orders.customerId],
@@ -302,7 +349,32 @@ export const orderItemsRelations = relations(orderItems, ({ many, one }) => ({
     references: [productBundles.id],
   }),
   progressEvents: many(orderLineItemProgressEvents),
+  bundleSubstitutions: many(orderItemBundleSubstitutions),
 }))
+
+export const orderItemBundleSubstitutionsRelations = relations(
+  orderItemBundleSubstitutions,
+  ({ one }) => ({
+    orderItem: one(orderItems, {
+      fields: [orderItemBundleSubstitutions.orderItemId],
+      references: [orderItems.id],
+    }),
+    sourceProductBundle: one(productBundles, {
+      fields: [orderItemBundleSubstitutions.sourceProductBundleId],
+      references: [productBundles.id],
+      relationName: "sourceProductBundle",
+    }),
+    targetProductBundle: one(productBundles, {
+      fields: [orderItemBundleSubstitutions.targetProductBundleId],
+      references: [productBundles.id],
+      relationName: "targetProductBundle",
+    }),
+    createdByUser: one(users, {
+      fields: [orderItemBundleSubstitutions.createdByUserId],
+      references: [users.id],
+    }),
+  })
+)
 
 export const orderLineItemProgressEventsRelations = relations(
   orderLineItemProgressEvents,
@@ -322,6 +394,10 @@ export type Order = typeof orders.$inferSelect
 export type NewOrder = typeof orders.$inferInsert
 export type OrderItem = typeof orderItems.$inferSelect
 export type NewOrderItem = typeof orderItems.$inferInsert
+export type OrderItemBundleSubstitution =
+  typeof orderItemBundleSubstitutions.$inferSelect
+export type NewOrderItemBundleSubstitution =
+  typeof orderItemBundleSubstitutions.$inferInsert
 export type OrderLineItemProgressEvent =
   typeof orderLineItemProgressEvents.$inferSelect
 export type NewOrderLineItemProgressEvent =

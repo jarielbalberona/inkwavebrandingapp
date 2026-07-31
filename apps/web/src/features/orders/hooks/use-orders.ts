@@ -10,15 +10,22 @@ import {
   getOrderInvoice,
   listOrders,
   listProgressEvents,
+  substituteOrderItemBundle,
   updateOrder,
   updateOrderPriorities,
   type CreateOrderPayload,
   type CreateProgressEventPayload,
   type Order,
   type OrderStatus,
+  type SubstituteOrderItemBundlePayload,
   type UpdateOrderPayload,
   type UpdateOrderPrioritiesPayload,
 } from "@/features/orders/api/orders-client"
+import {
+  inventoryBalancesQueryKey,
+  inventoryItemDetailQueryKey,
+  inventoryMovementsQueryKey,
+} from "@/features/inventory/hooks/use-inventory"
 
 export const ordersQueryKey = ["orders"] as const
 export const orderProgressEventsQueryKey = [
@@ -115,6 +122,34 @@ export function useUpdateOrderMutation() {
     }) => updateOrder(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey })
+    },
+  })
+}
+
+export function useSubstituteOrderItemBundleMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      orderLineItemId,
+      payload,
+    }: {
+      orderLineItemId: string
+      payload: SubstituteOrderItemBundlePayload
+    }) => substituteOrderItemBundle(orderLineItemId, payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ordersQueryKey }),
+        queryClient.invalidateQueries({
+          queryKey: inventoryBalancesQueryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: inventoryMovementsQueryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: inventoryItemDetailQueryKey,
+        }),
+      ])
     },
   })
 }

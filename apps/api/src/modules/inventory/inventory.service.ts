@@ -54,6 +54,29 @@ export class InventoryAdjustmentOutInsufficientStockError extends Error {
   }
 }
 
+export class InventoryReservationStateMismatchError extends Error {
+  readonly statusCode = 409
+
+  constructor() {
+    super(
+      "The order line reservation history does not match its current bundle. Review the inventory ledger before substituting it."
+    )
+  }
+}
+
+export type BundleReservationComponent =
+  | { itemType: "cup"; cupId: string; quantity: number; lidId?: undefined }
+  | { itemType: "lid"; lidId: string; quantity: number; cupId?: undefined }
+
+export interface SubstituteOrderItemReservationsInput {
+  orderId: string
+  orderItemId: string
+  createdByUserId?: string
+  substitutionId: string
+  sourceItems: BundleReservationComponent[]
+  targetItems: BundleReservationComponent[]
+}
+
 export class InventoryService {
   constructor(
     private readonly inventoryRepository: InventoryRepository,
@@ -190,6 +213,84 @@ export class InventoryService {
     )
   }
 
+  async substituteOrderItemReservations(
+    input: SubstituteOrderItemReservationsInput,
+    options: { useExistingTransaction?: boolean } = {}
+  ) {
+    if (options.useExistingTransaction) {
+      return this.substituteOrderItemReservationsWithRepository(
+        input,
+        this.inventoryRepository
+      )
+    }
+
+    return this.inventoryRepository.transaction((repository) =>
+      this.substituteOrderItemReservationsWithRepository(input, repository)
+    )
+  }
+
+  private async substituteOrderItemReservationsWithRepository(
+    input: SubstituteOrderItemReservationsInput,
+    repository: InventoryRepository
+  ) {
+    const outstanding = await repository.getOutstandingReservationsForOrderItem(
+      input.orderItemId
+    )
+
+    if (!reservationComponentsMatch(outstanding, input.sourceItems)) {
+      throw new InventoryReservationStateMismatchError()
+    }
+
+    for (const item of input.targetItems) {
+      const reference = toBundleReservationReference(item)
+      const balance = await repository.getBalanceByItem(reference)
+
+      if (!balance) {
+        throw new InventoryBalanceItemNotFoundError(reference.itemType)
+      }
+
+      await this.assertTrackedItemIsActive(reference)
+    }
+
+    const movements = []
+
+    for (const item of input.sourceItems) {
+      movements.push(
+        await repository.appendMovement({
+          itemType: item.itemType,
+          cupId: item.cupId,
+          lidId: item.lidId,
+          movementType: "release_reservation",
+          quantity: item.quantity,
+          orderId: input.orderId,
+          orderItemId: input.orderItemId,
+          note: "Released for product bundle substitution",
+          reference: input.substitutionId,
+          createdByUserId: input.createdByUserId,
+        })
+      )
+    }
+
+    for (const item of input.targetItems) {
+      movements.push(
+        await repository.appendMovement({
+          itemType: item.itemType,
+          cupId: item.cupId,
+          lidId: item.lidId,
+          movementType: "reserve",
+          quantity: item.quantity,
+          orderId: input.orderId,
+          orderItemId: input.orderItemId,
+          note: "Reserved replacement product bundle stock",
+          reference: input.substitutionId,
+          createdByUserId: input.createdByUserId,
+        })
+      )
+    }
+
+    return movements
+  }
+
   private async reserveOrderItemsWithRepository(
     input: ReserveOrderItemsInput,
     repository: InventoryRepository
@@ -287,4 +388,41 @@ function toInventoryItemKey(reference: InventoryItemReference): string {
   return reference.itemType === "cup"
     ? `cup:${reference.cupId}`
     : `lid:${reference.lidId}`
+}
+
+function toBundleReservationReference(
+  item: BundleReservationComponent
+): InventoryItemReference {
+  return item.itemType === "cup"
+    ? { itemType: "cup", cupId: item.cupId }
+    : { itemType: "lid", lidId: item.lidId }
+}
+
+function reservationComponentsMatch(
+  actual: BundleReservationComponent[],
+  expected: BundleReservationComponent[]
+): boolean {
+  const actualByKey = aggregateReservationComponents(actual)
+  const expectedByKey = aggregateReservationComponents(expected)
+
+  if (actualByKey.size !== expectedByKey.size) {
+    return false
+  }
+
+  return [...expectedByKey].every(
+    ([key, quantity]) => actualByKey.get(key) === quantity
+  )
+}
+
+function aggregateReservationComponents(
+  components: BundleReservationComponent[]
+): Map<string, number> {
+  const quantities = new Map<string, number>()
+
+  for (const component of components) {
+    const key = toInventoryItemKey(toBundleReservationReference(component))
+    quantities.set(key, (quantities.get(key) ?? 0) + component.quantity)
+  }
+
+  return quantities
 }
