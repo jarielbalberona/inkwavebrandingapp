@@ -40,7 +40,7 @@ const orderCupSchema = z.object({
   brand: z.string(),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   size: z.string(),
-  color: z.enum(["transparent", "black", "white", "kraft"]),
+  color: z.enum(["transparent", "black", "white", "kraft", "blue", "grey", "green", "red", "teal"]),
 })
 
 const orderLidSchema = z.object({

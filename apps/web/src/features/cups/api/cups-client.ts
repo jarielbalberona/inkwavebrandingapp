@@ -9,7 +9,7 @@ export const cupSchema = z.object({
   brand: z.enum(["dabba", "grecoopack", "brand_1", "other_supplier"]),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   size: z.enum(["6.5oz", "8oz", "12oz", "16oz", "20oz", "22oz"]),
-  color: z.enum(["transparent", "black", "white", "kraft"]),
+  color: z.enum(["transparent", "black", "white", "kraft", "blue", "grey", "green", "red", "teal"]),
   min_stock: z.number(),
   cost_price: z.string().optional(),
   default_sell_price: z.string().optional(),
@@ -39,7 +39,7 @@ export interface CupPayload {
   brand: "dabba" | "grecoopack" | "brand_1" | "other_supplier"
   diameter: "80mm" | "90mm" | "95mm" | "98mm"
   size: "6.5oz" | "8oz" | "12oz" | "16oz" | "20oz" | "22oz"
-  color: "transparent" | "black" | "white" | "kraft"
+  color: "transparent" | "black" | "white" | "kraft" | "blue" | "grey" | "green" | "red" | "teal"
   min_stock: number
   cost_price: string
   default_sell_price: string

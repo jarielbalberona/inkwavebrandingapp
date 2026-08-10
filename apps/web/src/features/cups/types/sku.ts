@@ -14,6 +14,11 @@ const cupColorCodes = {
   black: "BLCK",
   white: "WHT",
   kraft: "KRFT",
+  blue: "BLUE",
+  grey: "GREY",
+  green: "GRN",
+  red: "RED",
+  teal: "TEAL",
 } as const
 
 export function normalizeSku(value: string): string {

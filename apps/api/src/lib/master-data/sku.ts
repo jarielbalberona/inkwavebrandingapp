@@ -15,6 +15,11 @@ const cupColorCodes: Record<CupContractShape["color"], string> = {
   black: "BLCK",
   white: "WHT",
   kraft: "KRFT",
+  blue: "BLUE",
+  grey: "GREY",
+  green: "GRN",
+  red: "RED",
+  teal: "TEAL",
 }
 
 const lidBrandCodes: Record<LidContractShape["brand"], string> = {

@@ -7,7 +7,7 @@ export const cupBrands = [
 ] as const
 export const cupDiameters = ["80mm", "90mm", "95mm", "98mm"] as const
 export const cupSizes = ["6.5oz", "8oz", "12oz", "16oz", "20oz", "22oz"] as const
-export const cupColors = ["transparent", "black", "white", "kraft"] as const
+export const cupColors = ["transparent", "black", "white", "kraft", "blue", "grey", "green", "red", "teal"] as const
 
 export type CupType = (typeof cupTypes)[number]
 export type CupBrand = (typeof cupBrands)[number]
@@ -39,7 +39,7 @@ export function getAllowedCupSizes(type: CupType): readonly CupSize[] {
 
 export function getAllowedCupColors(type: CupType, brand: CupBrand): readonly CupColor[] {
   if (type === "paper") {
-    return ["white", "black", "kraft"]
+    return ["white", "black", "kraft", "blue", "grey", "green", "red", "teal"]
   }
 
   if (brand === "dabba" || brand === "grecoopack") {

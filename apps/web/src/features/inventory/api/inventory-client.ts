@@ -18,7 +18,7 @@ const cupSchema = z.object({
   brand: z.string(),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   size: z.string(),
-  color: z.enum(["transparent", "black", "white", "kraft"]),
+  color: z.enum(["transparent", "black", "white", "kraft", "blue", "grey", "green", "red", "teal"]),
   min_stock: z.number(),
   is_active: z.boolean(),
   cost_price: z.string().optional(),

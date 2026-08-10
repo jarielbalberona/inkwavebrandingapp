@@ -29,6 +29,24 @@ test("createCupRequestSchema accepts a valid paper cup contract", () => {
   })
 })
 
+for (const color of ["blue", "grey", "green", "red", "teal"] as const) {
+  test(`createCupRequestSchema accepts the ${color} paper cup color`, () => {
+    const result = createCupRequestSchema.parse({
+      type: "paper",
+      brand: "other_supplier",
+      diameter: "90mm",
+      size: "16oz",
+      color,
+      min_stock: 0,
+      cost_price: "0",
+      default_sell_price: "0",
+      is_active: true,
+    })
+
+    assert.equal(result.color, color)
+  })
+}
+
 test("createCupRequestSchema rejects invalid plastic cup diameter for dabba", () => {
   assert.throws(
     () =>

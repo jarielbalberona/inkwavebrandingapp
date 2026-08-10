@@ -9,7 +9,7 @@ export const cupBrands = [
 ] as const
 export const cupDiameters = ["80mm", "90mm", "95mm", "98mm"] as const
 export const cupSizes = ["6.5oz", "8oz", "12oz", "16oz", "20oz", "22oz"] as const
-export const cupColors = ["transparent", "black", "white", "kraft"] as const
+export const cupColors = ["transparent", "black", "white", "kraft", "blue", "grey", "green", "red", "teal"] as const
 
 export const cupTypeSchema = z.enum(cupTypes)
 export const cupBrandSchema = z.enum(cupBrands)
@@ -55,7 +55,7 @@ export function getAllowedCupColors(
   brand: CupContractShape["brand"],
 ): readonly CupContractShape["color"][] {
   if (type === "paper") {
-    return ["white", "black", "kraft"]
+    return ["white", "black", "kraft", "blue", "grey", "green", "red", "teal"]
   }
 
   if (brand === "dabba" || brand === "grecoopack") {
@@ -107,7 +107,7 @@ export function addCupContractIssues(input: CupContractShape, context: z.Refinem
       path: ["color"],
       message:
         input.type === "paper"
-          ? "Paper cups must use white, black, or kraft."
+          ? "Paper cups must use white, black, kraft, blue, grey, green, red, or teal."
           : input.brand === "dabba" || input.brand === "grecoopack"
             ? "Dabba and Grecoopack plastic cups must be transparent."
             : "Brand 1 and other supplier plastic cups must be transparent or black.",

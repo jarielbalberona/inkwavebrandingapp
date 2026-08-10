@@ -21,7 +21,7 @@ export const cupBrandEnum = pgEnum("cup_brand", [
 ])
 export const cupDiameterEnum = pgEnum("cup_diameter", ["80mm", "90mm", "95mm", "98mm"])
 export const cupSizeEnum = pgEnum("cup_size", ["6.5oz", "8oz", "12oz", "16oz", "20oz", "22oz"])
-export const cupColorEnum = pgEnum("cup_color", ["transparent", "black", "white", "kraft"])
+export const cupColorEnum = pgEnum("cup_color", ["transparent", "black", "white", "kraft", "blue", "grey", "green", "red", "teal"])
 
 export const cups = pgTable(
   "cups",
@@ -87,7 +87,7 @@ export const cups = pgTable(
     check(
       "cups_type_color_contract",
       sql`(
-        (${table.type} = 'paper' AND ${table.color} IN ('white', 'black', 'kraft'))
+        (${table.type} = 'paper' AND ${table.color} IN ('white', 'black', 'kraft', 'blue', 'grey', 'green', 'red', 'teal'))
         OR
         (
           ${table.type} = 'plastic'
