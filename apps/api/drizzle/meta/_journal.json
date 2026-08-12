@@ -316,6 +316,13 @@
       "when": 1786521734000,
       "tag": "0045_update_paper_bowl_specs",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1786522219000,
+      "tag": "0046_set_220cc_paper_bowl_diameter",
+      "breakpoints": true
     }
   ]
 }
