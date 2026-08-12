@@ -309,6 +309,13 @@
       "when": 1786517245800,
       "tag": "0044_thick_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1786521734000,
+      "tag": "0045_update_paper_bowl_specs",
+      "breakpoints": true
     }
   ]
 }
