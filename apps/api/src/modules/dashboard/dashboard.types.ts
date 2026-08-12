@@ -12,6 +12,7 @@ export interface DashboardSummaryDto {
     tracked_items: number
     tracked_cup_count: number
     tracked_lid_count: number
+    tracked_paper_bowl_count: number
     low_stock_cup_count: number
   }
   orders: {

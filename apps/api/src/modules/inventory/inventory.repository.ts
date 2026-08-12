@@ -5,11 +5,13 @@ import {
   cups,
   inventoryMovements,
   lids,
+  paperBowls,
   orders,
   type Cup,
   type Customer,
   type InventoryMovement,
   type Lid,
+  type PaperBowl,
   type Order,
   type OrderItem,
   type User,
@@ -20,12 +22,13 @@ import type {
   ReserveOrderItemsInput,
 } from "./inventory.schemas.js"
 
-export type InventoryTrackedItemType = "cup" | "lid"
+export type InventoryTrackedItemType = "cup" | "lid" | "paper_bowl"
 
 export interface InventoryCupBalanceSummary {
   itemType: "cup"
   cup: Cup
   lid: null
+  paperBowl: null
   onHand: number
   reserved: number
 }
@@ -34,6 +37,16 @@ export interface InventoryLidBalanceSummary {
   itemType: "lid"
   cup: null
   lid: Lid
+  paperBowl: null
+  onHand: number
+  reserved: number
+}
+
+export interface InventoryPaperBowlBalanceSummary {
+  itemType: "paper_bowl"
+  cup: null
+  lid: null
+  paperBowl: PaperBowl
   onHand: number
   reserved: number
 }
@@ -41,17 +54,20 @@ export interface InventoryLidBalanceSummary {
 export type InventoryBalanceSummary =
   | InventoryCupBalanceSummary
   | InventoryLidBalanceSummary
+  | InventoryPaperBowlBalanceSummary
 
 export interface InventoryMovementWithRelations extends InventoryMovement {
   cup: Cup | null
   lid: Lid | null
+  paperBowl: PaperBowl | null
   createdByUser: User | null
   linkedOrder: InventoryMovementLinkedOrderSummary | null
 }
 
 export type InventoryItemReference =
-  | { itemType: "cup"; cupId: string; lidId?: undefined }
-  | { itemType: "lid"; cupId?: undefined; lidId: string }
+  | { itemType: "cup"; cupId: string; lidId?: undefined; paperBowlId?: undefined }
+  | { itemType: "lid"; cupId?: undefined; lidId: string; paperBowlId?: undefined }
+  | { itemType: "paper_bowl"; cupId?: undefined; lidId?: undefined; paperBowlId: string }
 
 export type OutstandingOrderItemReservation = InventoryItemReference & {
   quantity: number
@@ -103,6 +119,10 @@ export class InventoryRepository {
       return this.getBalanceByCupId(reference.cupId)
     }
 
+    if (reference.itemType === "paper_bowl") {
+      return this.getBalanceByPaperBowlId(reference.paperBowlId)
+    }
+
     return this.getBalanceByLidId(reference.lidId)
   }
 
@@ -114,6 +134,7 @@ export class InventoryRepository {
         itemType: inventoryMovements.itemType,
         cupId: inventoryMovements.cupId,
         lidId: inventoryMovements.lidId,
+        paperBowlId: inventoryMovements.paperBowlId,
         quantity: sql<number>`COALESCE(SUM(
           CASE
             WHEN ${inventoryMovements.movementType} = 'reserve' THEN ${inventoryMovements.quantity}
@@ -127,7 +148,8 @@ export class InventoryRepository {
       .groupBy(
         inventoryMovements.itemType,
         inventoryMovements.cupId,
-        inventoryMovements.lidId
+        inventoryMovements.lidId,
+        inventoryMovements.paperBowlId
       )
 
     const reservations: OutstandingOrderItemReservation[] = []
@@ -154,6 +176,11 @@ export class InventoryRepository {
           lidId: row.lidId,
           quantity,
         })
+        continue
+      }
+
+      if (row.itemType === "paper_bowl" && row.paperBowlId) {
+        reservations.push({ itemType: "paper_bowl", paperBowlId: row.paperBowlId, quantity })
         continue
       }
 
@@ -206,6 +233,7 @@ export class InventoryRepository {
       itemType: "cup",
       cup: row.cup,
       lid: null,
+      paperBowl: null,
       onHand: Number(row.onHand),
       reserved: Number(row.reserved),
     }
@@ -254,9 +282,43 @@ export class InventoryRepository {
       itemType: "lid",
       cup: null,
       lid: row.lid,
+      paperBowl: null,
       onHand: Number(row.onHand),
       reserved: Number(row.reserved),
     }
+  }
+
+  async getBalanceByPaperBowlId(
+    paperBowlId: string
+  ): Promise<InventoryPaperBowlBalanceSummary | null> {
+    const rows = await this.db
+      .select({
+        paperBowl: paperBowls,
+        onHand: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.movementType} IN ('stock_in', 'adjustment_in') THEN ${inventoryMovements.quantity} WHEN ${inventoryMovements.movementType} IN ('consume', 'adjustment_out') THEN -${inventoryMovements.quantity} ELSE 0 END), 0)`,
+        reserved: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.movementType} = 'reserve' THEN ${inventoryMovements.quantity} WHEN ${inventoryMovements.movementType} IN ('release_reservation', 'consume') THEN -${inventoryMovements.quantity} ELSE 0 END), 0)`,
+      })
+      .from(paperBowls)
+      .leftJoin(
+        inventoryMovements,
+        and(
+          eq(inventoryMovements.itemType, "paper_bowl"),
+          eq(inventoryMovements.paperBowlId, paperBowls.id),
+          eq(paperBowls.id, paperBowlId)
+        )
+      )
+      .where(eq(paperBowls.id, paperBowlId))
+      .groupBy(paperBowls.id)
+    const row = rows[0]
+    return row
+      ? {
+          itemType: "paper_bowl",
+          cup: null,
+          lid: null,
+          paperBowl: row.paperBowl,
+          onHand: Number(row.onHand),
+          reserved: Number(row.reserved),
+        }
+      : null
   }
 
   async listBalances(options: {
@@ -301,6 +363,7 @@ export class InventoryRepository {
           itemType: "cup" as const,
           cup: row.cup,
           lid: null,
+          paperBowl: null,
           onHand: Number(row.onHand),
           reserved: Number(row.reserved),
         }))
@@ -343,6 +406,34 @@ export class InventoryRepository {
           itemType: "lid" as const,
           cup: null,
           lid: row.lid,
+          paperBowl: null,
+          onHand: Number(row.onHand),
+          reserved: Number(row.reserved),
+        }))
+      )
+    }
+
+    if (!options.itemType || options.itemType === "paper_bowl") {
+      const bowlRows = await this.db
+        .select({
+          paperBowl: paperBowls,
+          onHand: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.movementType} IN ('stock_in', 'adjustment_in') THEN ${inventoryMovements.quantity} WHEN ${inventoryMovements.movementType} IN ('consume', 'adjustment_out') THEN -${inventoryMovements.quantity} ELSE 0 END), 0)`,
+          reserved: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.movementType} = 'reserve' THEN ${inventoryMovements.quantity} WHEN ${inventoryMovements.movementType} IN ('release_reservation', 'consume') THEN -${inventoryMovements.quantity} ELSE 0 END), 0)`,
+        })
+        .from(paperBowls)
+        .leftJoin(
+          inventoryMovements,
+          and(eq(inventoryMovements.itemType, "paper_bowl"), eq(inventoryMovements.paperBowlId, paperBowls.id))
+        )
+        .where(options.includeInactive ? undefined : eq(paperBowls.isActive, true))
+        .groupBy(paperBowls.id)
+        .orderBy(asc(paperBowls.sku))
+      balances.push(
+        ...bowlRows.map((row) => ({
+          itemType: "paper_bowl" as const,
+          cup: null,
+          lid: null,
+          paperBowl: row.paperBowl,
           onHand: Number(row.onHand),
           reserved: Number(row.reserved),
         }))
@@ -361,6 +452,9 @@ export class InventoryRepository {
         : undefined,
       filters.cup_id ? eq(inventoryMovements.cupId, filters.cup_id) : undefined,
       filters.lid_id ? eq(inventoryMovements.lidId, filters.lid_id) : undefined,
+      filters.paper_bowl_id
+        ? eq(inventoryMovements.paperBowlId, filters.paper_bowl_id)
+        : undefined,
       filters.movement_type
         ? eq(inventoryMovements.movementType, filters.movement_type)
         : undefined,
@@ -371,6 +465,7 @@ export class InventoryRepository {
       with: {
         cup: true,
         lid: true,
+        paperBowl: true,
         createdByUser: true,
       },
       orderBy: [desc(inventoryMovements.createdAt)],
@@ -388,6 +483,7 @@ export class InventoryRepository {
       createdByUser: row.createdByUser ?? null,
       cup: row.cup ?? null,
       lid: row.lid ?? null,
+      paperBowl: row.paperBowl ?? null,
       linkedOrder: toLinkedOrderSummary(
         row,
         linkedOrdersById.get(row.orderId ?? "") ?? null
@@ -403,6 +499,10 @@ export class InventoryRepository {
         itemType: "cup",
         cupId: item.cupId!,
       }
+    }
+
+    if (item.itemType === "paper_bowl") {
+      return { itemType: "paper_bowl", paperBowlId: item.paperBowlId! }
     }
 
     return {

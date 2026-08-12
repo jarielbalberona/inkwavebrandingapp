@@ -12,6 +12,7 @@ import {
 } from "@/features/inventory/api/inventory-client"
 import { cupsQueryKey } from "@/features/cups/hooks/use-cups"
 import { lidsQueryKey } from "@/features/lids/hooks/use-lids"
+import { paperBowlsQueryKey } from "@/features/paper-bowls/hooks/use-paper-bowls"
 
 export const inventoryBalancesQueryKey = ["inventory", "balances"] as const
 export const inventoryMovementsQueryKey = ["inventory", "movements"] as const
@@ -62,6 +63,7 @@ export function useStockIntakeMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cupsQueryKey })
       await queryClient.invalidateQueries({ queryKey: lidsQueryKey })
+      await queryClient.invalidateQueries({ queryKey: paperBowlsQueryKey })
       await queryClient.invalidateQueries({
         queryKey: inventoryBalancesQueryKey,
       })
@@ -84,6 +86,7 @@ export function useInventoryAdjustmentMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: cupsQueryKey })
       await queryClient.invalidateQueries({ queryKey: lidsQueryKey })
+      await queryClient.invalidateQueries({ queryKey: paperBowlsQueryKey })
       await queryClient.invalidateQueries({
         queryKey: inventoryBalancesQueryKey,
       })

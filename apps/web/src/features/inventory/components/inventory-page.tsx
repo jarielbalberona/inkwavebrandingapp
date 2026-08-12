@@ -44,7 +44,11 @@ import {
 
 import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
-import type { InventoryBalance } from "@/features/inventory/api/inventory-client"
+import type {
+  InventoryAdjustmentPayload,
+  InventoryBalance,
+  StockIntakePayload,
+} from "@/features/inventory/api/inventory-client"
 import {
   useInventoryAdjustmentMutation,
   useInventoryBalancesQuery,
@@ -90,7 +94,7 @@ const emptyAdjustmentValues: AdjustmentFormValues = {
   note: "",
 }
 
-const inventoryTypeOptions = ["cup", "lid"] as const
+const inventoryTypeOptions = ["cup", "lid", "paper_bowl"] as const
 
 export function InventoryPage() {
   const currentUser = useCurrentUser()
@@ -169,23 +173,7 @@ export function InventoryPage() {
     setPageNotice(null)
 
     try {
-      await stockIntake.mutateAsync(
-        selectedBalance.item_type === "cup"
-          ? {
-              itemType: "cup",
-              cupId: selectedBalance.cup.id,
-              quantity: values.quantity,
-              note: values.note?.trim() || undefined,
-              reference: values.reference?.trim() || undefined,
-            }
-          : {
-              itemType: "lid",
-              lidId: selectedBalance.lid.id,
-              quantity: values.quantity,
-              note: values.note?.trim() || undefined,
-              reference: values.reference?.trim() || undefined,
-            },
-      )
+      await stockIntake.mutateAsync(toStockIntakePayload(selectedBalance, values))
 
       form.reset(emptyFormValues)
       setIsReceiveStockDialogOpen(false)
@@ -213,23 +201,7 @@ export function InventoryPage() {
 
     try {
       await inventoryAdjustment.mutateAsync(
-        selectedBalance.item_type === "cup"
-          ? {
-              itemType: "cup",
-              cupId: selectedBalance.cup.id,
-              movementType: values.movementType,
-              quantity: values.quantity,
-              note: values.note.trim(),
-              reference: values.reference?.trim() || undefined,
-            }
-          : {
-              itemType: "lid",
-              lidId: selectedBalance.lid.id,
-              movementType: values.movementType,
-              quantity: values.quantity,
-              note: values.note.trim(),
-              reference: values.reference?.trim() || undefined,
-            },
+        toInventoryAdjustmentPayload(selectedBalance, values),
       )
 
       adjustmentForm.reset(emptyAdjustmentValues)
@@ -286,7 +258,7 @@ export function InventoryPage() {
             <div className="grid gap-1">
               <CardTitle>Inventory Balances</CardTitle>
               <CardDescription>
-                Cups and lids now share the same movement-ledger model. Stock intake writes a real <code>stock_in</code> movement.
+                Cups, lids, and paper bowls share the same movement ledger. Stock intake writes a real <code>stock_in</code> movement.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -308,6 +280,13 @@ export function InventoryPage() {
                     <Button asChild type="button"  size="sm" variant="outline">
                       <Link to="/lids">
                         <PlusIcon className="size-4" /> Lid
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {canCreateCups ? (
+                    <Button asChild type="button" size="sm" variant="outline">
+                      <Link to="/products">
+                        <PlusIcon className="size-4" /> Paper bowl
                       </Link>
                     </Button>
                   ) : null}
@@ -340,7 +319,7 @@ export function InventoryPage() {
             <Label htmlFor="inventory-search">Find tracked items</Label>
             <Input
               id="inventory-search"
-              placeholder="Search cups or lids"
+              placeholder="Search cups, lids, or paper bowls"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -422,7 +401,7 @@ export function InventoryPage() {
                     {balance.available}
                   </TableCell>
                   <TableCell>
-                    {balance.item_type === "cup" ? balance.cup.min_stock : balance.lid.min_stock}
+                    {getInventoryMinStock(balance)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={stockStateVariant(balance)}>{stockStateLabel(balance)}</Badge>
@@ -840,6 +819,12 @@ function getInventoryFilterValue(
     return balance.cup.color
   }
 
+  if (balance.item_type === "paper_bowl") {
+    if (field === "brand") return balance.paper_bowl.supplier
+    if (field === "size") return balance.paper_bowl.size
+    return balance.paper_bowl.color
+  }
+
   if (field === "brand") {
     return balance.lid.brand
   }
@@ -852,17 +837,15 @@ function getInventoryFilterValue(
 }
 
 function formatInventoryItemLabel(balance: InventoryBalance): string {
-  if (balance.item_type === "cup") {
-    return balance.cup.sku
-  }
-
-  return balance.lid.sku
+  return formatInventoryItemPrimaryLabel(balance)
 }
 
 function formatInventoryItemPrimaryLabel(balance: InventoryBalance): string {
   if (balance.item_type === "cup") {
     return balance.cup.sku
   }
+
+  if (balance.item_type === "paper_bowl") return balance.paper_bowl.sku
 
   return balance.lid.sku
 }
@@ -872,11 +855,21 @@ function formatInventoryItemSecondaryLabel(balance: InventoryBalance): string {
     return `${balance.cup.type} · ${balance.cup.brand} · ${balance.cup.size} · ${balance.cup.diameter} · ${balance.cup.color}`
   }
 
+
+  if (balance.item_type === "paper_bowl") {
+    const diameter = balance.paper_bowl.diameter_mm
+      ? ` · ${balance.paper_bowl.diameter_mm}mm`
+      : ""
+    return `${balance.paper_bowl.name} · ${balance.paper_bowl.supplier}${diameter}`
+  }
+
   return `${balance.lid.type} · ${balance.lid.brand} · ${balance.lid.color}`
 }
 
 function isInventoryItemActive(balance: InventoryBalance): boolean {
-  return balance.item_type === "cup" ? balance.cup.is_active : balance.lid.is_active
+  if (balance.item_type === "cup") return balance.cup.is_active
+  if (balance.item_type === "lid") return balance.lid.is_active
+  return balance.paper_bowl.is_active
 }
 
 function stockStateLabel(balance: InventoryBalance): string {
@@ -884,11 +877,7 @@ function stockStateLabel(balance: InventoryBalance): string {
     return "Negative"
   }
 
-  if (balance.item_type === "cup" && balance.available <= balance.cup.min_stock) {
-    return "Low"
-  }
-
-  if (balance.item_type === "lid" && balance.available <= balance.lid.min_stock) {
+  if (balance.available <= getInventoryMinStock(balance)) {
     return "Low"
   }
 
@@ -900,11 +889,7 @@ function stockStateVariant(balance: InventoryBalance): "default" | "secondary" |
     return "destructive"
   }
 
-  if (balance.item_type === "cup" && balance.available <= balance.cup.min_stock) {
-    return "secondary"
-  }
-
-  if (balance.item_type === "lid" && balance.available <= balance.lid.min_stock) {
+  if (balance.available <= getInventoryMinStock(balance)) {
     return "secondary"
   }
 
@@ -916,5 +901,42 @@ function toInventoryItemKey(balance: InventoryBalance): string {
 }
 
 function toInventoryItemId(balance: InventoryBalance): string {
-  return balance.item_type === "cup" ? balance.cup.id : balance.lid.id
+  if (balance.item_type === "cup") return balance.cup.id
+  if (balance.item_type === "lid") return balance.lid.id
+  return balance.paper_bowl.id
+}
+
+function getInventoryMinStock(balance: InventoryBalance): number {
+  if (balance.item_type === "cup") return balance.cup.min_stock
+  if (balance.item_type === "lid") return balance.lid.min_stock
+  return balance.paper_bowl.min_stock
+}
+
+function toStockIntakePayload(
+  balance: InventoryBalance,
+  values: StockIntakeFormValues,
+): StockIntakePayload {
+  const details = {
+    quantity: values.quantity,
+    note: values.note?.trim() || undefined,
+    reference: values.reference?.trim() || undefined,
+  }
+  if (balance.item_type === "cup") return { itemType: "cup", cupId: balance.cup.id, ...details }
+  if (balance.item_type === "lid") return { itemType: "lid", lidId: balance.lid.id, ...details }
+  return { itemType: "paper_bowl", paperBowlId: balance.paper_bowl.id, ...details }
+}
+
+function toInventoryAdjustmentPayload(
+  balance: InventoryBalance,
+  values: AdjustmentFormValues,
+): InventoryAdjustmentPayload {
+  const details = {
+    movementType: values.movementType,
+    quantity: values.quantity,
+    note: values.note.trim(),
+    reference: values.reference?.trim() || undefined,
+  }
+  if (balance.item_type === "cup") return { itemType: "cup", cupId: balance.cup.id, ...details }
+  if (balance.item_type === "lid") return { itemType: "lid", lidId: balance.lid.id, ...details }
+  return { itemType: "paper_bowl", paperBowlId: balance.paper_bowl.id, ...details }
 }

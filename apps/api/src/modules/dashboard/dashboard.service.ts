@@ -14,6 +14,9 @@ export class DashboardService {
     ])
     const cupBalances = balances.filter((balance) => balance.itemType === "cup")
     const lidBalances = balances.filter((balance) => balance.itemType === "lid")
+    const paperBowlBalances = balances.filter(
+      (balance) => balance.itemType === "paper_bowl",
+    )
 
     const countsByStatus = new Map(orderRows.map((row) => [row.status, row.count]))
     const statuses = orderReportStatuses.map((status) => ({
@@ -26,6 +29,7 @@ export class DashboardService {
         tracked_items: balances.length,
         tracked_cup_count: cupBalances.length,
         tracked_lid_count: lidBalances.length,
+        tracked_paper_bowl_count: paperBowlBalances.length,
         low_stock_cup_count: cupBalances.filter(
           (balance) => balance.onHand - balance.reserved <= balance.cup.minStock,
         ).length,

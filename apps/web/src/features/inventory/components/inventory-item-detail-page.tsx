@@ -214,7 +214,11 @@ export function InventoryItemDetailPage({
 
 function InventoryBalanceBreakdown({ balance }: { balance: InventoryBalance }) {
   const minStock =
-    balance.item_type === "cup" ? balance.cup.min_stock : balance.lid.min_stock
+    balance.item_type === "cup"
+      ? balance.cup.min_stock
+      : balance.item_type === "lid"
+        ? balance.lid.min_stock
+        : balance.paper_bowl.min_stock
 
   return (
     <div className="grid gap-3 md:grid-cols-4">
@@ -359,7 +363,7 @@ function formatLinkedOrderLabel(order: {
 }
 
 function parseInventoryItemType(value: string): InventoryItemType | null {
-  if (value === "cup" || value === "lid") {
+  if (value === "cup" || value === "lid" || value === "paper_bowl") {
     return value
   }
 
@@ -367,12 +371,21 @@ function parseInventoryItemType(value: string): InventoryItemType | null {
 }
 
 function formatInventoryItemPrimaryLabel(balance: InventoryBalance): string {
-  return balance.item_type === "cup" ? balance.cup.sku : balance.lid.sku
+  if (balance.item_type === "cup") return balance.cup.sku
+  if (balance.item_type === "lid") return balance.lid.sku
+  return balance.paper_bowl.sku
 }
 
 function formatInventoryItemSecondaryLabel(balance: InventoryBalance): string {
   if (balance.item_type === "cup") {
     return `${balance.cup.brand} - ${balance.cup.size} - ${balance.cup.color}`
+  }
+
+  if (balance.item_type === "paper_bowl") {
+    const diameter = balance.paper_bowl.diameter_mm
+      ? ` - ${balance.paper_bowl.diameter_mm}mm`
+      : ""
+    return `${balance.paper_bowl.name} - ${balance.paper_bowl.supplier}${diameter}`
   }
 
   return `${balance.lid.type} - ${balance.lid.brand} - ${balance.lid.shape} - ${balance.lid.color}`

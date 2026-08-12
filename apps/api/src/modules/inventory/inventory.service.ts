@@ -2,6 +2,7 @@ import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { LidsRepository } from "../lids/lids.repository.js"
+import { PaperBowlsRepository } from "../paper-bowls/paper-bowls.repository.js"
 import {
   InventoryRepository,
   type InventoryItemReference,
@@ -25,7 +26,7 @@ import { toInventoryBalanceDto } from "./inventory.types.js"
 export class InventoryItemNotFoundError extends Error {
   readonly statusCode = 404
 
-  constructor(itemType: "cup" | "lid") {
+  constructor(itemType: "cup" | "lid" | "paper_bowl") {
     super(`${capitalizeInventoryItemType(itemType)} not found`)
   }
 }
@@ -33,7 +34,7 @@ export class InventoryItemNotFoundError extends Error {
 export class InventoryItemInactiveError extends Error {
   readonly statusCode = 409
 
-  constructor(itemType: "cup" | "lid") {
+  constructor(itemType: "cup" | "lid" | "paper_bowl") {
     super(`Cannot append inventory movement for an inactive ${itemType}`)
   }
 }
@@ -41,7 +42,7 @@ export class InventoryItemInactiveError extends Error {
 export class InventoryBalanceItemNotFoundError extends Error {
   readonly statusCode = 404
 
-  constructor(itemType: "cup" | "lid") {
+  constructor(itemType: "cup" | "lid" | "paper_bowl") {
     super(`${capitalizeInventoryItemType(itemType)} not found`)
   }
 }
@@ -65,8 +66,27 @@ export class InventoryReservationStateMismatchError extends Error {
 }
 
 export type BundleReservationComponent =
-  | { itemType: "cup"; cupId: string; quantity: number; lidId?: undefined }
-  | { itemType: "lid"; lidId: string; quantity: number; cupId?: undefined }
+  | {
+      itemType: "cup"
+      cupId: string
+      quantity: number
+      lidId?: undefined
+      paperBowlId?: undefined
+    }
+  | {
+      itemType: "lid"
+      lidId: string
+      quantity: number
+      cupId?: undefined
+      paperBowlId?: undefined
+    }
+  | {
+      itemType: "paper_bowl"
+      paperBowlId: string
+      quantity: number
+      cupId?: undefined
+      lidId?: undefined
+    }
 
 export interface SubstituteOrderItemReservationsInput {
   orderId: string
@@ -81,7 +101,8 @@ export class InventoryService {
   constructor(
     private readonly inventoryRepository: InventoryRepository,
     private readonly cupsRepository: CupsRepository,
-    private readonly lidsRepository: LidsRepository
+    private readonly lidsRepository: LidsRepository,
+    private readonly paperBowlsRepository?: PaperBowlsRepository
   ) {}
 
   async appendMovement(input: AppendInventoryMovementInput) {
@@ -100,6 +121,9 @@ export class InventoryService {
       itemType: input.itemType,
       cupId: input.cupId,
       lidId: input.lidId,
+      ...(input.itemType === "paper_bowl"
+        ? { paperBowlId: input.paperBowlId }
+        : {}),
       movementType: "stock_in",
       quantity: input.quantity,
       note: input.note,
@@ -144,7 +168,9 @@ export class InventoryService {
     const movements = await this.inventoryRepository.listMovements(
       reference.itemType === "cup"
         ? { item_type: "cup", cup_id: reference.cupId }
-        : { item_type: "lid", lid_id: reference.lidId }
+        : reference.itemType === "lid"
+          ? { item_type: "lid", lid_id: reference.lidId }
+          : { item_type: "paper_bowl", paper_bowl_id: reference.paperBowlId }
     )
 
     return {
@@ -187,6 +213,9 @@ export class InventoryService {
       itemType: parsedInput.itemType,
       cupId: parsedInput.cupId,
       lidId: parsedInput.lidId,
+      ...(parsedInput.itemType === "paper_bowl"
+        ? { paperBowlId: parsedInput.paperBowlId }
+        : {}),
       movementType: parsedInput.movementType,
       quantity: parsedInput.quantity,
       note: parsedInput.note,
@@ -260,6 +289,9 @@ export class InventoryService {
           itemType: item.itemType,
           cupId: item.cupId,
           lidId: item.lidId,
+          ...(item.itemType === "paper_bowl"
+            ? { paperBowlId: item.paperBowlId }
+            : {}),
           movementType: "release_reservation",
           quantity: item.quantity,
           orderId: input.orderId,
@@ -277,6 +309,9 @@ export class InventoryService {
           itemType: item.itemType,
           cupId: item.cupId,
           lidId: item.lidId,
+          ...(item.itemType === "paper_bowl"
+            ? { paperBowlId: item.paperBowlId }
+            : {}),
           movementType: "reserve",
           quantity: item.quantity,
           orderId: input.orderId,
@@ -321,6 +356,9 @@ export class InventoryService {
           itemType: item.itemType,
           cupId: item.cupId,
           lidId: item.lidId,
+          ...(item.itemType === "paper_bowl"
+            ? { paperBowlId: item.paperBowlId }
+            : {}),
           movementType: "reserve",
           quantity: item.quantity,
           orderId: input.orderId,
@@ -352,19 +390,36 @@ export class InventoryService {
       return
     }
 
-    const lid = await this.lidsRepository.findById(reference.lidId)
+    if (reference.itemType === "lid") {
+      const lid = await this.lidsRepository.findById(reference.lidId)
 
-    if (!lid) {
-      throw new InventoryItemNotFoundError("lid")
+      if (!lid) {
+        throw new InventoryItemNotFoundError("lid")
+      }
+
+      if (!lid.isActive) {
+        throw new InventoryItemInactiveError("lid")
+      }
+
+      return
     }
 
-    if (!lid.isActive) {
-      throw new InventoryItemInactiveError("lid")
+    const bowl = await this.paperBowlsRepository?.findById(reference.paperBowlId)
+
+    if (!bowl) {
+      throw new InventoryItemNotFoundError("paper_bowl")
+    }
+
+    if (!bowl.isActive) {
+      throw new InventoryItemInactiveError("paper_bowl")
     }
   }
 
   private toInventoryItemReference(
-    input: Pick<AppendInventoryMovementInput, "itemType" | "cupId" | "lidId">
+    input: Pick<
+      AppendInventoryMovementInput,
+      "itemType" | "cupId" | "lidId" | "paperBowlId"
+    >
   ): InventoryItemReference {
     if (input.itemType === "cup") {
       return {
@@ -373,29 +428,38 @@ export class InventoryService {
       }
     }
 
+    if (input.itemType === "lid") {
+      return {
+        itemType: "lid",
+        lidId: input.lidId!,
+      }
+    }
+
     return {
-      itemType: "lid",
-      lidId: input.lidId!,
+      itemType: "paper_bowl",
+      paperBowlId: input.paperBowlId!,
     }
   }
 }
 
-function capitalizeInventoryItemType(itemType: "cup" | "lid"): string {
-  return itemType.charAt(0).toUpperCase() + itemType.slice(1)
+function capitalizeInventoryItemType(itemType: "cup" | "lid" | "paper_bowl"): string {
+  return itemType === "paper_bowl"
+    ? "Paper bowl"
+    : itemType.charAt(0).toUpperCase() + itemType.slice(1)
 }
 
 function toInventoryItemKey(reference: InventoryItemReference): string {
-  return reference.itemType === "cup"
-    ? `cup:${reference.cupId}`
-    : `lid:${reference.lidId}`
+  if (reference.itemType === "cup") return `cup:${reference.cupId}`
+  if (reference.itemType === "lid") return `lid:${reference.lidId}`
+  return `paper_bowl:${reference.paperBowlId}`
 }
 
 function toBundleReservationReference(
   item: BundleReservationComponent
 ): InventoryItemReference {
-  return item.itemType === "cup"
-    ? { itemType: "cup", cupId: item.cupId }
-    : { itemType: "lid", lidId: item.lidId }
+  if (item.itemType === "cup") return { itemType: "cup", cupId: item.cupId }
+  if (item.itemType === "lid") return { itemType: "lid", lidId: item.lidId }
+  return { itemType: "paper_bowl", paperBowlId: item.paperBowlId }
 }
 
 function reservationComponentsMatch(

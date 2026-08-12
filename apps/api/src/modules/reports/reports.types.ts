@@ -4,13 +4,13 @@ import type { CommercialSalesReportItemType, CommercialSalesReportQuery, CupUsag
 import type { SalesCostVisibilityReportQuery } from "./reports.schemas.js"
 
 export interface InventoryReportItemDto {
-  item_type: "cup" | "lid"
+  item_type: "cup" | "lid" | "paper_bowl"
   item: {
     id: string
     sku: string
     type: string
     brand: string
-    diameter: string
+    diameter: string | null
     size_or_shape: string
     color: string
     min_stock: number | null
@@ -161,23 +161,46 @@ export function toInventoryReportItemDto(
     }
   }
 
+  if (balance.itemType === "lid") {
+    return {
+      item_type: "lid",
+      item: {
+        id: balance.lid.id,
+        sku: balance.lid.sku,
+        type: balance.lid.type,
+        brand: balance.lid.brand,
+        diameter: balance.lid.diameter,
+        size_or_shape: balance.lid.shape,
+        color: balance.lid.color,
+        min_stock: null,
+        is_active: balance.lid.isActive,
+      },
+      on_hand: balance.onHand,
+      reserved: balance.reserved,
+      available,
+      is_low_stock: false,
+    }
+  }
+
   return {
-    item_type: "lid",
+    item_type: "paper_bowl",
     item: {
-      id: balance.lid.id,
-      sku: balance.lid.sku,
-      type: balance.lid.type,
-      brand: balance.lid.brand,
-      diameter: balance.lid.diameter,
-      size_or_shape: balance.lid.shape,
-      color: balance.lid.color,
-      min_stock: null,
-      is_active: balance.lid.isActive,
+      id: balance.paperBowl.id,
+      sku: balance.paperBowl.sku,
+      type: "paper_bowl",
+      brand: balance.paperBowl.supplier,
+      diameter: balance.paperBowl.diameterMm
+        ? `${balance.paperBowl.diameterMm}mm`
+        : null,
+      size_or_shape: balance.paperBowl.size,
+      color: balance.paperBowl.color,
+      min_stock: balance.paperBowl.minStock,
+      is_active: balance.paperBowl.isActive,
     },
     on_hand: balance.onHand,
     reserved: balance.reserved,
     available,
-    is_low_stock: false,
+    is_low_stock: available <= balance.paperBowl.minStock,
   }
 }
 

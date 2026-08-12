@@ -11,6 +11,7 @@ import {
 
 import { cups } from "./cups.js"
 import { lids } from "./lids.js"
+import { paperBowls } from "./paper-bowls.js"
 import { users } from "./users.js"
 
 export const inventoryMovementTypeEnum = pgEnum("inventory_movement_type", [
@@ -22,10 +23,7 @@ export const inventoryMovementTypeEnum = pgEnum("inventory_movement_type", [
   "adjustment_out",
 ])
 
-export const inventoryItemTypeEnum = pgEnum("inventory_item_type", [
-  "cup",
-  "lid",
-])
+export const inventoryItemTypeEnum = pgEnum("inventory_item_type", ["cup", "lid", "paper_bowl"])
 
 export const inventoryMovements = pgTable(
   "inventory_movements",
@@ -34,6 +32,9 @@ export const inventoryMovements = pgTable(
     itemType: inventoryItemTypeEnum("item_type").notNull(),
     cupId: uuid("cup_id").references(() => cups.id, { onDelete: "restrict" }),
     lidId: uuid("lid_id").references(() => lids.id, { onDelete: "restrict" }),
+    paperBowlId: uuid("paper_bowl_id").references(() => paperBowls.id, {
+      onDelete: "restrict",
+    }),
     movementType: inventoryMovementTypeEnum("movement_type").notNull(),
     quantity: integer("quantity").notNull(),
     orderId: uuid("order_id"),
@@ -50,17 +51,21 @@ export const inventoryMovements = pgTable(
     check(
       "inventory_movements_exactly_one_item",
       sql`(
-        (${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL)
+        (${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL AND ${table.paperBowlId} IS NULL)
         OR
-        (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL)
+        (${table.cupId} IS NULL AND ${table.lidId} IS NOT NULL AND ${table.paperBowlId} IS NULL)
+        OR
+        (${table.cupId} IS NULL AND ${table.lidId} IS NULL AND ${table.paperBowlId} IS NOT NULL)
       )`,
     ),
     check(
       "inventory_movements_item_type_matches_reference",
       sql`(
-        (${table.itemType} = 'cup' AND ${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL)
+        (${table.itemType} = 'cup' AND ${table.cupId} IS NOT NULL AND ${table.lidId} IS NULL AND ${table.paperBowlId} IS NULL)
         OR
-        (${table.itemType} = 'lid' AND ${table.lidId} IS NOT NULL AND ${table.cupId} IS NULL)
+        (${table.itemType} = 'lid' AND ${table.lidId} IS NOT NULL AND ${table.cupId} IS NULL AND ${table.paperBowlId} IS NULL)
+        OR
+        (${table.itemType} = 'paper_bowl' AND ${table.paperBowlId} IS NOT NULL AND ${table.cupId} IS NULL AND ${table.lidId} IS NULL)
       )`,
     ),
   ],
@@ -74,6 +79,10 @@ export const inventoryMovementsRelations = relations(inventoryMovements, ({ one 
   lid: one(lids, {
     fields: [inventoryMovements.lidId],
     references: [lids.id],
+  }),
+  paperBowl: one(paperBowls, {
+    fields: [inventoryMovements.paperBowlId],
+    references: [paperBowls.id],
   }),
   createdByUser: one(users, {
     fields: [inventoryMovements.createdByUserId],

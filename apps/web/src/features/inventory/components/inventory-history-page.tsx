@@ -170,12 +170,16 @@ export function InventoryHistoryPage() {
                     <span className="font-medium">
                       {movement.item_type === "cup"
                         ? movement.cup.sku
-                        : movement.lid.sku}
+                        : movement.item_type === "lid"
+                          ? movement.lid.sku
+                          : movement.paper_bowl.sku}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {movement.item_type === "cup"
                         ? `${movement.cup.brand} · ${movement.cup.size}`
-                        : `${movement.lid.type} · ${movement.lid.brand} · ${movement.lid.color}`}
+                        : movement.item_type === "lid"
+                          ? `${movement.lid.type} · ${movement.lid.brand} · ${movement.lid.color}`
+                          : movement.paper_bowl.name}
                     </span>
                   </div>
                 </TableCell>

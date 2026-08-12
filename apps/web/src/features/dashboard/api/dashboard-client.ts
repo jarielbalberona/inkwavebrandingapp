@@ -20,6 +20,7 @@ const dashboardSummarySchema = z.object({
     tracked_items: z.number(),
     tracked_cup_count: z.number(),
     tracked_lid_count: z.number(),
+    tracked_paper_bowl_count: z.number(),
     low_stock_cup_count: z.number(),
   }),
   orders: z.object({

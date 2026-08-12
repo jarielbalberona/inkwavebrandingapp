@@ -1,6 +1,7 @@
 import type { SafeUser } from "../auth/auth.schemas.js"
 import { toCupDto, type CupDto } from "../cups/cups.types.js"
 import { toLidDto, type LidDto } from "../lids/lids.types.js"
+import { toPaperBowlDto } from "../paper-bowls/paper-bowls.types.js"
 import type { InventoryMovementWithRelations } from "./inventory.repository.js"
 
 type InventoryMovementLinkedOrderDto = {
@@ -32,6 +33,7 @@ export type InventoryMovementDto =
       created_at: string
       cup: CupDto
       lid: null
+      paper_bowl: null
       created_by: {
         id: string
         display_name: string | null
@@ -51,6 +53,27 @@ export type InventoryMovementDto =
       created_at: string
       cup: null
       lid: LidDto
+      paper_bowl: null
+      created_by: {
+        id: string
+        display_name: string | null
+        email: string
+      } | null
+    }
+  | {
+      id: string
+      item_type: "paper_bowl"
+      movement_type: InventoryMovementWithRelations["movementType"]
+      quantity: number
+      note: string | null
+      reference: string | null
+      order_id: string | null
+      order_item_id: string | null
+      linked_order: InventoryMovementLinkedOrderDto | null
+      created_at: string
+      cup: null
+      lid: null
+      paper_bowl: ReturnType<typeof toPaperBowlDto>
       created_by: {
         id: string
         display_name: string | null
@@ -89,15 +112,17 @@ export function toInventoryMovementDto(
       created_at: movement.createdAt.toISOString(),
       cup: toCupDto(movement.cup, user),
       lid: null,
+      paper_bowl: null,
       created_by: createdBy,
     }
   }
 
-  if (!movement.lid) {
+  if (movement.itemType === "lid") {
+    if (!movement.lid) {
     throw new Error("Lid inventory movement is missing lid relation")
-  }
+    }
 
-  return {
+    return {
     id: movement.id,
     item_type: "lid",
     movement_type: movement.movementType,
@@ -110,6 +135,29 @@ export function toInventoryMovementDto(
     created_at: movement.createdAt.toISOString(),
     cup: null,
     lid: toLidDto(movement.lid, user),
+    paper_bowl: null,
+    created_by: createdBy,
+    }
+  }
+
+  if (!movement.paperBowl) {
+    throw new Error("Paper bowl inventory movement is missing paper bowl relation")
+  }
+
+  return {
+    id: movement.id,
+    item_type: "paper_bowl",
+    movement_type: movement.movementType,
+    quantity: movement.quantity,
+    note: movement.note,
+    reference: movement.reference,
+    order_id: movement.orderId,
+    order_item_id: movement.orderItemId,
+    linked_order: linkedOrder,
+    created_at: movement.createdAt.toISOString(),
+    cup: null,
+    lid: null,
+    paper_bowl: toPaperBowlDto(movement.paperBowl, user),
     created_by: createdBy,
   }
 }

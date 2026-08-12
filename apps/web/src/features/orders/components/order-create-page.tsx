@@ -952,7 +952,9 @@ export function OrderCreatePage() {
         continue
       }
 
-      quantities.set(toTrackedItemKey("lid", balance.lid.id), balance.available)
+      if (balance.item_type === "lid") {
+        quantities.set(toTrackedItemKey("lid", balance.lid.id), balance.available)
+      }
     }
 
     return quantities

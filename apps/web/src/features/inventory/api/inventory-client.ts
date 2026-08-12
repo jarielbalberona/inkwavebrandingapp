@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { ApiClientError, api } from "@/lib/api"
+import { paperBowlSchema } from "@/features/paper-bowls/api/paper-bowls-client"
 
 const inventoryMovementTypeSchema = z.enum([
   "stock_in",
@@ -48,6 +49,7 @@ const inventoryBalanceSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("cup"),
     cup: cupSchema,
     lid: z.null(),
+    paper_bowl: z.null(),
     on_hand: z.number(),
     reserved: z.number(),
     available: z.number(),
@@ -56,6 +58,16 @@ const inventoryBalanceSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("lid"),
     cup: z.null(),
     lid: lidSchema,
+    paper_bowl: z.null(),
+    on_hand: z.number(),
+    reserved: z.number(),
+    available: z.number(),
+  }),
+  z.object({
+    item_type: z.literal("paper_bowl"),
+    cup: z.null(),
+    lid: z.null(),
+    paper_bowl: paperBowlSchema,
     on_hand: z.number(),
     reserved: z.number(),
     available: z.number(),
@@ -113,6 +125,7 @@ const inventoryMovementListItemSchema = z.discriminatedUnion("item_type", [
     created_at: z.string(),
     cup: cupSchema,
     lid: z.null(),
+    paper_bowl: z.null(),
     created_by: z
       .object({
         id: z.string().uuid(),
@@ -134,6 +147,29 @@ const inventoryMovementListItemSchema = z.discriminatedUnion("item_type", [
     created_at: z.string(),
     cup: z.null(),
     lid: lidSchema,
+    paper_bowl: z.null(),
+    created_by: z
+      .object({
+        id: z.string().uuid(),
+        display_name: z.string().nullable(),
+        email: z.string().email(),
+      })
+      .nullable(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    item_type: z.literal("paper_bowl"),
+    movement_type: inventoryMovementTypeSchema,
+    quantity: z.number().int().positive(),
+    note: z.string().nullable(),
+    reference: z.string().nullable(),
+    order_id: z.string().uuid().nullable(),
+    order_item_id: z.string().uuid().nullable(),
+    linked_order: linkedOrderSchema,
+    created_at: z.string(),
+    cup: z.null(),
+    lid: z.null(),
+    paper_bowl: paperBowlSchema,
     created_by: z
       .object({
         id: z.string().uuid(),
@@ -155,9 +191,10 @@ const inventoryItemDetailResponseSchema = z.object({
 
 const inventoryMovementSchema = z.object({
   id: z.string().uuid(),
-  itemType: z.enum(["cup", "lid"]),
+  itemType: z.enum(["cup", "lid", "paper_bowl"]),
   cupId: z.string().uuid().nullable(),
   lidId: z.string().uuid().nullable(),
+  paperBowlId: z.string().uuid().nullable(),
   movementType: inventoryMovementTypeSchema,
   quantity: z.number().int().positive(),
   orderId: z.string().uuid().nullable(),
@@ -205,6 +242,15 @@ export type StockIntakePayload =
       note?: string
       reference?: string
     }
+  | {
+      itemType: "paper_bowl"
+      cupId?: undefined
+      lidId?: undefined
+      paperBowlId: string
+      quantity: number
+      note?: string
+      reference?: string
+    }
 
 export type InventoryAdjustmentPayload =
   | {
@@ -220,6 +266,16 @@ export type InventoryAdjustmentPayload =
       itemType: "lid"
       cupId?: undefined
       lidId: string
+      movementType: "adjustment_in" | "adjustment_out"
+      quantity: number
+      note: string
+      reference?: string
+    }
+  | {
+      itemType: "paper_bowl"
+      cupId?: undefined
+      lidId?: undefined
+      paperBowlId: string
       movementType: "adjustment_in" | "adjustment_out"
       quantity: number
       note: string
@@ -261,6 +317,8 @@ export async function listInventoryMovements(filters: {
   if (filters.itemId && filters.itemType) {
     if (filters.itemType === "lid") {
       searchParams.set("lid_id", filters.itemId)
+    } else if (filters.itemType === "paper_bowl") {
+      searchParams.set("paper_bowl_id", filters.itemId)
     } else {
       searchParams.set("cup_id", filters.itemId)
     }
@@ -325,17 +383,13 @@ export async function createStockIntake(
 
       if (error.status === 404) {
         throw new Error(
-          payload.itemType === "cup"
-            ? "Selected cup no longer exists."
-            : "Selected lid no longer exists."
+          `Selected ${formatInventoryItemType(payload.itemType)} no longer exists.`
         )
       }
 
       if (error.status === 409) {
         throw new Error(
-          payload.itemType === "cup"
-            ? "Selected cup is inactive and cannot receive stock."
-            : "Selected lid is inactive and cannot receive stock."
+          `Selected ${formatInventoryItemType(payload.itemType)} is inactive and cannot receive stock.`
         )
       }
 
@@ -348,6 +402,10 @@ export async function createStockIntake(
 
     throw error
   }
+}
+
+function formatInventoryItemType(itemType: InventoryItemType): string {
+  return itemType === "paper_bowl" ? "paper bowl" : itemType
 }
 
 export async function createInventoryAdjustment(
@@ -370,9 +428,7 @@ export async function createInventoryAdjustment(
 
       if (error.status === 404) {
         throw new Error(
-          payload.itemType === "cup"
-            ? "Selected cup no longer exists."
-            : "Selected lid no longer exists."
+          `Selected ${formatInventoryItemType(payload.itemType)} no longer exists.`
         )
       }
 
@@ -384,9 +440,7 @@ export async function createInventoryAdjustment(
         }
 
         throw new Error(
-          payload.itemType === "cup"
-            ? "Selected cup is inactive and cannot be adjusted."
-            : "Selected lid is inactive and cannot be adjusted."
+          `Selected ${formatInventoryItemType(payload.itemType)} is inactive and cannot be adjusted.`
         )
       }
 

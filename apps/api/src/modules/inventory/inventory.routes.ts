@@ -10,6 +10,7 @@ import { AuthorizationError, sendForbidden } from "../auth/authorization.js"
 import { AuthService } from "../auth/auth.service.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { LidsRepository } from "../lids/lids.repository.js"
+import { PaperBowlsRepository } from "../paper-bowls/paper-bowls.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
 import {
   InventoryAdjustmentOutInsufficientStockError,
@@ -96,12 +97,14 @@ export async function handleInventoryRoute(
           itemId: itemDetailMatch[2],
         })
 
-        const detail = await service.getItemDetail(
+        const reference =
           params.itemType === "cup"
-            ? { itemType: "cup", cupId: params.itemId }
-            : { itemType: "lid", lidId: params.itemId },
-          user
-        )
+            ? ({ itemType: "cup", cupId: params.itemId } as const)
+            : params.itemType === "lid"
+              ? ({ itemType: "lid", lidId: params.itemId } as const)
+              : ({ itemType: "paper_bowl", paperBowlId: params.itemId } as const)
+
+        const detail = await service.getItemDetail(reference, user)
 
         sendJson(response, 200, detail)
       }
@@ -190,7 +193,8 @@ async function withAuthenticatedUser(
       new InventoryService(
         new InventoryRepository(getDatabaseClient()),
         new CupsRepository(getDatabaseClient()),
-        new LidsRepository(getDatabaseClient())
+        new LidsRepository(getDatabaseClient()),
+        new PaperBowlsRepository(getDatabaseClient())
       ),
       authContext.user
     )

@@ -63,7 +63,7 @@ export function DashboardPage() {
                 <MetricCard
                   label="Tracked items"
                   value={summary.inventory.tracked_items}
-                  description={`Inventory-tracked cups and lids. Cups: ${summary.inventory.tracked_cup_count.toLocaleString()} • Lids: ${summary.inventory.tracked_lid_count.toLocaleString()}.`}
+                  description={`Inventory-tracked products. Cups: ${summary.inventory.tracked_cup_count.toLocaleString()} • Lids: ${summary.inventory.tracked_lid_count.toLocaleString()} • Paper bowls: ${summary.inventory.tracked_paper_bowl_count.toLocaleString()}.`}
                 />
                 <MetricCard
                   label="Low-stock cups"

@@ -15,6 +15,7 @@ import { handleInvoicesRoute } from "./modules/invoices/invoices.routes.js"
 import { handleLidsRoute } from "./modules/lids/lids.routes.js"
 import { handleNonStockItemsRoute } from "./modules/non-stock-items/non-stock-items.routes.js"
 import { handleOrdersRoute } from "./modules/orders/orders.routes.js"
+import { handlePaperBowlsRoute } from "./modules/paper-bowls/paper-bowls.routes.js"
 import { handleProductBundlesRoute } from "./modules/product-bundles/product-bundles.routes.js"
 import { handleReportsRoute } from "./modules/reports/reports.routes.js"
 import { handleSellableProductPriceRulesRoute } from "./modules/sellable-product-price-rules/sellable-product-price-rules.routes.js"
@@ -76,6 +77,7 @@ export async function handleApiRequest(
     if (await handleInventoryRoute(request, response, { env })) return
     if (await handleLidsRoute(request, response, { env })) return
     if (await handleNonStockItemsRoute(request, response, { env })) return
+    if (await handlePaperBowlsRoute(request, response, { env })) return
     if (await handleProductBundlesRoute(request, response, { env })) return
     if (await handleSellableProductPriceRulesRoute(request, response, { env })) return
     if (await handleDashboardRoute(request, response, { env })) return

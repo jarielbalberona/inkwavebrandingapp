@@ -13,10 +13,11 @@ import {
 import { CupsPage } from "@/features/cups/components/cups-page"
 import { LidsPage } from "@/features/lids/components/lids-page"
 import { GeneralItemsPage } from "@/features/non-stock-items/components/general-items-page"
+import { PaperBowlsPage } from "@/features/paper-bowls/components/paper-bowls-page"
 import { ProductBundlesPage } from "@/features/product-bundles/components/product-bundles-page"
 import { SellableProductPriceRulesPage } from "@/features/sellable-product-price-rules/components/sellable-product-price-rules-page"
 
-type ProductTabValue = "cups" | "lids" | "general-items" | "bundles" | "pricing-rules"
+type ProductTabValue = "cups" | "paper-bowls" | "lids" | "general-items" | "bundles" | "pricing-rules"
 
 type ProductTab = {
   value: ProductTabValue
@@ -34,6 +35,7 @@ export function ProductsPage() {
       // inventory master data first, commercial bundle/pricing tabs after they land.
       if (hasPermission(currentUser.data, appPermissions.cupsView)) {
         tabs.push({ value: "cups", label: "Cups", content: <CupsPage /> })
+        tabs.push({ value: "paper-bowls", label: "Paper Bowls", content: <PaperBowlsPage /> })
       }
 
       if (hasPermission(currentUser.data, appPermissions.lidsView)) {
