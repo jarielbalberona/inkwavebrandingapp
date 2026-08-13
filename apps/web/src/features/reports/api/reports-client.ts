@@ -127,6 +127,7 @@ const commercialSalesItemTypeSchema = z.enum([
   "product_bundle",
   "cup",
   "lid",
+  "paper_bowl",
   "non_stock_item",
   "custom_charge",
 ])

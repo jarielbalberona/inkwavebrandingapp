@@ -5,6 +5,7 @@ import type {
   Cup,
   Lid,
   NonStockItem,
+  PaperBowl,
   ProductBundle,
 } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
@@ -12,7 +13,10 @@ import { assertPermission } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
 import { InventoryRepository } from "../inventory/inventory.repository.js"
-import { InventoryService } from "../inventory/inventory.service.js"
+import {
+  InventoryBalanceItemNotFoundError,
+  InventoryService,
+} from "../inventory/inventory.service.js"
 import { InvoicesRepository } from "../invoices/invoices.repository.js"
 import {
   assertInvoiceAllowsStructuralChanges,
@@ -22,6 +26,7 @@ import {
 } from "../invoices/invoices.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
+import { PaperBowlsRepository } from "../paper-bowls/paper-bowls.repository.js"
 import { ProductBundlesRepository } from "../product-bundles/product-bundles.repository.js"
 import { toProductBundleInventoryComponents } from "../product-bundles/product-bundles.composition.js"
 import { SellableProductPriceRulesRepository } from "../sellable-product-price-rules/sellable-product-price-rules.repository.js"
@@ -109,6 +114,7 @@ export interface OrderCreateLineItemErrorDetail {
   itemType:
     | "cup"
     | "lid"
+    | "paper_bowl"
     | "non_stock_item"
     | "custom_charge"
     | "product_bundle"
@@ -309,6 +315,13 @@ type ResolvedOrderLineItem =
     }
   | {
       requestLineItemIndex: number
+      itemType: "paper_bowl"
+      paperBowl: PaperBowl
+      quantity: number
+      notes?: string
+    }
+  | {
+      requestLineItemIndex: number
       itemType: "non_stock_item"
       nonStockItem: NonStockItem
       quantity: number
@@ -339,14 +352,15 @@ type UpdateOrderLineItemInput = NonNullable<
   UpdateOrderInput["line_items"]
 >[number]
 
-type OrderInventoryItemType = "cup" | "lid"
-type OrderTrackedLineItemType = "cup" | "lid" | "product_bundle"
+type OrderInventoryItemType = "cup" | "lid" | "paper_bowl"
+type OrderTrackedLineItemType = "cup" | "lid" | "paper_bowl" | "product_bundle"
 type OrderProgressComponentItemType = "cup" | "lid"
 
 interface InventoryComponentReservation {
   itemType: OrderInventoryItemType
   cupId?: string
   lidId?: string
+  paperBowlId?: string
   quantity: number
 }
 
@@ -364,6 +378,7 @@ async function resolveOrderLineItems(
     nonStockItemsRepository: NonStockItemsRepository
     productBundlesRepository: ProductBundlesRepository
     sellableProductPriceRulesRepository: SellableProductPriceRulesRepository
+    paperBowlsRepository?: PaperBowlsRepository
     user: SafeUser
   }
 ): Promise<ResolvedOrderLineItem[]> {
@@ -459,6 +474,54 @@ async function resolveOrderLineItems(
         requestLineItemIndex: index,
         itemType: "lid",
         lid,
+        quantity: item.quantity,
+        notes: item.notes,
+      })
+      continue
+    }
+
+    if (item.item_type === "paper_bowl") {
+      const paperBowl = await dependencies.paperBowlsRepository?.findById(
+        item.paper_bowl_id
+      )
+
+      if (!paperBowl) {
+        throw new OrderCreateValidationError(
+          "Some order line items are invalid",
+          404,
+          [
+            {
+              lineItemIndex: index,
+              itemType: "paper_bowl",
+              itemId: item.paper_bowl_id,
+              field: "item_id",
+              message: `Line item ${index + 1} references a paper bowl that no longer exists.`,
+            },
+          ]
+        )
+      }
+
+      if (!paperBowl.isActive) {
+        throw new OrderCreateValidationError(
+          "Some order line items are invalid",
+          409,
+          [
+            {
+              lineItemIndex: index,
+              itemType: "paper_bowl",
+              itemId: item.paper_bowl_id,
+              field: "item_id",
+              itemLabel: paperBowl.sku,
+              message: `Line item ${index + 1} uses inactive paper bowl ${paperBowl.sku}.`,
+            },
+          ]
+        )
+      }
+
+      resolvedItems.push({
+        requestLineItemIndex: index,
+        itemType: "paper_bowl",
+        paperBowl,
         quantity: item.quantity,
         notes: item.notes,
       })
@@ -771,7 +834,8 @@ export class OrdersService {
     private readonly sellableProductPriceRulesRepository: SellableProductPriceRulesRepository,
     private readonly createInventoryService: (
       db: DatabaseClient
-    ) => InventoryService
+    ) => InventoryService,
+    private readonly paperBowlsRepository?: PaperBowlsRepository
   ) {}
 
   async list(query: OrderListQuery, user: SafeUser): Promise<OrderDto[]> {
@@ -1012,6 +1076,7 @@ export class OrdersService {
       productBundlesRepository: this.productBundlesRepository,
       sellableProductPriceRulesRepository:
         this.sellableProductPriceRulesRepository,
+      paperBowlsRepository: this.paperBowlsRepository,
       user,
     })
 
@@ -1275,6 +1340,66 @@ export class OrdersService {
           }
         }
 
+        if (
+          orderItem.itemType === "paper_bowl" &&
+          parsedInput.stage === "printed"
+        ) {
+          const balance = await inventoryRepository.getBalanceByPaperBowlId(
+            orderItem.paperBowlId!
+          )
+
+          if (!balance) {
+            throw new InventoryBalanceItemNotFoundError("paper_bowl")
+          }
+
+          if (balance.onHand < parsedInput.quantity) {
+            throw new OrderPrintedQuantityInsufficientStockError()
+          }
+
+          const lineItemReservedRemaining = Math.max(
+            orderItem.quantity - currentTotals.total_printed,
+            0
+          )
+          const reservedQuantityToConsume = Math.min(
+            lineItemReservedRemaining,
+            parsedInput.quantity
+          )
+          const overrunQuantityToDeduct =
+            parsedInput.quantity - reservedQuantityToConsume
+
+          if (balance.reserved < reservedQuantityToConsume) {
+            throw new OrderPrintedQuantityNotReservedError()
+          }
+
+          if (reservedQuantityToConsume > 0) {
+            await inventoryRepository.appendMovement({
+              itemType: "paper_bowl",
+              paperBowlId: orderItem.paperBowlId!,
+              movementType: "consume",
+              quantity: reservedQuantityToConsume,
+              orderId: orderItem.orderId,
+              orderItemId: orderItem.id,
+              note: "Consumed reserved paper bowl stock by printed progress event",
+              reference: event.id,
+              createdByUserId: user.id,
+            })
+          }
+
+          if (overrunQuantityToDeduct > 0) {
+            await inventoryRepository.appendMovement({
+              itemType: "paper_bowl",
+              paperBowlId: orderItem.paperBowlId!,
+              movementType: "adjustment_out",
+              quantity: overrunQuantityToDeduct,
+              orderId: orderItem.orderId,
+              orderItemId: orderItem.id,
+              note: "Deducted printed paper bowl overrun outside reservation",
+              reference: event.id,
+              createdByUserId: user.id,
+            })
+          }
+        }
+
         if (orderItem.itemType === "lid" && parsedInput.stage === "released") {
           const balance = await inventoryRepository.getBalanceByLidId(
             orderItem.lidId!
@@ -1437,6 +1562,7 @@ export class OrdersService {
                 itemType: component.itemType,
                 cupId: component.cupId,
                 lidId: component.lidId,
+                paperBowlId: component.paperBowlId,
                 movementType: "release_reservation",
                 quantity: component.quantity,
                 orderId: order.id,
@@ -1557,6 +1683,7 @@ export class OrdersService {
               productBundlesRepository: new ProductBundlesRepository(db),
               sellableProductPriceRulesRepository:
                 new SellableProductPriceRulesRepository(db),
+              paperBowlsRepository: new PaperBowlsRepository(db),
               user,
             }
           )
@@ -1577,9 +1704,10 @@ export class OrdersService {
           const orderItemIdsToDelete: string[] = []
           const reservationAdjustments: Array<{
             action: "reserve" | "release"
-            itemType: "cup" | "lid"
+            itemType: "cup" | "lid" | "paper_bowl"
             cupId?: string
             lidId?: string
+            paperBowlId?: string
             orderItemId?: string
             quantity: number
             requestLineItemIndex: number
@@ -1773,6 +1901,10 @@ export class OrdersService {
                     return item.cupId === adjustment.cupId
                   }
 
+                  if (adjustment.itemType === "paper_bowl") {
+                    return item.paperBowlId === adjustment.paperBowlId
+                  }
+
                   return item.lidId === adjustment.lidId
                 })
 
@@ -1795,6 +1927,7 @@ export class OrdersService {
                         itemType: adjustment.itemType,
                         cupId: adjustment.cupId,
                         lidId: adjustment.lidId,
+                        paperBowlId: adjustment.paperBowlId,
                         quantity: adjustment.quantity,
                       },
                     ],
@@ -1808,6 +1941,7 @@ export class OrdersService {
                 itemType: adjustment.itemType,
                 cupId: adjustment.cupId,
                 lidId: adjustment.lidId,
+                paperBowlId: adjustment.paperBowlId,
                 movementType: "release_reservation",
                 quantity: adjustment.quantity,
                 orderId: refreshedOrder.id,
@@ -1955,6 +2089,7 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
       itemType: "cup" as const,
       cupId: item.cup.id,
       lidId: undefined,
+      paperBowlId: undefined,
       nonStockItemId: undefined,
       productBundleId: undefined,
       descriptionSnapshot: item.cup.sku,
@@ -1970,6 +2105,7 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
       itemType: "lid" as const,
       cupId: undefined,
       lidId: item.lid.id,
+      paperBowlId: undefined,
       nonStockItemId: undefined,
       productBundleId: undefined,
       descriptionSnapshot: buildLidDescriptionSnapshot(item.lid),
@@ -1980,11 +2116,28 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
     }
   }
 
+  if (item.itemType === "paper_bowl") {
+    return {
+      itemType: "paper_bowl" as const,
+      cupId: undefined,
+      lidId: undefined,
+      paperBowlId: item.paperBowl.id,
+      nonStockItemId: undefined,
+      productBundleId: undefined,
+      descriptionSnapshot: item.paperBowl.sku,
+      quantity: item.quantity,
+      unitCostPrice: item.paperBowl.costPrice,
+      unitSellPrice: item.paperBowl.defaultSellPrice,
+      notes: item.notes,
+    }
+  }
+
   if (item.itemType === "non_stock_item") {
     return {
       itemType: "non_stock_item" as const,
       cupId: undefined,
       lidId: undefined,
+      paperBowlId: undefined,
       nonStockItemId: item.nonStockItem.id,
       productBundleId: undefined,
       descriptionSnapshot: buildNonStockItemDescriptionSnapshot(
@@ -2002,6 +2155,7 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
       itemType: "product_bundle" as const,
       cupId: undefined,
       lidId: undefined,
+      paperBowlId: undefined,
       nonStockItemId: undefined,
       productBundleId: item.productBundle.id,
       descriptionSnapshot: buildProductBundleDescriptionSnapshot(
@@ -2018,6 +2172,7 @@ function toOrderItemInsert(item: ResolvedOrderLineItem) {
     itemType: "custom_charge" as const,
     cupId: undefined,
     lidId: undefined,
+    paperBowlId: undefined,
     nonStockItemId: undefined,
     productBundleId: undefined,
     descriptionSnapshot: item.descriptionSnapshot,
@@ -2039,6 +2194,7 @@ function buildReservationRequestsForResolvedItems(
     itemType: OrderInventoryItemType
     cupId?: string
     lidId?: string
+    paperBowlId?: string
     quantity: number
   }> = []
 
@@ -2070,6 +2226,7 @@ function buildReservationRequestsForResolvedItems(
         itemType: component.itemType,
         cupId: component.cupId,
         lidId: component.lidId,
+        paperBowlId: component.paperBowlId,
         quantity: component.quantity,
       }))
     )
@@ -2101,6 +2258,16 @@ function getReservationComponentsForResolvedItem(
     ]
   }
 
+  if (item.itemType === "paper_bowl") {
+    return [
+      {
+        itemType: "paper_bowl",
+        paperBowlId: item.paperBowl.id,
+        quantity: item.quantity,
+      },
+    ]
+  }
+
   if (item.itemType === "product_bundle") {
     return item.componentReservations
   }
@@ -2127,6 +2294,13 @@ function findMatchingCreatedOrderItem(
     if (resolvedItem.itemType === "lid") {
       return (
         orderItem.itemType === "lid" && orderItem.lidId === resolvedItem.lid.id
+      )
+    }
+
+    if (resolvedItem.itemType === "paper_bowl") {
+      return (
+        orderItem.itemType === "paper_bowl" &&
+        orderItem.paperBowlId === resolvedItem.paperBowl.id
       )
     }
 
@@ -2167,6 +2341,10 @@ function isSameOrderItemIdentity(
     return existingItem.lidId === nextItem.lidId
   }
 
+  if (existingItem.itemType === "paper_bowl") {
+    return existingItem.paperBowlId === nextItem.paperBowlId
+  }
+
   if (existingItem.itemType === "non_stock_item") {
     return existingItem.nonStockItemId === nextItem.nonStockItemId
   }
@@ -2191,7 +2369,9 @@ function getExistingTrackedItemProgress(
     item.progressEvents
   )
   const minimumAllowedQuantity =
-    item.itemType === "cup" || item.itemType === "product_bundle"
+    item.itemType === "cup" ||
+    item.itemType === "paper_bowl" ||
+    item.itemType === "product_bundle"
       ? Math.max(
           totals.total_printed,
           totals.total_qa_passed,
@@ -2207,7 +2387,9 @@ function getExistingTrackedItemProgress(
 
   return {
     hasProgress:
-      item.itemType === "cup" || item.itemType === "product_bundle"
+      item.itemType === "cup" ||
+      item.itemType === "paper_bowl" ||
+      item.itemType === "product_bundle"
         ? minimumAllowedQuantity > 0
         : minimumAllowedQuantity > 0,
     consumedQuantity:
@@ -2241,6 +2423,8 @@ function getPersistedItemReferenceId(
   if (item.itemType === "lid") {
     return item.lidId
   }
+
+  if (item.itemType === "paper_bowl") return item.paperBowlId
 
   if (item.itemType === "non_stock_item") {
     return item.nonStockItemId
@@ -2281,6 +2465,16 @@ function getReservationComponentsForExistingOrderItem(
     ]
   }
 
+  if (item.itemType === "paper_bowl") {
+    return [
+      {
+        itemType: "paper_bowl",
+        paperBowlId: item.paperBowlId ?? undefined,
+        quantity: nextQuantity,
+      },
+    ]
+  }
+
   if (item.itemType !== "product_bundle") {
     return []
   }
@@ -2310,9 +2504,10 @@ function getReservationComponentsForExistingOrderItem(
 function pushReservationAdjustmentsFromComponents(
   adjustments: Array<{
     action: "reserve" | "release"
-    itemType: "cup" | "lid"
+    itemType: "cup" | "lid" | "paper_bowl"
     cupId?: string
     lidId?: string
+    paperBowlId?: string
     orderItemId?: string
     quantity: number
     requestLineItemIndex: number
@@ -2332,6 +2527,7 @@ function pushReservationAdjustmentsFromComponents(
       itemType: component.itemType,
       cupId: component.cupId,
       lidId: component.lidId,
+      paperBowlId: component.paperBowlId,
       orderItemId,
       quantity: component.quantity,
       requestLineItemIndex,
@@ -2398,6 +2594,7 @@ function pushReservationDeltaAdjustments(
           itemType: component.itemType,
           cupId: component.cupId,
           lidId: component.lidId,
+          paperBowlId: component.paperBowlId,
           quantity: Math.abs(delta),
         },
       ],
@@ -2416,7 +2613,9 @@ function toReservationComponentQuantityMap(
     const key =
       component.itemType === "cup"
         ? `cup:${component.cupId ?? ""}`
-        : `lid:${component.lidId ?? ""}`
+        : component.itemType === "lid"
+          ? `lid:${component.lidId ?? ""}`
+          : `paper_bowl:${component.paperBowlId ?? ""}`
     const existing = byKey.get(key)
 
     byKey.set(key, {
@@ -2492,6 +2691,19 @@ function getCancellationReleaseComponents(
     const quantity = Math.max(item.quantity - totals.total_printed, 0)
     return quantity > 0
       ? [{ itemType: "cup", cupId: item.cupId ?? undefined, quantity }]
+      : []
+  }
+
+  if (item.itemType === "paper_bowl") {
+    const quantity = Math.max(item.quantity - totals.total_printed, 0)
+    return quantity > 0
+      ? [
+          {
+            itemType: "paper_bowl",
+            paperBowlId: item.paperBowlId ?? undefined,
+            quantity,
+          },
+        ]
       : []
   }
 
@@ -2581,7 +2793,10 @@ function isTrackedOrderItemType(
   itemType: string
 ): itemType is OrderTrackedLineItemType {
   return (
-    itemType === "cup" || itemType === "lid" || itemType === "product_bundle"
+    itemType === "cup" ||
+    itemType === "lid" ||
+    itemType === "paper_bowl" ||
+    itemType === "product_bundle"
   )
 }
 
@@ -2776,7 +2991,11 @@ function deriveLineItemStatus(
     return "completed"
   }
 
-  if (itemType === "cup" || componentItemType === "cup") {
+  if (
+    itemType === "cup" ||
+    itemType === "paper_bowl" ||
+    componentItemType === "cup"
+  ) {
     if (totals.total_released > 0) {
       return "released"
     }

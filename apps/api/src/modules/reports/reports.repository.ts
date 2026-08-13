@@ -30,7 +30,7 @@ export interface SalesCostVisibilityRow {
 }
 
 export interface CommercialSalesRow {
-  itemType: "product_bundle" | "cup" | "lid" | "non_stock_item" | "custom_charge"
+  itemType: "product_bundle" | "cup" | "lid" | "paper_bowl" | "non_stock_item" | "custom_charge"
   itemId: string | null
   descriptionSnapshot: string
   quantitySold: number
@@ -176,6 +176,7 @@ export class ReportsRepository {
       WHEN ${invoiceItems.itemType} = 'product_bundle' THEN ${orderItems.productBundleId}
       WHEN ${invoiceItems.itemType} = 'cup' THEN ${orderItems.cupId}
       WHEN ${invoiceItems.itemType} = 'lid' THEN ${orderItems.lidId}
+      WHEN ${invoiceItems.itemType} = 'paper_bowl' THEN ${orderItems.paperBowlId}
       WHEN ${invoiceItems.itemType} = 'non_stock_item' THEN ${orderItems.nonStockItemId}
       ELSE NULL
     END`

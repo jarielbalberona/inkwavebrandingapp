@@ -28,7 +28,7 @@ export interface InvoiceListItemDto {
 export interface InvoiceItemDto {
   id: string
   order_line_item_id: string
-  item_type: "cup" | "lid" | "non_stock_item" | "custom_charge" | "product_bundle"
+  item_type: "cup" | "lid" | "paper_bowl" | "non_stock_item" | "custom_charge" | "product_bundle"
   description_snapshot: string
   notes: string | null
   quantity: number

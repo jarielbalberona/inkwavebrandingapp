@@ -148,6 +148,212 @@ describe("inventory, order, and invoice integration", () => {
     ])
   })
 
+  it("creates paper bowl order lines and reserves the referenced bowl inventory", async () => {
+    const api = await getIntegrationRequest()
+    const adminCookie = await getAdminSessionCookie()
+    const customer = await seedCustomer()
+    const db = await getIntegrationDb()
+    const [paperBowl] = await db
+      .insert(schema.paperBowls)
+      .values({
+        sku: "INT-PB-WHITE-320CC",
+        size: "320cc",
+        color: "white",
+        diameterMm: 89,
+        costPrice: "4.16",
+        defaultSellPrice: "4.16",
+      })
+      .returning()
+
+    if (!paperBowl) {
+      throw new Error("Failed to seed paper bowl fixture")
+    }
+
+    const shortageOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [
+          {
+            item_type: "paper_bowl",
+            paper_bowl_id: paperBowl.id,
+            quantity: 4,
+          },
+        ],
+      })
+
+    expect(shortageOrderResponse.status).toBe(201)
+    const shortageBalancesResponse = await api
+      .get("/inventory/balances")
+      .query({ item_type: "paper_bowl" })
+      .set("Cookie", adminCookie)
+    expect(shortageBalancesResponse.body.balances[0]).toMatchObject({
+      on_hand: 0,
+      reserved: 4,
+      available: -4,
+    })
+
+    const cancelShortageOrderResponse = await api
+      .patch(`/orders/${shortageOrderResponse.body.order.id}/cancel`)
+      .set("Cookie", adminCookie)
+
+    expect(cancelShortageOrderResponse.status).toBe(200)
+    expect(cancelShortageOrderResponse.body.order.status).toBe("canceled")
+
+    const intakeResponse = await api
+      .post("/inventory/stock-intake")
+      .set("Cookie", adminCookie)
+      .send({
+        itemType: "paper_bowl",
+        paperBowlId: paperBowl.id,
+        quantity: 40,
+        reference: "INT-PAPER-BOWL-STOCK",
+      })
+
+    expect(intakeResponse.status).toBe(201)
+
+    const createOrderResponse = await api
+      .post("/orders")
+      .set("Cookie", adminCookie)
+      .send({
+        customer_id: customer.id,
+        line_items: [
+          {
+            item_type: "paper_bowl",
+            paper_bowl_id: paperBowl.id,
+            quantity: 12,
+          },
+        ],
+      })
+
+    expect(createOrderResponse.status).toBe(201)
+    expect(createOrderResponse.body.order.items[0]).toMatchObject({
+      item_type: "paper_bowl",
+      paper_bowl: {
+        id: paperBowl.id,
+        sku: paperBowl.sku,
+        name: "320cc White Paper Bowl",
+        diameter_mm: 89,
+      },
+      quantity: 12,
+      unit_sell_price: "4.16",
+    })
+
+    const balancesResponse = await api
+      .get("/inventory/balances")
+      .query({ item_type: "paper_bowl" })
+      .set("Cookie", adminCookie)
+
+    expect(balancesResponse.status).toBe(200)
+    expect(balancesResponse.body.balances).toContainEqual(
+      expect.objectContaining({
+        item_type: "paper_bowl",
+        paper_bowl: expect.objectContaining({ id: paperBowl.id }),
+        on_hand: 40,
+        reserved: 12,
+        available: 28,
+      })
+    )
+
+    const movements = await db.query.inventoryMovements.findMany({
+      where: eq(
+        schema.inventoryMovements.orderId,
+        createOrderResponse.body.order.id
+      ),
+    })
+
+    expect(movements).toHaveLength(1)
+    expect(movements[0]).toMatchObject({
+      itemType: "paper_bowl",
+      paperBowlId: paperBowl.id,
+      movementType: "reserve",
+      quantity: 12,
+    })
+
+    const updateOrderResponse = await api
+      .patch(`/orders/${createOrderResponse.body.order.id}`)
+      .set("Cookie", adminCookie)
+      .send({
+        line_items: [
+          {
+            id: createOrderResponse.body.order.items[0].id,
+            item_type: "paper_bowl",
+            paper_bowl_id: paperBowl.id,
+            quantity: 15,
+          },
+        ],
+      })
+
+    expect(updateOrderResponse.status).toBe(200)
+    expect(updateOrderResponse.body.order.items[0].quantity).toBe(15)
+
+    const invoiceResponse = await api
+      .get(`/orders/${createOrderResponse.body.order.id}/invoice`)
+      .set("Cookie", adminCookie)
+    expect(invoiceResponse.status).toBe(200)
+
+    const paymentResponse = await api
+      .post(`/invoices/${invoiceResponse.body.invoice.id}/payments`)
+      .set("Cookie", adminCookie)
+      .send({
+        amount: invoiceResponse.body.invoice.total_amount,
+        payment_date: "2026-08-13T09:00:00.000Z",
+      })
+    expect(paymentResponse.status).toBe(201)
+    expect(paymentResponse.body.invoice.status).toBe("paid")
+
+    const printedResponse = await api
+      .post(
+        `/order-line-items/${createOrderResponse.body.order.items[0].id}/progress-events`
+      )
+      .set("Cookie", adminCookie)
+      .send({
+        stage: "printed",
+        quantity: 5,
+        event_date: "2026-08-13T10:00:00.000Z",
+      })
+
+    expect(printedResponse.status).toBe(201)
+    expect(printedResponse.body.totals.total_printed).toBe(5)
+
+    const afterPrintBalancesResponse = await api
+      .get("/inventory/balances")
+      .query({ item_type: "paper_bowl" })
+      .set("Cookie", adminCookie)
+    const afterPrintBalance = afterPrintBalancesResponse.body.balances.find(
+      (balance: { paper_bowl?: { id: string } }) =>
+        balance.paper_bowl?.id === paperBowl.id
+    )
+
+    expect(afterPrintBalance).toMatchObject({
+      on_hand: 35,
+      reserved: 10,
+      available: 25,
+    })
+
+    const movementsAfterPrint = await db.query.inventoryMovements.findMany({
+      where: eq(
+        schema.inventoryMovements.orderId,
+        createOrderResponse.body.order.id
+      ),
+      orderBy: (inventoryMovements, { asc }) => [
+        asc(inventoryMovements.createdAt),
+      ],
+    })
+
+    expect(
+      movementsAfterPrint.map((movement) => ({
+        movementType: movement.movementType,
+        quantity: movement.quantity,
+      }))
+    ).toEqual([
+      { movementType: "reserve", quantity: 12 },
+      { movementType: "reserve", quantity: 3 },
+      { movementType: "consume", quantity: 5 },
+    ])
+  })
+
   it("substitutes a partially paid order bundle without changing its invoice snapshot", async () => {
     const api = await getIntegrationRequest()
     const adminCookie = await getAdminSessionCookie()

@@ -59,6 +59,8 @@ import type { Lid } from "@/features/lids/api/lids-client"
 import { useLidsQuery } from "@/features/lids/hooks/use-lids"
 import type { NonStockItem } from "@/features/non-stock-items/api/non-stock-items-client"
 import { useNonStockItemsQuery } from "@/features/non-stock-items/hooks/use-non-stock-items"
+import type { PaperBowl } from "@/features/paper-bowls/api/paper-bowls-client"
+import { usePaperBowlsQuery } from "@/features/paper-bowls/hooks/use-paper-bowls"
 import { CreateOrderError } from "@/features/orders/api/orders-client"
 import {
   useOrderInvoiceQuery,
@@ -81,6 +83,7 @@ const orderEditSchema = z.object({
             "product_bundle",
             "cup",
             "lid",
+            "paper_bowl",
             "non_stock_item",
             "custom_charge",
           ]),
@@ -128,7 +131,7 @@ const orderEditSchema = z.object({
 })
 
 type OrderEditValues = z.infer<typeof orderEditSchema>
-type SelectableOrderItem = ProductBundle | Cup | Lid | NonStockItem
+type SelectableOrderItem = ProductBundle | Cup | Lid | PaperBowl | NonStockItem
 
 const emptyLineItem: OrderEditValues["line_items"][number] = {
   item_type: "product_bundle",
@@ -163,6 +166,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
   const orderInvoiceQuery = useOrderInvoiceQuery(orderId, canViewInvoices)
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
+  const paperBowlsQuery = usePaperBowlsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
   const productBundlesQuery = useProductBundlesQuery()
   const updateOrderMutation = useUpdateOrderMutation()
@@ -176,6 +180,10 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
   const activeLids = useMemo(
     () => (lidsQuery.data ?? []).filter((lid) => lid.is_active),
     [lidsQuery.data]
+  )
+  const activePaperBowls = useMemo(
+    () => (paperBowlsQuery.data ?? []).filter((bowl) => bowl.is_active),
+    [paperBowlsQuery.data]
   )
   const activeNonStockItems = useMemo(
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
@@ -251,11 +259,13 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
             ? item.cup.id
             : item.item_type === "lid"
               ? item.lid.id
-              : item.item_type === "non_stock_item"
-                ? item.non_stock_item.id
-                : item.item_type === "product_bundle"
-                  ? item.product_bundle.id
-                  : undefined,
+              : item.item_type === "paper_bowl"
+                ? item.paper_bowl.id
+                : item.item_type === "non_stock_item"
+                  ? item.non_stock_item.id
+                  : item.item_type === "product_bundle"
+                    ? item.product_bundle.id
+                    : undefined,
         description_snapshot:
           item.item_type === "custom_charge"
             ? item.custom_charge.description_snapshot
@@ -327,26 +337,35 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                       quantity: item.quantity,
                       notes: item.notes?.trim() || undefined,
                     }
-                  : item.item_type === "non_stock_item"
+                  : item.item_type === "paper_bowl"
                     ? {
                         id: item.id,
-                        item_type: "non_stock_item" as const,
-                        non_stock_item_id: item.item_id!,
+                        item_type: "paper_bowl" as const,
+                        paper_bowl_id: item.item_id!,
                         quantity: item.quantity,
                         notes: item.notes?.trim() || undefined,
                       }
-                    : {
-                        id: item.id,
-                        item_type: "custom_charge" as const,
-                        description_snapshot: item.description_snapshot!.trim(),
-                        quantity: item.quantity,
-                        unit_sell_price: item.unit_sell_price!.toFixed(2),
-                        unit_cost_price:
-                          item.unit_cost_price === undefined
-                            ? undefined
-                            : item.unit_cost_price.toFixed(2),
-                        notes: item.notes?.trim() || undefined,
-                      }
+                    : item.item_type === "non_stock_item"
+                      ? {
+                          id: item.id,
+                          item_type: "non_stock_item" as const,
+                          non_stock_item_id: item.item_id!,
+                          quantity: item.quantity,
+                          notes: item.notes?.trim() || undefined,
+                        }
+                      : {
+                          id: item.id,
+                          item_type: "custom_charge" as const,
+                          description_snapshot:
+                            item.description_snapshot!.trim(),
+                          quantity: item.quantity,
+                          unit_sell_price: item.unit_sell_price!.toFixed(2),
+                          unit_cost_price:
+                            item.unit_cost_price === undefined
+                              ? undefined
+                              : item.unit_cost_price.toFixed(2),
+                          notes: item.notes?.trim() || undefined,
+                        }
           ),
         },
       })
@@ -512,10 +531,12 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                           fieldId={field.id}
                           activeCups={activeCups}
                           activeLids={activeLids}
+                          activePaperBowls={activePaperBowls}
                           activeNonStockItems={activeNonStockItems}
                           activeProductBundles={activeProductBundles}
                           cupsLoading={cupsQuery.isLoading}
                           lidsLoading={lidsQuery.isLoading}
+                          paperBowlsLoading={paperBowlsQuery.isLoading}
                           nonStockItemsLoading={nonStockItemsQuery.isLoading}
                           disabled={formLocked}
                           canManageCustomCharges={canManageCustomCharges}
@@ -574,6 +595,7 @@ export function OrderEditPage({ orderId }: { orderId: string }) {
                     updateOrderMutation.isPending ||
                     cupsQuery.isLoading ||
                     lidsQuery.isLoading ||
+                    paperBowlsQuery.isLoading ||
                     nonStockItemsQuery.isLoading ||
                     productBundlesQuery.isLoading
                   }
@@ -596,10 +618,12 @@ function OrderEditLineItemFields({
   fieldId,
   activeCups,
   activeLids,
+  activePaperBowls,
   activeNonStockItems,
   activeProductBundles,
   cupsLoading,
   lidsLoading,
+  paperBowlsLoading,
   nonStockItemsLoading,
   disabled,
   canManageCustomCharges,
@@ -608,10 +632,12 @@ function OrderEditLineItemFields({
   fieldId: string
   activeCups: Cup[]
   activeLids: Lid[]
+  activePaperBowls: PaperBowl[]
   activeNonStockItems: NonStockItem[]
   activeProductBundles: ProductBundle[]
   cupsLoading: boolean
   lidsLoading: boolean
+  paperBowlsLoading: boolean
   nonStockItemsLoading: boolean
   disabled: boolean
   canManageCustomCharges: boolean
@@ -629,7 +655,9 @@ function OrderEditLineItemFields({
         ? activeCups
         : itemType === "lid"
           ? activeLids
-          : activeNonStockItems
+          : itemType === "paper_bowl"
+            ? activePaperBowls
+            : activeNonStockItems
 
   return (
     <div className="grid gap-3">
@@ -667,6 +695,7 @@ function OrderEditLineItemFields({
                 <SelectItem value="product_bundle">Product Bundle</SelectItem>
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
+                <SelectItem value="paper_bowl">Paper Bowl</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
                 <SelectItem
                   value="custom_charge"
@@ -785,7 +814,9 @@ function OrderEditLineItemFields({
                       ? "Product bundle"
                       : itemType === "lid"
                         ? "Lid"
-                        : "General Item"}
+                        : itemType === "paper_bowl"
+                          ? "Paper bowl"
+                          : "General Item"}
                 </FormLabel>
                 <FormControl>
                   <Combobox<SelectableOrderItem>
@@ -819,9 +850,13 @@ function OrderEditLineItemFields({
                               ? lidsLoading
                                 ? "Loading lids..."
                                 : "Search lids"
-                              : nonStockItemsLoading
-                                ? "Loading general items..."
-                                : "Search general items"
+                              : itemType === "paper_bowl"
+                                ? paperBowlsLoading
+                                  ? "Loading paper bowls..."
+                                  : "Search paper bowls"
+                                : nonStockItemsLoading
+                                  ? "Loading general items..."
+                                  : "Search general items"
                       }
                       showClear
                       className="w-full min-w-0"
@@ -929,6 +964,10 @@ function formatSelectableOrderItemOption(
     return formatLidOption(item as Lid)
   }
 
+  if (itemType === "paper_bowl") {
+    return formatPaperBowlOption(item as PaperBowl)
+  }
+
   return formatNonStockItemOption(item as NonStockItem)
 }
 
@@ -939,6 +978,12 @@ function formatCupOption(cup: Cup): string {
 function formatLidOption(lid: Lid): string {
   const skuPart = lid.sku.trim() ? `${lid.sku.trim()} · ` : ""
   return `${skuPart}${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color}`
+}
+
+function formatPaperBowlOption(bowl: PaperBowl): string {
+  const diameter =
+    bowl.diameter_mm === null ? "diameter not set" : `${bowl.diameter_mm}mm`
+  return `${bowl.sku} · ${bowl.name} · ${diameter}`
 }
 
 function formatNonStockItemOption(item: NonStockItem): string {

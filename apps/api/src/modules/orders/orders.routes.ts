@@ -21,6 +21,7 @@ import {
 } from "../inventory/inventory.service.js"
 import { LidsRepository } from "../lids/lids.repository.js"
 import { NonStockItemsRepository } from "../non-stock-items/non-stock-items.repository.js"
+import { PaperBowlsRepository } from "../paper-bowls/paper-bowls.repository.js"
 import { ProductBundlesRepository } from "../product-bundles/product-bundles.repository.js"
 import { SellableProductPriceRulesRepository } from "../sellable-product-price-rules/sellable-product-price-rules.repository.js"
 import { UsersRepository } from "../users/users.repository.js"
@@ -310,8 +311,10 @@ async function withAuthenticatedUser(
           new InventoryService(
             new InventoryRepository(transactionDb),
             new CupsRepository(transactionDb),
-            new LidsRepository(transactionDb)
-          )
+            new LidsRepository(transactionDb),
+            new PaperBowlsRepository(transactionDb)
+          ),
+        new PaperBowlsRepository(db)
       ),
       authContext.user
     )

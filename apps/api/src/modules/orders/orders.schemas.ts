@@ -38,6 +38,12 @@ const createOrderLineItemSchema = z.discriminatedUnion("item_type", [
     notes: optionalText(500),
   }),
   z.object({
+    item_type: z.literal("paper_bowl"),
+    paper_bowl_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
     item_type: z.literal("non_stock_item"),
     non_stock_item_id: z.string().uuid(),
     quantity: z.number().int().positive(),
@@ -72,6 +78,13 @@ const updateOrderLineItemSchema = z.discriminatedUnion("item_type", [
     id: z.string().uuid().optional(),
     item_type: z.literal("lid"),
     lid_id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    notes: optionalText(500),
+  }),
+  z.object({
+    id: z.string().uuid().optional(),
+    item_type: z.literal("paper_bowl"),
+    paper_bowl_id: z.string().uuid(),
     quantity: z.number().int().positive(),
     notes: optionalText(500),
   }),

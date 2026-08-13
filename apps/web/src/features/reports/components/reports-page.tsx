@@ -792,6 +792,8 @@ function formatCommercialItemType(itemType: CommercialSalesReportItem["item_type
       return "Cup"
     case "lid":
       return "Lid"
+    case "paper_bowl":
+      return "Paper bowl"
   }
 }
 

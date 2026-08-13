@@ -21,6 +21,9 @@ import { OrdersRepository } from "../../modules/orders/orders.repository.js"
 import { OrdersService } from "../../modules/orders/orders.service.js"
 import { CupsRepository } from "../../modules/cups/cups.repository.js"
 import { LidsRepository } from "../../modules/lids/lids.repository.js"
+import { PaperBowlsRepository } from "../../modules/paper-bowls/paper-bowls.repository.js"
+import { ProductBundlesRepository } from "../../modules/product-bundles/product-bundles.repository.js"
+import { SellableProductPriceRulesRepository } from "../../modules/sellable-product-price-rules/sellable-product-price-rules.repository.js"
 import { hashPassword } from "../../modules/users/passwords.js"
 import { applySqlMigrations } from "../integration/migrations.js"
 
@@ -243,12 +246,16 @@ async function seedSmokeData(
     new CupsRepository(db),
     new LidsRepository(db),
     new NonStockItemsRepository(db),
+    new ProductBundlesRepository(db),
+    new SellableProductPriceRulesRepository(db),
     (transactionDb) =>
       new InventoryService(
         new InventoryRepository(transactionDb),
         new CupsRepository(transactionDb),
         new LidsRepository(transactionDb),
+        new PaperBowlsRepository(transactionDb),
       ),
+    new PaperBowlsRepository(db),
   )
 
   const invoicesService = new InvoicesService(

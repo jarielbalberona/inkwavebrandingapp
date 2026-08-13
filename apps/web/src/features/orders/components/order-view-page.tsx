@@ -904,6 +904,10 @@ function formatOrderItemLabel(item: Order["items"][number]): string {
     return item.lid.sku
   }
 
+  if (item.item_type === "paper_bowl") {
+    return item.paper_bowl.sku
+  }
+
   if (item.item_type === "custom_charge") {
     return item.description_snapshot
   }
@@ -922,6 +926,14 @@ function formatOrderItemDetails(item: Order["items"][number]): string {
 
   if (item.item_type === "lid") {
     return `${item.lid.type} · ${item.lid.brand} · ${item.lid.color} · ${item.description_snapshot}`
+  }
+
+  if (item.item_type === "paper_bowl") {
+    const diameter =
+      item.paper_bowl.diameter_mm === null
+        ? "diameter not set"
+        : `${item.paper_bowl.diameter_mm}mm`
+    return `${item.paper_bowl.name} · ${diameter}`
   }
 
   if (item.item_type === "custom_charge") {

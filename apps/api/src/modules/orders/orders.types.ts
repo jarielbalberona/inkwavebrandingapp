@@ -3,9 +3,11 @@ import type {
   Customer,
   Lid,
   NonStockItem,
+  PaperBowl,
   ProductBundle,
 } from "../../db/schema/index.js"
 import type { SafeUser } from "../auth/auth.schemas.js"
+import { formatPaperBowlName } from "../paper-bowls/paper-bowls.contract.js"
 import { shapePermissionAwareResponse } from "../auth/role-safe-response.js"
 import { toCustomerDto } from "../customers/customers.types.js"
 import type {
@@ -32,6 +34,16 @@ interface OrderLidDto {
   diameter: string
   shape: string
   color: string
+}
+
+interface OrderPaperBowlDto {
+  id: string
+  sku: string
+  name: string
+  supplier: string
+  size: string
+  color: string
+  diameter_mm: number | null
 }
 
 interface OrderNonStockItemDto {
@@ -72,11 +84,13 @@ interface BaseOrderItemDto {
   item_type:
     | "cup"
     | "lid"
+    | "paper_bowl"
     | "non_stock_item"
     | "custom_charge"
     | "product_bundle"
   cup: OrderCupDto | null
   lid: OrderLidDto | null
+  paper_bowl: OrderPaperBowlDto | null
   non_stock_item: OrderNonStockItemDto | null
   custom_charge: OrderCustomChargeDto | null
   product_bundle: OrderProductBundleDto | null
@@ -202,6 +216,7 @@ function toBaseOrderItemDto(
       item_type: "cup",
       cup: toCupDto(item.cup as Cup),
       lid: null,
+      paper_bowl: null,
       non_stock_item: null,
       custom_charge: null,
       product_bundle: null,
@@ -220,6 +235,26 @@ function toBaseOrderItemDto(
       item_type: "lid",
       cup: null,
       lid: toLidDto(item.lid as Lid),
+      paper_bowl: null,
+      non_stock_item: null,
+      custom_charge: null,
+      product_bundle: null,
+      bundle_substitutions: toBundleSubstitutionDtos(item),
+      description_snapshot: item.descriptionSnapshot,
+      quantity: item.quantity,
+      notes: item.notes ?? null,
+      created_at: item.createdAt.toISOString(),
+      updated_at: item.updatedAt.toISOString(),
+    }
+  }
+
+  if (item.itemType === "paper_bowl") {
+    return {
+      id: item.id,
+      item_type: "paper_bowl",
+      cup: null,
+      lid: null,
+      paper_bowl: toPaperBowlOrderDto(item.paperBowl as PaperBowl),
       non_stock_item: null,
       custom_charge: null,
       product_bundle: null,
@@ -238,6 +273,7 @@ function toBaseOrderItemDto(
       item_type: "custom_charge",
       cup: null,
       lid: null,
+      paper_bowl: null,
       non_stock_item: null,
       custom_charge: {
         description_snapshot: item.descriptionSnapshot,
@@ -258,6 +294,7 @@ function toBaseOrderItemDto(
       item_type: "product_bundle",
       cup: null,
       lid: null,
+      paper_bowl: null,
       non_stock_item: null,
       custom_charge: null,
       product_bundle: toProductBundleDto(item.productBundle as ProductBundle),
@@ -275,6 +312,7 @@ function toBaseOrderItemDto(
     item_type: "non_stock_item",
     cup: null,
     lid: null,
+    paper_bowl: null,
     non_stock_item: toNonStockItemDto(item.nonStockItem as NonStockItem),
     custom_charge: null,
     product_bundle: null,
@@ -334,6 +372,18 @@ function toLidDto(lid: Lid): OrderLidDto {
     diameter: lid.diameter,
     shape: lid.shape,
     color: lid.color,
+  }
+}
+
+function toPaperBowlOrderDto(paperBowl: PaperBowl): OrderPaperBowlDto {
+  return {
+    id: paperBowl.id,
+    sku: paperBowl.sku,
+    name: formatPaperBowlName(paperBowl),
+    supplier: paperBowl.supplier,
+    size: paperBowl.size,
+    color: paperBowl.color,
+    diameter_mm: paperBowl.diameterMm,
   }
 }
 

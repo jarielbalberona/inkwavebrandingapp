@@ -40,7 +40,17 @@ const orderCupSchema = z.object({
   brand: z.string(),
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   size: z.string(),
-  color: z.enum(["transparent", "black", "white", "kraft", "blue", "grey", "green", "red", "teal"]),
+  color: z.enum([
+    "transparent",
+    "black",
+    "white",
+    "kraft",
+    "blue",
+    "grey",
+    "green",
+    "red",
+    "teal",
+  ]),
 })
 
 const orderLidSchema = z.object({
@@ -51,6 +61,15 @@ const orderLidSchema = z.object({
   diameter: z.enum(["80mm", "90mm", "95mm", "98mm"]),
   shape: z.string(),
   color: z.enum(["transparent", "black", "white"]),
+})
+
+const orderPaperBowlSchema = z.object({
+  id: z.string().uuid(),
+  sku: z.string(),
+  name: z.string(),
+  size: z.string(),
+  color: z.enum(["white", "kraft"]),
+  diameter_mm: z.number().int().positive().nullable(),
 })
 
 const orderNonStockItemSchema = z.object({
@@ -104,6 +123,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("cup"),
     cup: orderCupSchema,
     lid: z.null(),
+    paper_bowl: nullableOmittedField(z.null()),
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: nullableOmittedField(z.null()),
@@ -123,6 +143,27 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("lid"),
     cup: z.null(),
     lid: orderLidSchema,
+    paper_bowl: nullableOmittedField(z.null()),
+    non_stock_item: nullableOmittedField(z.null()),
+    custom_charge: nullableOmittedField(z.null()),
+    product_bundle: nullableOmittedField(z.null()),
+    bundle_substitutions: z
+      .array(orderItemBundleSubstitutionSchema)
+      .default([]),
+    description_snapshot: z.string(),
+    quantity: z.number().int().positive(),
+    notes: z.string().nullable(),
+    unit_cost_price: z.string().optional(),
+    unit_sell_price: z.string().optional(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  z.object({
+    id: z.string().uuid(),
+    item_type: z.literal("paper_bowl"),
+    cup: z.null(),
+    lid: z.null(),
+    paper_bowl: orderPaperBowlSchema,
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: nullableOmittedField(z.null()),
@@ -142,6 +183,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("non_stock_item"),
     cup: z.null(),
     lid: z.null(),
+    paper_bowl: nullableOmittedField(z.null()),
     non_stock_item: orderNonStockItemSchema,
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: nullableOmittedField(z.null()),
@@ -161,6 +203,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("custom_charge"),
     cup: z.null(),
     lid: z.null(),
+    paper_bowl: nullableOmittedField(z.null()),
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: orderCustomChargeSchema,
     product_bundle: nullableOmittedField(z.null()),
@@ -180,6 +223,7 @@ const orderItemSchema = z.discriminatedUnion("item_type", [
     item_type: z.literal("product_bundle"),
     cup: z.null(),
     lid: z.null(),
+    paper_bowl: nullableOmittedField(z.null()),
     non_stock_item: nullableOmittedField(z.null()),
     custom_charge: nullableOmittedField(z.null()),
     product_bundle: orderProductBundleSchema,
@@ -216,6 +260,7 @@ const invoiceItemSchema = z.object({
   item_type: z.enum([
     "cup",
     "lid",
+    "paper_bowl",
     "non_stock_item",
     "custom_charge",
     "product_bundle",
@@ -336,6 +381,7 @@ const createOrderLineItemErrorSchema = z.object({
   item_type: z.enum([
     "cup",
     "lid",
+    "paper_bowl",
     "non_stock_item",
     "custom_charge",
     "product_bundle",
@@ -391,6 +437,12 @@ export interface CreateOrderPayload {
         notes?: string
       }
     | {
+        item_type: "paper_bowl"
+        paper_bowl_id: string
+        quantity: number
+        notes?: string
+      }
+    | {
         item_type: "non_stock_item"
         non_stock_item_id: string
         quantity: number
@@ -442,6 +494,13 @@ export interface UpdateOrderPayload {
         id?: string
         item_type: "lid"
         lid_id: string
+        quantity: number
+        notes?: string
+      }
+    | {
+        id?: string
+        item_type: "paper_bowl"
+        paper_bowl_id: string
         quantity: number
         notes?: string
       }

@@ -68,6 +68,8 @@ import type { Lid } from "@/features/lids/api/lids-client"
 import { useLidsQuery } from "@/features/lids/hooks/use-lids"
 import type { NonStockItem } from "@/features/non-stock-items/api/non-stock-items-client"
 import { useNonStockItemsQuery } from "@/features/non-stock-items/hooks/use-non-stock-items"
+import type { PaperBowl } from "@/features/paper-bowls/api/paper-bowls-client"
+import { usePaperBowlsQuery } from "@/features/paper-bowls/hooks/use-paper-bowls"
 import { CreateOrderError } from "@/features/orders/api/orders-client"
 import { useCreateOrderMutation } from "@/features/orders/hooks/use-orders"
 import type { ProductBundle } from "@/features/product-bundles/api/product-bundles-client"
@@ -88,6 +90,7 @@ const orderCreateSchema = z.object({
             "product_bundle",
             "cup",
             "lid",
+            "paper_bowl",
             "non_stock_item",
             "custom_charge",
           ]),
@@ -135,7 +138,7 @@ const orderCreateSchema = z.object({
 })
 
 type OrderCreateValues = z.infer<typeof orderCreateSchema>
-type SelectableOrderItem = ProductBundle | Cup | Lid | NonStockItem
+type SelectableOrderItem = ProductBundle | Cup | Lid | PaperBowl | NonStockItem
 const noneValue = "__none__"
 
 const emptyLineItem: OrderCreateValues["line_items"][number] = {
@@ -158,7 +161,7 @@ function parseMoneyAmount(value: string | undefined | null): number | null {
 }
 
 function resolveCatalogLineItemUnitAmount(
-  item: Cup | Lid | NonStockItem | undefined
+  item: Cup | Lid | PaperBowl | NonStockItem | undefined
 ): number | null {
   if (!item || !("default_sell_price" in item)) {
     return null
@@ -316,7 +319,9 @@ function OrderCustomerCombobox({
     if (open) {
       if (skipListSearchSyncRef.current) {
         const committedLabel =
-          selectedCustomerOption.id !== noneValue ? selectedCustomerOption.label : ""
+          selectedCustomerOption.id !== noneValue
+            ? selectedCustomerOption.label
+            : ""
         if (committedLabel !== "" && next === committedLabel) {
           skipListSearchSyncRef.current = false
           return
@@ -330,7 +335,9 @@ function OrderCustomerCombobox({
       return
     }
     const expectedLabel =
-      selectedCustomerOption.id !== noneValue ? selectedCustomerOption.label : null
+      selectedCustomerOption.id !== noneValue
+        ? selectedCustomerOption.label
+        : null
     // `selectedCustomer` / expectedLabel can still be the *previous* row for one tick after a new
     // item is chosen; `next` may already be the new row's label. Don't clear if `next` is any
     // customer's canonical label (typical list selection).
@@ -448,6 +455,15 @@ function formatSelectableOrderItemOption(
     )
   }
 
+  if (itemType === "paper_bowl") {
+    return formatPaperBowlOption(
+      item as PaperBowl,
+      availableQuantityByTrackedItemKey.get(
+        toTrackedItemKey("paper_bowl", item.id)
+      )
+    )
+  }
+
   return formatNonStockItemOption(item as NonStockItem)
 }
 
@@ -470,6 +486,10 @@ function getEmptyOrderItemLabel(
 
   if (itemType === "lid") {
     return "No lid"
+  }
+
+  if (itemType === "paper_bowl") {
+    return "No paper bowl"
   }
 
   return "No general item"
@@ -516,7 +536,9 @@ function OrderItemCombobox({
     <Combobox
       value={selectedOption}
       onValueChange={(option: OrderItemComboboxOption | null) => {
-        onValueChange(!option || option.id === noneValue ? undefined : option.id)
+        onValueChange(
+          !option || option.id === noneValue ? undefined : option.id
+        )
       }}
       items={options}
       itemToStringLabel={(option) => option?.label ?? ""}
@@ -547,12 +569,14 @@ function OrderCreateLineItemFields({
   fieldId,
   activeCups,
   activeLids,
+  activePaperBowls,
   activeNonStockItems,
   activeProductBundles,
   activePricingRules,
   availableQuantityByTrackedItemKey,
   cupsLoading,
   lidsLoading,
+  paperBowlsLoading,
   nonStockItemsLoading,
   canManageCustomCharges,
 }: {
@@ -560,12 +584,14 @@ function OrderCreateLineItemFields({
   fieldId: string
   activeCups: Cup[]
   activeLids: Lid[]
+  activePaperBowls: PaperBowl[]
   activeNonStockItems: NonStockItem[]
   activeProductBundles: ProductBundle[]
   activePricingRules: SellableProductPriceRule[]
   availableQuantityByTrackedItemKey: Map<string, number>
   cupsLoading: boolean
   lidsLoading: boolean
+  paperBowlsLoading: boolean
   nonStockItemsLoading: boolean
   canManageCustomCharges: boolean
 }) {
@@ -595,10 +621,12 @@ function OrderCreateLineItemFields({
         ? activeCups
         : itemType === "lid"
           ? activeLids
-          : activeNonStockItems
+          : itemType === "paper_bowl"
+            ? activePaperBowls
+            : activeNonStockItems
   const selectedCatalogItem = availableItems.find((item) => item.id === itemId)
   const selectedAvailableQuantity =
-    itemType === "cup" || itemType === "lid"
+    itemType === "cup" || itemType === "lid" || itemType === "paper_bowl"
       ? availableQuantityByTrackedItemKey.get(
           toTrackedItemKey(itemType, itemId)
         )
@@ -660,6 +688,7 @@ function OrderCreateLineItemFields({
                 <SelectItem value="product_bundle">Product Bundle</SelectItem>
                 <SelectItem value="cup">Cup</SelectItem>
                 <SelectItem value="lid">Lid</SelectItem>
+                <SelectItem value="paper_bowl">Paper Bowl</SelectItem>
                 <SelectItem value="non_stock_item">General Item</SelectItem>
                 <SelectItem
                   value="custom_charge"
@@ -781,7 +810,9 @@ function OrderCreateLineItemFields({
                       ? "Cup SKU"
                       : itemType === "lid"
                         ? "Lid"
-                        : "General Item"}
+                        : itemType === "paper_bowl"
+                          ? "Paper bowl"
+                          : "General Item"}
                 </FormLabel>
                 <FormControl>
                   <OrderItemCombobox
@@ -804,9 +835,13 @@ function OrderCreateLineItemFields({
                             ? lidsLoading
                               ? "Loading lids..."
                               : "Search lids"
-                            : nonStockItemsLoading
-                              ? "Loading general items..."
-                              : "Search general items"
+                            : itemType === "paper_bowl"
+                              ? paperBowlsLoading
+                                ? "Loading paper bowls..."
+                                : "Search paper bowls"
+                              : nonStockItemsLoading
+                                ? "Loading general items..."
+                                : "Search general items"
                     }
                   />
                 </FormControl>
@@ -910,6 +945,7 @@ export function OrderCreatePage() {
   )
   const cupsQuery = useCupsQuery()
   const lidsQuery = useLidsQuery()
+  const paperBowlsQuery = usePaperBowlsQuery()
   const nonStockItemsQuery = useNonStockItemsQuery()
   const productBundlesQuery = useProductBundlesQuery()
   const pricingRulesQuery = useSellableProductPriceRulesQuery()
@@ -927,6 +963,10 @@ export function OrderCreatePage() {
   const activeLids = useMemo(
     () => (lidsQuery.data ?? []).filter((lid) => lid.is_active),
     [lidsQuery.data]
+  )
+  const activePaperBowls = useMemo(
+    () => (paperBowlsQuery.data ?? []).filter((bowl) => bowl.is_active),
+    [paperBowlsQuery.data]
   )
   const activeNonStockItems = useMemo(
     () => (nonStockItemsQuery.data ?? []).filter((item) => item.is_active),
@@ -953,7 +993,18 @@ export function OrderCreatePage() {
       }
 
       if (balance.item_type === "lid") {
-        quantities.set(toTrackedItemKey("lid", balance.lid.id), balance.available)
+        quantities.set(
+          toTrackedItemKey("lid", balance.lid.id),
+          balance.available
+        )
+        continue
+      }
+
+      if (balance.item_type === "paper_bowl") {
+        quantities.set(
+          toTrackedItemKey("paper_bowl", balance.paper_bowl.id),
+          balance.available
+        )
       }
     }
 
@@ -999,6 +1050,7 @@ export function OrderCreatePage() {
     form.watch("line_items"),
     activeCups,
     activeLids,
+    activePaperBowls,
     availableQuantityByTrackedItemKey
   )
   const selectedOrderStatus = form.watch("status")
@@ -1049,24 +1101,31 @@ export function OrderCreatePage() {
                     quantity: item.quantity,
                     notes: item.notes?.trim() || undefined,
                   }
-                : item.item_type === "non_stock_item"
+                : item.item_type === "paper_bowl"
                   ? {
-                      item_type: "non_stock_item",
-                      non_stock_item_id: item.item_id!,
+                      item_type: "paper_bowl",
+                      paper_bowl_id: item.item_id!,
                       quantity: item.quantity,
                       notes: item.notes?.trim() || undefined,
                     }
-                  : {
-                      item_type: "custom_charge",
-                      description_snapshot: item.description_snapshot!.trim(),
-                      quantity: item.quantity,
-                      unit_sell_price: item.unit_sell_price!.toFixed(2),
-                      unit_cost_price:
-                        item.unit_cost_price === undefined
-                          ? undefined
-                          : item.unit_cost_price.toFixed(2),
-                      notes: item.notes?.trim() || undefined,
-                    }
+                  : item.item_type === "non_stock_item"
+                    ? {
+                        item_type: "non_stock_item",
+                        non_stock_item_id: item.item_id!,
+                        quantity: item.quantity,
+                        notes: item.notes?.trim() || undefined,
+                      }
+                    : {
+                        item_type: "custom_charge",
+                        description_snapshot: item.description_snapshot!.trim(),
+                        quantity: item.quantity,
+                        unit_sell_price: item.unit_sell_price!.toFixed(2),
+                        unit_cost_price:
+                          item.unit_cost_price === undefined
+                            ? undefined
+                            : item.unit_cost_price.toFixed(2),
+                        notes: item.notes?.trim() || undefined,
+                      }
         ),
       })
 
@@ -1194,6 +1253,7 @@ export function OrderCreatePage() {
                                 fieldId={field.id}
                                 activeCups={activeCups}
                                 activeLids={activeLids}
+                                activePaperBowls={activePaperBowls}
                                 activeNonStockItems={activeNonStockItems}
                                 activeProductBundles={activeProductBundles}
                                 activePricingRules={activePricingRules}
@@ -1202,6 +1262,7 @@ export function OrderCreatePage() {
                                 }
                                 cupsLoading={cupsQuery.isLoading}
                                 lidsLoading={lidsQuery.isLoading}
+                                paperBowlsLoading={paperBowlsQuery.isLoading}
                                 nonStockItemsLoading={
                                   nonStockItemsQuery.isLoading
                                 }
@@ -1293,9 +1354,9 @@ export function OrderCreatePage() {
                 <AlertDescription>
                   <div className="grid gap-2">
                     <p>
-                      System note: this pending order asks for more tracked stock than
-                      is currently available. The backend will reject unsafe
-                      reservations.
+                      System note: this pending order asks for more tracked
+                      stock than is currently available. The reservation will
+                      create a negative available balance until stock is received.
                     </p>
                     <ul className="list-disc space-y-1 pl-5">
                       {systemNotes.map((note) => (
@@ -1313,6 +1374,7 @@ export function OrderCreatePage() {
                 createOrderMutation.isPending ||
                 cupsQuery.isLoading ||
                 lidsQuery.isLoading ||
+                paperBowlsQuery.isLoading ||
                 inventoryBalancesQuery.isLoading
               }
             >
@@ -1330,7 +1392,7 @@ export function OrderCreatePage() {
 }
 
 function toTrackedItemKey(
-  itemType: "cup" | "lid",
+  itemType: "cup" | "lid" | "paper_bowl",
   itemId: string | undefined
 ): string {
   return `${itemType}:${itemId ?? ""}`
@@ -1353,6 +1415,15 @@ function formatLidOption(lid: Lid, availableQuantity?: number): string {
   return `${skuPart}${lid.type} · ${lid.brand} · ${lid.diameter} · ${lid.shape} · ${lid.color} · ${formatAvailableQuantity(availableQuantity)}`
 }
 
+function formatPaperBowlOption(
+  bowl: PaperBowl,
+  availableQuantity?: number
+): string {
+  const diameter =
+    bowl.diameter_mm === null ? "diameter not set" : `${bowl.diameter_mm}mm`
+  return `${bowl.sku} · ${bowl.name} · ${diameter} · ${formatAvailableQuantity(availableQuantity)}`
+}
+
 function formatNonStockItemOption(item: NonStockItem): string {
   return item.description?.trim()
     ? `${item.name} · ${item.description}`
@@ -1373,10 +1444,15 @@ function buildOrderCreationSystemNotes(
   lineItems: OrderCreateValues["line_items"],
   activeCups: Cup[],
   activeLids: Lid[],
+  activePaperBowls: PaperBowl[],
   availableQuantityByTrackedItemKey: Map<string, number>
 ): string[] {
   return lineItems.flatMap((item, index) => {
-    if (item.item_type !== "cup" && item.item_type !== "lid") {
+    if (
+      item.item_type !== "cup" &&
+      item.item_type !== "lid" &&
+      item.item_type !== "paper_bowl"
+    ) {
       return []
     }
 
@@ -1395,7 +1471,13 @@ function buildOrderCreationSystemNotes(
     const label =
       item.item_type === "cup"
         ? formatCupShortLabel(activeCups.find((cup) => cup.id === item.item_id))
-        : formatLidShortLabel(activeLids.find((lid) => lid.id === item.item_id))
+        : item.item_type === "lid"
+          ? formatLidShortLabel(
+              activeLids.find((lid) => lid.id === item.item_id)
+            )
+          : formatPaperBowlShortLabel(
+              activePaperBowls.find((bowl) => bowl.id === item.item_id)
+            )
 
     const shortage = item.quantity - availableQuantity
 
@@ -1419,4 +1501,8 @@ function formatLidShortLabel(lid: Lid | undefined): string {
   }
 
   return `lid ${lid.brand} ${lid.diameter} ${lid.shape} ${lid.color}`
+}
+
+function formatPaperBowlShortLabel(bowl: PaperBowl | undefined): string {
+  return bowl ? `paper bowl ${bowl.sku}` : "selected paper bowl"
 }

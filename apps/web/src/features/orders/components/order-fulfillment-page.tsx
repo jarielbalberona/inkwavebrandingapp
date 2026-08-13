@@ -63,7 +63,7 @@ import { ArrowLeftIcon, BoxIcon } from "lucide-react"
 type BundleFulfillmentPart = "cup" | "lid"
 
 type TrackedLineItem = Order["items"][number] & {
-  item_type: "cup" | "lid" | "product_bundle"
+  item_type: "cup" | "lid" | "paper_bowl" | "product_bundle"
 }
 
 type FulfillmentRow = {
@@ -426,7 +426,9 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                     items={fulfillmentRows}
                     itemToStringLabel={formatFulfillmentRowLabel}
                     itemToStringValue={(row) => row.key}
-                    isItemEqualToValue={(row, selected) => row.key === selected.key}
+                    isItemEqualToValue={(row, selected) =>
+                      row.key === selected.key
+                    }
                   >
                     <ComboboxInput
                       placeholder="Search line items"
@@ -434,7 +436,9 @@ export function OrderFulfillmentPage({ orderId }: { orderId: string }) {
                       className="w-full min-w-0"
                     />
                     <ComboboxContent>
-                      <ComboboxEmpty>No matching line items found.</ComboboxEmpty>
+                      <ComboboxEmpty>
+                        No matching line items found.
+                      </ComboboxEmpty>
                       <ComboboxList>
                         {(row: FulfillmentRow) => (
                           <ComboboxItem key={row.key} value={row}>
@@ -778,6 +782,10 @@ function formatOrderItemLabel(item: Order["items"][number]): string {
     return item.lid.sku
   }
 
+  if (item.item_type === "paper_bowl") {
+    return item.paper_bowl.sku
+  }
+
   if (item.item_type === "custom_charge") {
     return item.description_snapshot
   }
@@ -796,6 +804,14 @@ function formatOrderItemDetails(item: Order["items"][number]): string {
 
   if (item.item_type === "lid") {
     return `${item.lid.type} · ${item.lid.brand} · ${item.lid.color} · ${item.description_snapshot}`
+  }
+
+  if (item.item_type === "paper_bowl") {
+    const diameter =
+      item.paper_bowl.diameter_mm === null
+        ? "diameter not set"
+        : `${item.paper_bowl.diameter_mm}mm`
+    return `${item.paper_bowl.name} · ${diameter}`
   }
 
   if (item.item_type === "custom_charge") {
@@ -902,7 +918,7 @@ function showPrintedQaColumns(
   itemType: Order["items"][number]["item_type"],
   row: FulfillmentRow | null
 ): boolean {
-  if (itemType === "cup") {
+  if (itemType === "cup" || itemType === "paper_bowl") {
     return true
   }
   if (itemType === "product_bundle") {
@@ -1151,7 +1167,9 @@ function buildProgressQuantityError(
     case "packed":
       return `Packed quantity cannot exceed the current QA-passed balance of ${maxQuantity}.`
     case "printed":
-      return itemType === "cup" || itemType === "product_bundle"
+      return itemType === "cup" ||
+        itemType === "paper_bowl" ||
+        itemType === "product_bundle"
         ? "Printed supports overrun and should not be capped here."
         : `Printed is not supported for ${itemType} line items.`
   }

@@ -323,6 +323,13 @@
       "when": 1786522219000,
       "tag": "0046_set_220cc_paper_bowl_diameter",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786635018210,
+      "tag": "0047_normal_beast",
+      "breakpoints": true
     }
   ]
 }

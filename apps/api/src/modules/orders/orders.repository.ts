@@ -95,6 +95,7 @@ export class OrdersRepository {
           with: {
             cup: true,
             lid: true,
+            paperBowl: true,
             nonStockItem: true,
             productBundle: {
               with: {
@@ -201,6 +202,7 @@ export class OrdersRepository {
         order: true,
         cup: true,
         lid: true,
+        paperBowl: true,
         nonStockItem: true,
         productBundle: {
           with: {

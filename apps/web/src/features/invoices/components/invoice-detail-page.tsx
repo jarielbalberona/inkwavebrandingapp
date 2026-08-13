@@ -930,6 +930,8 @@ function formatInvoiceItemType(itemType: Invoice["items"][number]["item_type"]):
       return "Cup"
     case "lid":
       return "Lid"
+    case "paper_bowl":
+      return "Paper bowl"
     case "non_stock_item":
       return "General item"
     case "custom_charge":

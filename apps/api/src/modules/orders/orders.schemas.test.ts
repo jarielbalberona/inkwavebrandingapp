@@ -54,6 +54,27 @@ test("createOrderSchema accepts a valid product_bundle line item with override p
   })
 })
 
+test("createOrderSchema accepts a valid paper_bowl line item", () => {
+  const parsed = createOrderSchema.parse({
+    customer_id: validCustomerId,
+    line_items: [
+      {
+        item_type: "paper_bowl",
+        paper_bowl_id: "22222222-2222-4222-8222-222222222222",
+        quantity: 500,
+        notes: "White 320cc bowls",
+      },
+    ],
+  })
+
+  assert.deepEqual(parsed.line_items[0], {
+    item_type: "paper_bowl",
+    paper_bowl_id: "22222222-2222-4222-8222-222222222222",
+    quantity: 500,
+    notes: "White 320cc bowls",
+  })
+})
+
 test("createOrderSchema accepts a valid custom_charge line item", () => {
   const parsed = createOrderSchema.parse({
     customer_id: validCustomerId,

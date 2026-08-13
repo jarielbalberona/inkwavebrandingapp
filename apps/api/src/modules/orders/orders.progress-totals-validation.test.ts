@@ -83,3 +83,20 @@ test("cup line item still requires packed to stay within QA passed", () => {
       /Packed quantity cannot exceed QA passed quantity/.test(error.message)
   )
 })
+
+test("paper bowl line items use the printed and QA fulfillment stages", () => {
+  assert.throws(
+    () =>
+      validateProgressTotals(
+        "paper_bowl",
+        10,
+        baseTotals({
+          total_printed: 3,
+          total_qa_passed: 4,
+        })
+      ),
+    (error) =>
+      error instanceof OrderProgressValidationError &&
+      /QA passed quantity cannot exceed printed quantity/.test(error.message)
+  )
+})

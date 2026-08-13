@@ -187,6 +187,7 @@ interface InvoiceSnapshotOrder {
     itemType:
       | "cup"
       | "lid"
+      | "paper_bowl"
       | "non_stock_item"
       | "custom_charge"
       | "product_bundle"
