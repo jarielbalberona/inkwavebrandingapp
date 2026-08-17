@@ -6,6 +6,16 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
@@ -42,6 +52,7 @@ import { useCurrentUser } from "@/features/auth/hooks/use-auth"
 import { appPermissions, getDefaultAuthorizedRoute, hasPermission } from "@/features/auth/permissions"
 import type { Customer, CustomerPayload } from "@/features/customers/api/customers-client"
 import {
+  useArchiveCustomerMutation,
   useCreateCustomerMutation,
   useCustomersQuery,
   useUpdateCustomerMutation,
@@ -78,7 +89,9 @@ export function CustomersPage() {
   const customersQuery = useCustomersQuery({ includeInactive: true, search: deferredSearch })
   const createCustomer = useCreateCustomerMutation()
   const updateCustomer = useUpdateCustomerMutation()
+  const archiveCustomer = useArchiveCustomerMutation()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const canViewCustomers = hasPermission(currentUser.data, appPermissions.customersView)
@@ -89,6 +102,18 @@ export function CustomersPage() {
   const canManageCustomers = hasPermission(currentUser.data, appPermissions.customersManage)
   const canEditConfidentialFields =
     canManageCustomers && (!selectedCustomer || "contact_person" in selectedCustomer)
+  const form = useForm<CustomerFormValues>({
+    resolver: zodResolver(customerFormSchema),
+    defaultValues: emptyFormValues,
+  })
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      return
+    }
+
+    form.reset(selectedCustomer ? toFormValues(selectedCustomer) : emptyFormValues)
+  }, [dialogOpen, selectedCustomer, form])
 
   if (currentUser.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading access...</p>
@@ -108,19 +133,6 @@ export function CustomersPage() {
     )
   }
 
-  const form = useForm<CustomerFormValues>({
-    resolver: zodResolver(customerFormSchema),
-    defaultValues: emptyFormValues,
-  })
-
-  useEffect(() => {
-    if (!dialogOpen) {
-      return
-    }
-
-    form.reset(selectedCustomer ? toFormValues(selectedCustomer) : emptyFormValues)
-  }, [dialogOpen, selectedCustomer, form])
-
   async function onSubmit(values: CustomerFormValues) {
     setSubmitError(null)
 
@@ -138,6 +150,25 @@ export function CustomersPage() {
       form.reset(emptyFormValues)
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to save customer.")
+    }
+  }
+
+  async function onArchive() {
+    if (!selectedCustomer) {
+      return
+    }
+
+    setSubmitError(null)
+
+    try {
+      await archiveCustomer.mutateAsync(selectedCustomer.id)
+      setArchiveDialogOpen(false)
+      setDialogOpen(false)
+      setSelectedCustomerId(null)
+      form.reset(emptyFormValues)
+    } catch (error) {
+      setArchiveDialogOpen(false)
+      setSubmitError(error instanceof Error ? error.message : "Unable to archive customer.")
     }
   }
 
@@ -280,8 +311,25 @@ export function CustomersPage() {
               />
 
               <DialogFooter showCloseButton>
+                {canManageCustomers && selectedCustomer ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={archiveCustomer.isPending}
+                    onClick={() => setArchiveDialogOpen(true)}
+                  >
+                    Archive Customer
+                  </Button>
+                ) : null}
                 {canManageCustomers ? (
-                  <Button type="submit" disabled={createCustomer.isPending || updateCustomer.isPending}>
+                  <Button
+                    type="submit"
+                    disabled={
+                      createCustomer.isPending ||
+                      updateCustomer.isPending ||
+                      archiveCustomer.isPending
+                    }
+                  >
                     {selectedCustomer ? "Save Changes" : "Create Customer"}
                   </Button>
                 ) : null}
@@ -290,6 +338,31 @@ export function CustomersPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive customer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedCustomer
+                ? `Archive ${selectedCustomer.business_name}? The customer will be hidden from customer records and new order selection. Existing orders and invoices will keep their history.`
+                : "Archive this customer? Existing orders and invoices will keep their history."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveCustomer.isPending}>Keep customer</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={archiveCustomer.isPending || !selectedCustomer}
+              onClick={() => {
+                void onArchive()
+              }}
+            >
+              {archiveCustomer.isPending ? "Archiving..." : "Archive customer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

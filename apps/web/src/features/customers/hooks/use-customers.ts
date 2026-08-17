@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
+  archiveCustomer,
   createCustomer,
   listCustomers,
   updateCustomer,
@@ -16,6 +17,17 @@ export function useCustomersQuery(filters: {
   return useQuery({
     queryKey: [...customersQueryKey, filters],
     queryFn: () => listCustomers(filters),
+  })
+}
+
+export function useArchiveCustomerMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => archiveCustomer(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: customersQueryKey })
+    },
   })
 }
 

@@ -22,6 +22,7 @@ export const customers = pgTable(
     address: varchar("address", { length: 500 }),
     notes: varchar("notes", { length: 500 }),
     isActive: boolean("is_active").notNull().default(true),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -29,6 +30,7 @@ export const customers = pgTable(
     uniqueIndex("customers_customer_code_unique_idx").on(sql`lower(${table.customerCode})`),
     index("customers_business_name_idx").on(sql`lower(${table.businessName})`),
     index("customers_email_idx").on(sql`lower(${table.email})`),
+    index("customers_archived_at_idx").on(table.archivedAt),
     check("customers_business_name_not_blank", sql`length(trim(${table.businessName})) > 0`),
     check(
       "customers_customer_code_not_blank",

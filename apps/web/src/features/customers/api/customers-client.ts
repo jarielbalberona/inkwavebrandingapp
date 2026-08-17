@@ -81,6 +81,30 @@ export async function updateCustomer(id: string, payload: Partial<CustomerPayloa
   return customerResponseSchema.parse(response).customer
 }
 
+export async function archiveCustomer(id: string): Promise<Customer> {
+  try {
+    const response = await api.post<unknown, Record<string, never>>(
+      `/customers/${id}/archive`,
+      {},
+    )
+    return customerResponseSchema.parse(response).customer
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 403) {
+      throw new CustomersApiError("You do not have permission to archive customer records.", error.status)
+    }
+
+    if (error instanceof ApiClientError && error.status === 404) {
+      throw new CustomersApiError("Customer no longer exists or is already archived.", error.status)
+    }
+
+    if (error instanceof ApiClientError) {
+      throw new CustomersApiError("Unable to archive customer.", error.status)
+    }
+
+    throw error
+  }
+}
+
 async function sendCustomerRequest(
   path: string,
   method: "POST" | "PATCH",

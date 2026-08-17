@@ -83,6 +83,18 @@ export class CustomersService {
       throw error
     }
   }
+
+  async archive(id: string, user: SafeUser): Promise<CustomerDto> {
+    assertPermission(user, "customers.manage")
+
+    const customer = await this.customersRepository.archive(id)
+
+    if (!customer) {
+      throw new CustomerNotFoundError()
+    }
+
+    return toCustomerDto(customer, user)
+  }
 }
 
 function isUniqueViolation(error: unknown): boolean {

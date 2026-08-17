@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or, sql } from "drizzle-orm"
+import { and, asc, eq, ilike, isNull, or, sql } from "drizzle-orm"
 
 import type { DatabaseClient } from "../../db/client.js"
 import { customers, type Customer } from "../../db/schema/index.js"
@@ -39,7 +39,7 @@ export class CustomersRepository {
     const rows = await this.db
       .select()
       .from(customers)
-      .where(eq(customers.id, id))
+      .where(and(eq(customers.id, id), isNull(customers.archivedAt)))
       .limit(1)
 
     return rows[0]
@@ -49,7 +49,12 @@ export class CustomersRepository {
     const rows = await this.db
       .select()
       .from(customers)
-      .where(eq(sql<string>`upper(${customers.customerCode})`, customerCode.toUpperCase()))
+      .where(
+        and(
+          eq(sql<string>`upper(${customers.customerCode})`, customerCode.toUpperCase()),
+          isNull(customers.archivedAt),
+        ),
+      )
       .limit(1)
 
     return rows[0]
@@ -57,6 +62,7 @@ export class CustomersRepository {
 
   async list(query: CustomerListQuery): Promise<Customer[]> {
     const conditions = [
+      isNull(customers.archivedAt),
       query.include_inactive ? undefined : eq(customers.isActive, true),
       query.search
         ? or(
@@ -90,7 +96,20 @@ export class CustomersRepository {
         isActive: input.isActive,
         updatedAt: new Date(),
       })
-      .where(eq(customers.id, id))
+      .where(and(eq(customers.id, id), isNull(customers.archivedAt)))
+      .returning()
+
+    return rows[0]
+  }
+
+  async archive(id: string): Promise<Customer | undefined> {
+    const rows = await this.db
+      .update(customers)
+      .set({
+        archivedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(customers.id, id), isNull(customers.archivedAt)))
       .returning()
 
     return rows[0]

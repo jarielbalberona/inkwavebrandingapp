@@ -53,6 +53,17 @@ export async function handleCustomersRoute(
     return true
   }
 
+  const archiveMatch = path.match(/^\/customers\/([^/]+)\/archive$/)
+
+  if (archiveMatch && request.method === "POST") {
+    await withAuthenticatedUser(request, response, context, async (service, user) => {
+      sendJson(response, 200, {
+        customer: await service.archive(customerIdSchema.parse(archiveMatch[1]), user),
+      })
+    })
+    return true
+  }
+
   const idMatch = path.match(/^\/customers\/([^/]+)$/)
 
   if (idMatch && request.method === "GET") {

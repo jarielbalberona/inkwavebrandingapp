@@ -330,6 +330,13 @@
       "when": 1786635018210,
       "tag": "0047_normal_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1786943238169,
+      "tag": "0048_strange_outlaw_kid",
+      "breakpoints": true
     }
   ]
 }
