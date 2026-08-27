@@ -55,6 +55,25 @@ test("product_bundle cup component still enforces QA within printed", () => {
   )
 })
 
+test("product_bundle cup progress cannot consume a sibling bundle reservation", () => {
+  assert.throws(
+    () =>
+      validateProgressTotals(
+        "product_bundle",
+        10,
+        baseTotals({
+          total_printed: 11,
+        }),
+        "cup"
+      ),
+    (error) =>
+      error instanceof OrderProgressValidationError &&
+      /printed total cannot exceed the bundle line ordered quantity/.test(
+        error.message
+      )
+  )
+})
+
 test("product_bundle without component selection is rejected", () => {
   assert.throws(
     () => validateProgressTotals("product_bundle", 10, baseTotals()),

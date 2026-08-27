@@ -1075,7 +1075,9 @@ function maxQuantityForStage(
 
   switch (stage) {
     case "printed":
-      return Number.MAX_SAFE_INTEGER
+      return itemType === "product_bundle"
+        ? Math.max(orderedQuantity - totals.total_printed, 0)
+        : Number.MAX_SAFE_INTEGER
     case "qa_passed":
       return Math.max(totals.total_printed - totals.total_qa_passed, 0)
     case "packed":

@@ -2932,6 +2932,18 @@ export function validateProgressTotals(
     )
   }
 
+  if (itemType === "product_bundle") {
+    for (const stage of cupProgressStages) {
+      const total = totalForStage(totals, stage)
+
+      if (total > orderedQuantity) {
+        throw new OrderProgressValidationError(
+          `${stage} total cannot exceed the bundle line ordered quantity`
+        )
+      }
+    }
+  }
+
   if (totals.total_qa_passed > totals.total_printed) {
     throw new OrderProgressValidationError(
       "QA passed quantity cannot exceed printed quantity"
