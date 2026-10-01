@@ -12,7 +12,10 @@ import type { SafeUser } from "../auth/auth.schemas.js"
 import { assertPermission } from "../auth/authorization.js"
 import { CupsRepository } from "../cups/cups.repository.js"
 import { CustomersRepository } from "../customers/customers.repository.js"
-import { InventoryRepository } from "../inventory/inventory.repository.js"
+import {
+  InventoryRepository,
+  type InventoryBalanceSummary,
+} from "../inventory/inventory.repository.js"
 import {
   InventoryBalanceItemNotFoundError,
   InventoryService,
@@ -246,19 +249,35 @@ export class OrderPriorityValidationError extends Error {
   }
 }
 
+function fulfillmentStockLabel(balance: InventoryBalanceSummary): string {
+  if (balance.itemType === "cup") {
+    const cup = balance.cup
+    return `${cup.size} ${cup.brand.replaceAll("_", " ")} cup (${cup.sku})`
+  }
+  if (balance.itemType === "lid") {
+    const lid = balance.lid
+    return `${lid.diameter} ${lid.brand.replaceAll("_", " ")} ${lid.shape.replaceAll("_", " ")} lid (${lid.sku})`
+  }
+  return `${balance.paperBowl.size} paper bowl (${balance.paperBowl.sku})`
+}
+
 export class OrderPrintedQuantityNotReservedError extends Error {
   readonly statusCode = 409
 
-  constructor() {
-    super("Fulfillment quantity exceeds remaining reserved stock")
+  constructor(sku: string, required: number, reserved: number) {
+    super(
+      `Cannot record progress for ${sku}: ${required.toLocaleString("en-US")} pieces are needed, but the system has only ${reserved.toLocaleString("en-US")} reserved. Ask an admin to check the stock allocated to this order before retrying.`
+    )
   }
 }
 
 export class OrderPrintedQuantityInsufficientStockError extends Error {
   readonly statusCode = 409
 
-  constructor() {
-    super("Printed quantity exceeds current on-hand stock")
+  constructor(sku: string, required: number, onHand: number) {
+    super(
+      `Not enough stock to record progress for ${sku}. You need ${required.toLocaleString("en-US")} pieces, but inventory shows ${onHand.toLocaleString("en-US")} in stock. You are short by ${Math.max(required - onHand, 0).toLocaleString("en-US")} pieces. Count the physical stock first. If a delivery has not been recorded, enter it under Inventory → Stock Intake. If the recorded count is wrong, correct it with an inventory adjustment. Then retry. If there is not enough physical stock, wait for the missing stock to arrive.`
+    )
   }
 }
 
@@ -1293,7 +1312,9 @@ export class OrdersService {
           }
 
           if (balance.onHand < parsedInput.quantity) {
-            throw new OrderPrintedQuantityInsufficientStockError()
+            throw new OrderPrintedQuantityInsufficientStockError(
+              fulfillmentStockLabel(balance), parsedInput.quantity, balance.onHand
+            )
           }
 
           const lineItemReservedRemaining = Math.max(
@@ -1308,7 +1329,9 @@ export class OrdersService {
             parsedInput.quantity - reservedQuantityToConsume
 
           if (balance.reserved < reservedQuantityToConsume) {
-            throw new OrderPrintedQuantityNotReservedError()
+            throw new OrderPrintedQuantityNotReservedError(
+              fulfillmentStockLabel(balance), reservedQuantityToConsume, balance.reserved
+            )
           }
 
           if (reservedQuantityToConsume > 0) {
@@ -1353,7 +1376,9 @@ export class OrdersService {
           }
 
           if (balance.onHand < parsedInput.quantity) {
-            throw new OrderPrintedQuantityInsufficientStockError()
+            throw new OrderPrintedQuantityInsufficientStockError(
+              fulfillmentStockLabel(balance), parsedInput.quantity, balance.onHand
+            )
           }
 
           const lineItemReservedRemaining = Math.max(
@@ -1368,7 +1393,9 @@ export class OrdersService {
             parsedInput.quantity - reservedQuantityToConsume
 
           if (balance.reserved < reservedQuantityToConsume) {
-            throw new OrderPrintedQuantityNotReservedError()
+            throw new OrderPrintedQuantityNotReservedError(
+              fulfillmentStockLabel(balance), reservedQuantityToConsume, balance.reserved
+            )
           }
 
           if (reservedQuantityToConsume > 0) {
@@ -1409,11 +1436,16 @@ export class OrdersService {
             throw new OrderLidNotFoundError()
           }
 
-          if (
-            balance.reserved < parsedInput.quantity ||
-            balance.onHand < parsedInput.quantity
-          ) {
-            throw new OrderPrintedQuantityNotReservedError()
+          if (balance.onHand < parsedInput.quantity) {
+            throw new OrderPrintedQuantityInsufficientStockError(
+              fulfillmentStockLabel(balance), parsedInput.quantity, balance.onHand
+            )
+          }
+
+          if (balance.reserved < parsedInput.quantity) {
+            throw new OrderPrintedQuantityNotReservedError(
+              fulfillmentStockLabel(balance), parsedInput.quantity, balance.reserved
+            )
           }
 
           await inventoryRepository.appendMovement({
@@ -1450,11 +1482,18 @@ export class OrdersService {
                 : new OrderLidNotFoundError()
             }
 
-            if (
-              balance.reserved < component.quantity ||
-              balance.onHand < component.quantity
-            ) {
-              throw new OrderPrintedQuantityNotReservedError()
+            const sku = fulfillmentStockLabel(balance)
+
+            if (balance.onHand < component.quantity) {
+              throw new OrderPrintedQuantityInsufficientStockError(
+                sku, component.quantity, balance.onHand
+              )
+            }
+
+            if (balance.reserved < component.quantity) {
+              throw new OrderPrintedQuantityNotReservedError(
+                sku, component.quantity, balance.reserved
+              )
             }
 
             await inventoryRepository.appendMovement({
